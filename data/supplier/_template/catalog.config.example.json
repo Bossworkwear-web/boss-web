@@ -1,0 +1,7 @@
+{
+  "productSlugPrefix": "acme",
+  "displayName": "ACME Workwear",
+  "skipTopLevelFolders": ["raw", "archive"],
+  "imagesSubdir": "images",
+  "descriptionTemplate": "{name} — {displayName} ({section})."
+}

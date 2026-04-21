@@ -1,0 +1,175 @@
+/*
+ * Storefront listing UI — role-based tokens and blocks.
+ * Load after globals.css (see layout.tsx).
+ *
+ * Roles:
+ *   1) subcategory-picker — large tap targets (`/categories/[main]`, home CTAs). Class: .subcategory-list-link (= .store-ui-subpicker-link)
+ *   2) category-browse-grid — product tiles (`/categories/[main]/[sub]`)
+ *   3) sidebar-nav — left rail + mobile drawer (see .store-ui-sidebar-*)
+ */
+
+:root {
+  /* —— Role: subcategory-picker —— */
+  --store-ui-subpicker-font: 22.68px;
+  --store-ui-subpicker-pad-y: 12.96px;
+  --store-ui-subpicker-pad-x: 17.28px;
+  --store-ui-subpicker-radius: 9.72px;
+  --store-ui-subpicker-gap: 9.72px;
+
+  /* —— Role: category-browse-grid —— */
+  --store-ui-browse-card-title-size: 20.59px;
+  --store-ui-browse-card-price-was-size: 18.22px;
+  --store-ui-browse-card-media-height: 331px;
+  --store-ui-browse-card-body-padding: 24px;
+  --store-ui-browse-grid-gap: 1.8rem;
+
+  /* —— Role: sidebar-nav (desktop + drawer; fonts scale on small viewports) —— */
+  --store-ui-sidebar-main-font: 1.35rem;
+  --store-ui-sidebar-main-font-max-lg: 1.12rem;
+  --store-ui-sidebar-sub-font: 1.2rem;
+  --store-ui-sidebar-sub-font-max-lg: 1.05rem;
+  --store-ui-sidebar-contact-font: 1.35rem;
+  --store-ui-sidebar-contact-font-max-lg: 1.12rem;
+  --store-ui-nav-drawer-width: min(100vw - 2.5rem, 340px);
+  --store-ui-nav-drawer-pad-x: 1rem;
+}
+
+/* Narrow viewports: picker + sidebar copy slightly smaller; drawer a touch wider for wrap */
+@media (max-width: 1023px) {
+  :root {
+    --store-ui-subpicker-font: 18px;
+    --store-ui-subpicker-pad-y: 11px;
+    --store-ui-subpicker-pad-x: 14px;
+    --store-ui-subpicker-radius: 8px;
+    --store-ui-subpicker-gap: 8px;
+    --store-ui-nav-drawer-pad-x: 0.875rem;
+  }
+}
+
+/* Tablet band: slightly shorter card media so columns + gaps feel balanced */
+@media (min-width: 640px) and (max-width: 1023px) {
+  :root {
+    --store-ui-browse-card-media-height: 300px;
+    --store-ui-browse-grid-gap: 1.5rem;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Role 1: subcategory-picker                                                 */
+/* -------------------------------------------------------------------------- */
+
+.subcategory-list-link,
+.store-ui-subpicker-link {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  font-size: var(--store-ui-subpicker-font) !important;
+  line-height: 1.35 !important;
+  padding: var(--store-ui-subpicker-pad-y) var(--store-ui-subpicker-pad-x) !important;
+  border-radius: var(--store-ui-subpicker-radius) !important;
+  min-height: 44px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.subcategory-list-link.inline-flex,
+.store-ui-subpicker-link.inline-flex {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  max-width: 100%;
+}
+
+.subcategory-list-grid {
+  gap: var(--store-ui-subpicker-gap) !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Role 2: category-browse-grid (/categories/[main]/[sub])                    */
+/* -------------------------------------------------------------------------- */
+
+.subcategory-browse-grid .product-card-grid-title {
+  font-family: var(--font-title) !important;
+  font-size: var(--store-ui-browse-card-title-size) !important;
+  line-height: 1.3 !important;
+}
+
+.subcategory-browse-grid .product-card-grid-code,
+.subcategory-browse-grid .product-card-grid-price,
+.subcategory-browse-grid .product-card-grid-price-sale {
+  font-family: var(--font-app) !important;
+  font-size: var(--store-ui-browse-card-title-size) !important;
+  line-height: 1.3 !important;
+}
+
+.subcategory-browse-grid .product-card-grid-price-was {
+  font-family: var(--font-app) !important;
+  font-size: var(--store-ui-browse-card-price-was-size) !important;
+  line-height: 1.3 !important;
+}
+
+.subcategory-browse-card-media {
+  min-height: var(--store-ui-browse-card-media-height) !important;
+  height: var(--store-ui-browse-card-media-height) !important;
+}
+
+.subcategory-browse-card-body {
+  padding: var(--store-ui-browse-card-body-padding) !important;
+}
+
+.subcategory-browse-grid.subcategory-browse-grid-gap {
+  gap: var(--store-ui-browse-grid-gap) !important;
+}
+
+/* Grid item default min-width:auto prevents card innards from shrinking — allow truncation */
+.subcategory-browse-grid > a {
+  min-width: 0 !important;
+}
+
+/* Five product cards per row on large viewports (overrides any stale Tailwind lg:grid-cols-6 in cache). */
+@media (min-width: 1024px) {
+  .subcategory-browse-grid.subcategory-browse-grid-gap {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Role 3: sidebar navigation                                                 */
+/* -------------------------------------------------------------------------- */
+
+.store-ui-nav-drawer-panel {
+  width: var(--store-ui-nav-drawer-width);
+}
+
+.store-ui-sidebar-nav-rail {
+  padding-left: var(--store-ui-nav-drawer-pad-x);
+  padding-right: var(--store-ui-nav-drawer-pad-x);
+}
+
+.store-ui-sidebar-main-link {
+  font-size: var(--store-ui-sidebar-main-font);
+}
+
+.store-ui-sidebar-sub-link {
+  font-size: var(--store-ui-sidebar-sub-font);
+}
+
+.store-ui-sidebar-contact-link {
+  font-size: var(--store-ui-sidebar-contact-font);
+}
+
+@media (max-width: 1023px) {
+  .store-ui-sidebar-main-link {
+    font-size: var(--store-ui-sidebar-main-font-max-lg);
+  }
+
+  .store-ui-sidebar-sub-link {
+    font-size: var(--store-ui-sidebar-sub-font-max-lg);
+  }
+
+  .store-ui-sidebar-contact-link {
+    font-size: var(--store-ui-sidebar-contact-font-max-lg);
+  }
+}

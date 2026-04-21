@@ -1,0 +1,15 @@
+---
+description: When the user asks for a boss-web backup (e.g. 백업, backup), run the Drive sync script
+alwaysApply: true
+---
+
+# Backup to Google Drive
+
+When the user’s message clearly requests **backing up** this repo (e.g. **백업**, **backup**, **백업해줘**, **구글 드라이브 백업**):
+
+1. From the **boss-web** repo root, run **`bash scripts/backup-boss-web.sh`**.
+2. Use **full / `all` filesystem permissions** so the script can write to the parent **`dev/`** folder (for `boss-web-backup-*.tar.gz`) and to **Google Drive** under `~/Library/CloudStorage/GoogleDrive-*/My Drive/`.
+3. If the script exits after printing that Drive was not found, tell the user to set **`BACKUP_GOOGLE_DRIVE_ROOT`** to the absolute path of their **My Drive** folder, then re-run the script.
+4. Prefer running the script yourself rather than only telling the user to run it, unless execution fails or permissions are denied.
+
+What the script does: creates **`../boss-web-backup-<timestamp>.tar.gz`** (excludes `node_modules`, `.next`), copies it to **`My Drive/<Boss_Web>/archives/`**, and **`rsync --delete`** the tree to **`My Drive/<Boss_Web>/boss-web/`** (same excludes). Override folder with **`BACKUP_DRIVE_SUBDIR`** if needed (default `Boss_Web`).

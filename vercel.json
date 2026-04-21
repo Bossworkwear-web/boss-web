@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/supplier-order-day",
+      "schedule": "30 0 * * *"
+    },
+    {
+      "path": "/api/cron/accounting-receipt-retention",
+      "schedule": "0 2 * * 0"
+    }
+  ]
+}

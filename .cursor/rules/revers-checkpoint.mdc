@@ -1,0 +1,14 @@
+---
+description: Keyword "revers" — align boss-web with REVERS-CHECKPOINT.md snapshot
+alwaysApply: true
+---
+
+# revers
+
+When the user’s message **includes the token `revers`** (meaning: jump back to / match the saved storefront checkpoint), do this:
+
+1. Read **`REVERS-CHECKPOINT.md`** at the project root (`boss-web/REVERS-CHECKPOINT.md`).
+2. Compare the current codebase to that document and **restore or fix** anything that no longer matches (home hero, nav, margins, category grid, pagination, subcategory routes, etc.).
+3. Prefer **minimal diffs** that bring behavior back in line with the checkpoint; do not remove `REVERS-CHECKPOINT.md` or this rule unless the user asks.
+
+If Git is in use and a tag `revers` exists, you may mention `git checkout revers` as an optional hard reset; otherwise rely on the markdown spec.

@@ -1,0 +1,18 @@
+[
+  {
+    "name": "Syzmik ZJ263 Zip Jacket",
+    "slug": "fb-syzmik-zj263",
+    "category": "Jackets",
+    "description": "Example row — replace with real copy and images.",
+    "base_price": 89.0,
+    "weight_kg": 0.65,
+    "stock_quantity": 0,
+    "is_active": true,
+    "sort_order": 100,
+    "image_urls": [
+      "https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=1600&q=80"
+    ],
+    "available_colors": ["Navy", "Black", "Charcoal"],
+    "available_sizes": ["S", "M", "L", "XL", "2XL", "3XL"]
+  }
+]

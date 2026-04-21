@@ -1,0 +1,577 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  /* Match TopNav Suspense fallback (`h-[5.5rem]` / `sm:h-[6.25rem]`) until TopNav measures via ResizeObserver. */
+  --site-header-height: 5.5rem;
+  /* Mirrors `SITE_PAGE_INSET_X_CLASS` in lib/site-layout.ts for non-TS CSS if needed */
+  --site-page-inset-x: 5cm;
+
+  /*
+   * Single storefront + admin type stack (Encode Sans Condensed from next/font on <html>).
+   * Use everywhere instead of mixing Arial / system-ui-only stacks.
+   */
+  --font-app: var(--font-encode-sans-condensed), ui-sans-serif, system-ui, sans-serif;
+  /* Page + section titles (h1–h6, product card names); body/UI copy stays --font-app */
+  --font-title: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-brand-navy: #001f3f;
+  --color-brand-orange: #ff851b;
+  --color-brand-surface: #f8fafc;
+  --font-sans: var(--font-app);
+  /* Same face as sans — one unified look site-wide (incl. font-mono utilities). */
+  --font-mono: var(--font-app);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --site-header-height: 6.25rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+/* 20% smaller typography — rem-based type + spacing scale together */
+html {
+  font-family: var(--font-app);
+  font-size: 80%;
+}
+
+/* Log in / sign up: +30% vs site-wide 80% root (0.8 × 1.3 = 1.04 of UA base). */
+html:has([data-log-in-page]) {
+  font-size: 104% !important;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+/* Match site face on controls (UA often defaults to Arial). */
+button,
+input,
+textarea,
+select,
+optgroup {
+  font-family: inherit;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-title);
+}
+
+table,
+caption,
+th,
+td {
+  font-family: inherit;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-app);
+}
+
+/* Top nav: dark gray shadow — reads clearly on white (plain CSS). */
+.store-top-nav-shell {
+  box-shadow:
+    0 1px 0 rgba(55, 65, 81, 0.22),
+    0 3px 8px rgba(55, 65, 81, 0.14),
+    0 8px 24px rgba(55, 65, 81, 0.12);
+  transition: box-shadow 0.3s ease;
+}
+
+.store-top-nav-shell.is-elevated {
+  box-shadow:
+    0 1px 0 rgba(55, 65, 81, 0.28),
+    0 4px 12px rgba(55, 65, 81, 0.18),
+    0 12px 32px rgba(55, 65, 81, 0.16);
+}
+
+/* TopNav cart: gentle grow/shrink on non-cart pages when the cart has items (not on /cart). */
+@keyframes store-cart-icon-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.28);
+  }
+}
+
+.store-cart-icon-animate {
+  display: inline-flex;
+  transform-origin: center center;
+  animation: store-cart-icon-breathe 1.15s ease-in-out infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-cart-icon-animate {
+    animation: none;
+  }
+}
+
+/* Home hero: full width of <main> (no 100vw + translate — that gets clipped by overflow-x-clip on ancestors). */
+.home-hero-strip {
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  background-color: #ffffff;
+  padding-bottom: 2rem;
+}
+
+/* Home hero: ensure overlay copy has no text shadow. */
+.home-hero-strip-copy-overlay,
+.home-hero-strip-copy-overlay * {
+  text-shadow: none !important;
+}
+
+/* Shared with home hero inner: capped column + padding (also used below hero on `/`). */
+.site-page-inner-shell,
+.home-hero-strip-inner {
+  box-sizing: border-box;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  max-width: 120rem;
+  padding: 3rem 1rem;
+}
+
+/* Get a Quote: inner column 20% narrower than default shell (120rem × 0.8 = 96rem). */
+.site-page-inner-shell.quote-page-inner-narrow {
+  max-width: 96rem;
+}
+
+/*
+ * Get a Quote: body + form type scaled up (cumulative ~44% over default `text-sm`:
+ * 1.2 × 1.2 on 0.875rem). `!important` wins over Tailwind utilities in this shell.
+ */
+.site-page-inner-shell.quote-page-inner-narrow.quote-page-body-text-120 h1 {
+  font-size: calc(2.25rem * 1.44) !important;
+  line-height: 1.15;
+}
+
+.site-page-inner-shell.quote-page-inner-narrow.quote-page-body-text-120 .text-sm {
+  font-size: calc(0.875rem * 1.44) !important;
+  line-height: 1.45;
+}
+
+.site-page-inner-shell.quote-page-inner-narrow.quote-page-body-text-120
+  input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),
+.site-page-inner-shell.quote-page-inner-narrow.quote-page-body-text-120 select,
+.site-page-inner-shell.quote-page-inner-narrow.quote-page-body-text-120 textarea {
+  font-size: calc(0.875rem * 1.44) !important;
+  line-height: 1.45;
+}
+
+.home-hero-strip-inner {
+  min-height: 18rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.75rem;
+  color: #fff;
+}
+
+/* Overlay hero: slideshow centered, headline on top (overrides side-by-side layout below). */
+.home-hero-strip-inner.home-hero-strip-overlay {
+  position: relative;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  min-height: min(78vh, 52rem);
+  /* Full-bleed slideshow: break out of 120rem column (copy overlay keeps its own px). */
+  box-sizing: border-box;
+  width: 100vw;
+  max-width: none;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  padding: 3rem 0;
+}
+
+.home-hero-strip-media {
+  width: 100%;
+  max-width: none;
+}
+
+.home-hero-strip-figure {
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.home-hero-strip-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 16rem;
+  border-radius: 1rem;
+  object-fit: cover;
+  aspect-ratio: 4 / 3;
+}
+
+.home-hero-strip-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .site-page-inner-shell,
+  .home-hero-strip-inner {
+    padding: 3.5rem 1.5rem;
+  }
+
+  .home-hero-strip-inner {
+    min-height: 22rem;
+    gap: 2rem;
+  }
+
+  .home-hero-strip-inner.home-hero-strip-overlay {
+    min-height: min(80vh, 56rem);
+    padding: 3.5rem 0;
+  }
+
+  .home-hero-strip-img {
+    max-height: 20rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .site-page-inner-shell,
+  .home-hero-strip-inner {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+
+  .home-hero-strip-inner {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2.5rem;
+  }
+
+  /* Keep overlay hero stacked + centered (do not switch to text | image row). */
+  .home-hero-strip-inner.home-hero-strip-overlay {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0;
+  }
+
+  .home-hero-strip-figure {
+    width: auto;
+    max-width: min(40vw, 28rem);
+  }
+
+  .home-hero-strip-img {
+    max-height: none;
+    width: 100%;
+    max-width: 28rem;
+  }
+}
+
+/* Product detail: title — medium (500); headings can ignore Tailwind without this */
+.product-detail-page .product-detail-title {
+  font-weight: 500 !important;
+}
+
+/* Product detail: SKU + prices — ensure 300 is visible (heading UA styles / utility order) */
+.product-detail-page .product-detail-sku,
+.product-detail-page .product-detail-list-price,
+.product-detail-page .product-detail-list-price .product-detail-price-strike,
+.product-detail-page .product-detail-per-item,
+.product-detail-page .product-detail-total,
+.product-detail-page .product-detail-volume-discount-rates {
+  font-weight: 300 !important;
+}
+
+/* Admin panel print: root was 80% for screen density — bump +50% on paper for legibility (rem-based UI scales). */
+@media print {
+  html:has(.admin-root-print-shell) {
+    font-size: 120% !important;
+  }
+}
+
+/* Click up sheet: PRINT — layout/section grid (@page margin only in TS; orientation from print dialog) */
+@media print {
+  /*
+   * Admin print bumps html to 120% (see above). Click up sheet: rem-based sheet UI scales from this root.
+   * Prior baseline was 84%; ×1.5 → 126% for larger print type. Table/textarea use explicit pt (also ×1.5).
+   */
+  html:has(body.click-up-sheet-print-mode) {
+    font-size: 126% !important;
+  }
+
+  body.click-up-sheet-print-mode {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.click-up-sheet-print-mode aside.fixed.bottom-0.left-0.top-0 {
+    display: none !important;
+  }
+
+  body.click-up-sheet-print-mode .admin-panel-print-main {
+    padding-left: 0 !important;
+    overflow: visible !important;
+  }
+
+  body.click-up-sheet-print-mode .admin-panel-print-zoom {
+    zoom: 1 !important;
+  }
+
+  body.click-up-sheet-print-mode .admin-panel-print-mobile-banner {
+    display: none !important;
+  }
+
+  body.click-up-sheet-print-mode .admin-root-print-shell {
+    background: #fff !important;
+  }
+
+  /* Inset content (replaces @page margin) so @page margin can stay 0 for fewer browser header/footer artifacts */
+  body.click-up-sheet-print-mode .click-up-sheet-print-area {
+    padding: 6mm;
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-area * {
+    box-sizing: border-box;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-area section {
+    padding: 0.65rem !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-area h2 {
+    font-size: 0.65rem !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-grid {
+    display: grid !important;
+    gap: 1.25rem !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-span-2 {
+    grid-column: 1 / -1 !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-order-4 {
+    gap: 0.35rem !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-order-4 label {
+    font-size: 0.825rem !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-order-4 input {
+    padding: 0.2rem 0.35rem !important;
+    font-size: 0.9rem !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-image-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-area input,
+  body.click-up-sheet-print-mode .click-up-sheet-print-area textarea {
+    border-color: #cbd5e1 !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-area .overflow-x-auto {
+    overflow: visible !important;
+    max-width: 100% !important;
+  }
+
+  /* Supplier table: fit printable width (screen uses min-w-[820px]) */
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table {
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+    font-size: 15.35625pt !important;
+    line-height: 1.25 !important;
+  }
+
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table th,
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table td {
+    padding: 0.12rem 0.2rem !important;
+    vertical-align: top !important;
+    word-wrap: break-word !important;
+    overflow-wrap: anywhere !important;
+    hyphens: auto !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-area textarea {
+    font-size: 11.025pt !important;
+    line-height: 1.3 !important;
+    min-height: 0 !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-image-grid img {
+    max-height: 63mm !important;
+    height: auto !important;
+    object-fit: contain !important;
+  }
+
+  body.click-up-sheet-print-mode .admin-panel-print-content-row {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+}
+
+/* Production pack (admin): print — hide sidebar & panel chrome; only pack body */
+@media print {
+  /*
+   * Admin print uses html 120% (see above). Production pack: 200% root → 2× rem-based type.
+   * Table uses explicit pt (doubled below). File thumbs use zoom 0.5 so h-28 tiles stay ~previous size.
+   */
+  html:has(body.production-pack-print-mode) {
+    font-size: 200% !important;
+  }
+
+  body.production-pack-print-mode {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    margin: 0 !important;
+    background: #fff !important;
+  }
+
+  body.production-pack-print-mode aside.fixed.bottom-0.left-0.top-0 {
+    display: none !important;
+  }
+
+  body.production-pack-print-mode .admin-panel-print-main {
+    padding-left: 0 !important;
+    overflow: visible !important;
+    margin: 0 !important;
+  }
+
+  body.production-pack-print-mode .admin-panel-print-zoom {
+    zoom: 1 !important;
+  }
+
+  body.production-pack-print-mode .admin-panel-print-mobile-banner {
+    display: none !important;
+  }
+
+  body.production-pack-print-mode .admin-root-print-shell {
+    background: #fff !important;
+    min-height: 0 !important;
+  }
+
+  body.production-pack-print-mode .admin-panel-print-content-row {
+    padding: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
+
+  body.production-pack-print-mode .production-pack-print-area {
+    padding: 6mm;
+    box-sizing: border-box;
+    max-width: 100%;
+    zoom: 1;
+  }
+
+  body.production-pack-print-mode .production-pack-print-area .production-pack-print-1x-thumb {
+    /* Counter 2× html rem so asset tiles stay ~1× on paper while body text is 2×. */
+    zoom: 0.5;
+  }
+
+  body.production-pack-print-mode .production-pack-print-area * {
+    box-sizing: border-box;
+  }
+
+  body.production-pack-print-mode .production-pack-print-area .overflow-x-auto {
+    overflow: visible !important;
+    max-width: 100% !important;
+  }
+
+  body.production-pack-print-mode .production-pack-print-area table {
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: auto !important;
+    font-size: 20pt !important;
+    line-height: 1.35 !important;
+  }
+
+  /* Order items only: Item column ~3× a fair equal share (~50% vs ~17% each for 6 cols). */
+  body.production-pack-print-mode .production-pack-order-items-table {
+    table-layout: fixed !important;
+  }
+
+  body.production-pack-print-mode .production-pack-order-items-table th:nth-child(1),
+  body.production-pack-print-mode .production-pack-order-items-table td:nth-child(1) {
+    width: 5% !important;
+  }
+
+  body.production-pack-print-mode .production-pack-order-items-table th:nth-child(2),
+  body.production-pack-print-mode .production-pack-order-items-table td:nth-child(2) {
+    width: 50% !important;
+    word-wrap: break-word !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  body.production-pack-print-mode .production-pack-order-items-table th:nth-child(3),
+  body.production-pack-print-mode .production-pack-order-items-table td:nth-child(3),
+  body.production-pack-print-mode .production-pack-order-items-table th:nth-child(4),
+  body.production-pack-print-mode .production-pack-order-items-table td:nth-child(4),
+  body.production-pack-print-mode .production-pack-order-items-table th:nth-child(5),
+  body.production-pack-print-mode .production-pack-order-items-table td:nth-child(5),
+  body.production-pack-print-mode .production-pack-order-items-table th:nth-child(6),
+  body.production-pack-print-mode .production-pack-order-items-table td:nth-child(6) {
+    width: 11.25% !important;
+  }
+
+  body.production-pack-print-mode .production-pack-print-area table th,
+  body.production-pack-print-mode .production-pack-print-area table td {
+    padding: 0.35rem 0.5rem !important;
+  }
+
+  body.production-pack-print-mode .production-pack-company-name {
+    display: block;
+    font-size: 1.5rem !important;
+    line-height: 1.2 !important;
+    font-weight: 600 !important;
+    color: #0f172a !important;
+    margin-top: 0.25rem;
+  }
+
+  body.production-pack-print-mode .production-pack-print-order-id {
+    font-size: 0.95rem !important;
+    line-height: 1.35 !important;
+  }
+
+  body.production-pack-print-mode .production-pack-print-name-label {
+    font-size: 0.7rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #64748b !important;
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "productSlugPrefix": "fb",
+  "displayName": "Fashion Biz",
+  "skipTopLevelFolders": ["jpegs - web ready", "Biz Corporates"],
+  "imagesSubdir": "images"
+}
