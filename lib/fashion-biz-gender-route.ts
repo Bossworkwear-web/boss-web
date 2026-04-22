@@ -31,7 +31,7 @@ export function isBizCareOrCollectionListing(
   return n.includes("bizcare") || n.includes("bizcollection");
 }
 
-function isBizCollectionListing(
+export function isBizCollectionListing(
   productName: string,
   storeSlug?: string | null,
   category?: string | null,

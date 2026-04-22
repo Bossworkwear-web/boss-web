@@ -2,7 +2,23 @@ import { getSubCategoriesForMain } from "@/lib/catalog";
 import { getDiscountPercent } from "@/lib/discounts";
 import {
   hasStorefrontListNameAndPrice,
+  isBizCollectionWomensShirtsExclusiveListing,
+  isFashionBizMensJacketsToWomensShirtsExclusiveListing,
+  isFashionBizMensJumperToWomensJumperExclusiveListing,
+  isFashionBizPolosWomensExclusiveListing,
+  isFashionBizShirtsWomensExclusiveListing,
+  isBisleyMensPantsExclusiveListing,
+  isBisleyWomensPantsExclusiveListing,
+  isWomensPantLinesExclusiveToWomensPantsOnlyListing,
+  isMensPants4srpMensScrubsExclusiveListing,
+  isMensPantsS3fszMensJumperExclusiveListing,
+  isTp3160bKidsPantsExclusiveListing,
   isChefJacketsForcedStyleCode,
+  isJbHiVisOr6daqf6darfWorkwearJumperExclusiveListing,
+  isJbHiVisOr6dvrlWorkwearJacketsExclusiveListing,
+  isJbMensPantsFeaturesToWorkwearPantsExclusiveListing,
+  isWorkwearJb6962MiscExclusiveListing,
+  isWorkwearMiscToPantsExclusiveListing,
   isFashionBizChefLineListing,
   isProductEligibleForSiteSearch,
   isProductVisibleInCategoryBrowse,
@@ -349,6 +365,29 @@ function resolveWorkwearCategoryBrowseSubSlug(
   if (resolved == null || resolved === "") {
     return null;
   }
+  const jb6962Meta = {
+    slug: item.slug ?? null,
+    category: item.category ?? null,
+    description: item.description ?? null,
+    supplier_name: item.supplier_name ?? null,
+    audience: item.audience ?? null,
+    storefront_hidden: item.storefront_hidden ?? null,
+  };
+  if (isWorkwearJb6962MiscExclusiveListing(item.name, jb6962Meta)) {
+    return "miscellaneous";
+  }
+  if (isJbHiVisOr6daqf6darfWorkwearJumperExclusiveListing(item.name, jb6962Meta)) {
+    return "jumper";
+  }
+  if (isJbHiVisOr6dvrlWorkwearJacketsExclusiveListing(item.name, jb6962Meta)) {
+    return "jackets";
+  }
+  if (isWorkwearMiscToPantsExclusiveListing(item.name, jb6962Meta)) {
+    return "pants";
+  }
+  if (isJbMensPantsFeaturesToWorkwearPantsExclusiveListing(item.name, jb6962Meta)) {
+    return "pants";
+  }
   if (workwearSyzmikStyleForcedJumper(item)) {
     return "jumper";
   }
@@ -414,9 +453,44 @@ function resolveWorkwearCategoryBrowseSubSlug(
   return resolved;
 }
 
+function resolveKidsCategoryBrowseSubSlug(resolved: string | null, item: CategoryBrowseProductRow): string | null {
+  const kidsMeta = {
+    slug: item.slug ?? null,
+    category: item.category ?? null,
+    description: item.description ?? null,
+    supplier_name: item.supplier_name ?? null,
+    audience: item.audience ?? null,
+    storefront_hidden: item.storefront_hidden ?? null,
+  };
+  if (isTp3160bKidsPantsExclusiveListing(item.name, kidsMeta)) {
+    return "pants";
+  }
+  if (resolved == null || resolved === "") {
+    return null;
+  }
+  return resolved;
+}
+
 function resolveMensCategoryBrowseSubSlug(resolved: string | null, item: CategoryBrowseProductRow): string | null {
   if (resolved == null || resolved === "") {
     return null;
+  }
+  const bisleyMensPantsMeta = {
+    slug: item.slug ?? null,
+    category: item.category ?? null,
+    description: item.description ?? null,
+    supplier_name: item.supplier_name ?? null,
+    audience: item.audience ?? null,
+    storefront_hidden: item.storefront_hidden ?? null,
+  };
+  if (isBisleyMensPantsExclusiveListing(item.name, bisleyMensPantsMeta)) {
+    return "pants";
+  }
+  if (isMensPants4srpMensScrubsExclusiveListing(item.name, bisleyMensPantsMeta)) {
+    return "scrubs";
+  }
+  if (isMensPantsS3fszMensJumperExclusiveListing(item.name, bisleyMensPantsMeta)) {
+    return "jumper";
   }
   if (resolved === "jackets" && looksLikeMensJacketsToJumperRow(item)) {
     return "jumper";
@@ -427,6 +501,35 @@ function resolveMensCategoryBrowseSubSlug(resolved: string | null, item: Categor
 function resolveWomensCategoryBrowseSubSlug(resolved: string | null, item: CategoryBrowseProductRow): string | null {
   if (resolved == null || resolved === "") {
     return null;
+  }
+  const womensExclusiveMeta = {
+    slug: item.slug ?? null,
+    category: item.category ?? null,
+    description: item.description ?? null,
+    supplier_name: item.supplier_name ?? null,
+    audience: item.audience ?? null,
+    storefront_hidden: item.storefront_hidden ?? null,
+  };
+  if (isBizCollectionWomensShirtsExclusiveListing(item.name, womensExclusiveMeta)) {
+    return "shirts";
+  }
+  if (isFashionBizMensJacketsToWomensShirtsExclusiveListing(item.name, womensExclusiveMeta)) {
+    return "shirts";
+  }
+  if (isFashionBizMensJumperToWomensJumperExclusiveListing(item.name, womensExclusiveMeta)) {
+    return "jumper";
+  }
+  if (isFashionBizShirtsWomensExclusiveListing(item.name, womensExclusiveMeta)) {
+    return "shirts";
+  }
+  if (isFashionBizPolosWomensExclusiveListing(item.name, womensExclusiveMeta)) {
+    return "polos";
+  }
+  if (isBisleyWomensPantsExclusiveListing(item.name, womensExclusiveMeta)) {
+    return "pants";
+  }
+  if (isWomensPantLinesExclusiveToWomensPantsOnlyListing(item.name, womensExclusiveMeta)) {
+    return "pants";
   }
   if (
     resolved === "jackets" &&
@@ -497,7 +600,9 @@ export function filterProductsForMainCategoryBrowse(
           ? resolveMensCategoryBrowseSubSlug(resolved, item)
           : mainSlug === "womens"
             ? resolveWomensCategoryBrowseSubSlug(resolved, item)
-            : resolved;
+            : mainSlug === "kids"
+              ? resolveKidsCategoryBrowseSubSlug(resolved, item)
+              : resolved;
 
     if (workwearResolved == null) {
       return false;
@@ -551,7 +656,9 @@ export function filterProductsForSubCategoryBrowse(
           ? resolveMensCategoryBrowseSubSlug(resolved, item)
           : mainSlug === "womens"
             ? resolveWomensCategoryBrowseSubSlug(resolved, item)
-            : resolved;
+            : mainSlug === "kids"
+              ? resolveKidsCategoryBrowseSubSlug(resolved, item)
+              : resolved;
     const matches =
       workwearResolved === subSlug ||
       // Workwear > Shirts: include Work Shirts so Bisley work shirts appear under "Shirts" too.
