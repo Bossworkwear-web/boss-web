@@ -3,8 +3,10 @@ import { unstable_cache } from "next/cache";
 import { notFound } from "next/navigation";
 
 import { getDiscountPercent } from "@/lib/discounts";
+import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
+import { FASHION_BIZ_STYLE_GENDER } from "@/lib/fashion-biz-gender.generated";
 import { storefrontRetailFromSupplierBaseOrFallback } from "@/lib/product-price";
-import { isBizCorporatesCatalogProduct } from "@/lib/product-visibility";
+import { isBizCareCatalogProduct, isBizCorporatesCatalogProduct } from "@/lib/product-visibility";
 import { slugifyProductNameForPath } from "@/lib/product-path-slug";
 import { storefrontDescriptionForDisplay } from "@/lib/product-display-name";
 import { createSupabaseClient } from "@/lib/supabase";
@@ -17,6 +19,23 @@ import type { PlacementData, ProductDetailData } from "../premium-work-polo/prem
 import { PremiumWorkPoloClientDynamic } from "./premium-work-polo-client-dynamic";
 
 export const dynamic = "force-dynamic";
+
+const DEFAULT_PDP_FALLBACK_IMAGES: string[] = [
+  "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1600&q=80",
+  "https://images.unsplash.com/photo-1592878940526-0214b0f374f6?auto=format&fit=crop&w=1200&q=80",
+];
+
+// Biz Care unisex: hero should feature both male + female together (fallback when no supplier images).
+const BIZ_CARE_UNISEX_HERO_IMAGE =
+  "https://images.unsplash.com/photo-1580281657527-47f249e8f6f1?auto=format&fit=crop&w=1600&q=80";
+
+function moveImageUrlToFront(urls: string[], wantSubstringUpper: string): string[] {
+  const idx = urls.findIndex((u) => String(u).toUpperCase().includes(wantSubstringUpper));
+  if (idx <= 0) {
+    return urls;
+  }
+  return [urls[idx], ...urls.slice(0, idx), ...urls.slice(idx + 1)];
+}
 
 type ProductDetailPageProps = {
   params: Promise<{
@@ -460,13 +479,31 @@ async function getDetailDataInternal(
         ? String(product.supplier_name).trim()
         : "";
 
-    const normalizedImageUrls =
+    const wantsBizCareUnisexHero = (() => {
+      if (!isBizCareCatalogProduct(product.name, { slug: product.slug ?? null, category: product.category ?? null })) {
+        return false;
+      }
+      const code = fashionBizStyleCodeFromListing(product.name, product.slug ?? null);
+      if (!code) {
+        return false;
+      }
+      return FASHION_BIZ_STYLE_GENDER[code] === "unisex";
+    })();
+
+    const normalizedImageUrlsRaw =
       product.image_urls && product.image_urls.length > 0
         ? product.image_urls
-        : [
-            "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1600&q=80",
-            "https://images.unsplash.com/photo-1592878940526-0214b0f374f6?auto=format&fit=crop&w=1200&q=80",
-          ];
+        : wantsBizCareUnisexHero
+          ? [BIZ_CARE_UNISEX_HERO_IMAGE, ...DEFAULT_PDP_FALLBACK_IMAGES]
+          : DEFAULT_PDP_FALLBACK_IMAGES;
+
+    const normalizedImageUrls = (() => {
+      const code = fashionBizStyleCodeFromListing(product.name, product.slug ?? null);
+      if (code?.toUpperCase() === "CL542UL") {
+        return moveImageUrlToFront(normalizedImageUrlsRaw, "CL542UL_TALENT_MIDNIGHTNAVY_07.JPG");
+      }
+      return normalizedImageUrlsRaw;
+    })();
 
     const normalizedColorOptions = normalizeColors(product.available_colors, fallbackColors);
     const derivedFromImages = deriveColorOptionsFromImageUrls(normalizedImageUrls);

@@ -60,7 +60,7 @@ export function getSubCategoriesForMain(mainSlug: string) {
         item.slug !== "scrubs" &&
         item.slug !== "chef" &&
         item.slug !== "apron" &&
-        (!PPE_EXCLUSIVE_SET.has(item.slug) || item.slug === "head-wear"),
+        (!PPE_EXCLUSIVE_SET.has(item.slug) || item.slug === "head-wear" || item.slug === "miscellaneous"),
     );
   }
   if (mainSlug === "chef") {

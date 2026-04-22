@@ -48,8 +48,24 @@ function nameIndicatesMensPantsProduct(name: string): boolean {
   const hasMens =
     /\bmens\b/i.test(name) ||
     /\bmen['\u2019]s\b/i.test(lower);
-  const hasPant = /\bpants?\b/i.test(lower);
-  return hasMens && hasPant;
+  if (!hasMens) {
+    return false;
+  }
+  const pantsLike =
+    /\b(pants?|trousers?|joggers?|overalls?)\b/i.test(lower) ||
+    /\bshorts?\b/i.test(lower) ||
+    /\b(cargo|work|utility)\s+(pants?|trousers?|shorts?)\b/i.test(lower) ||
+    /\b(cargo|work|utility)\b/i.test(lower) ||
+    /\bmulti\s*pocket\b/i.test(lower) ||
+    /\bmulti\s*pkt\b/i.test(lower);
+  if (!pantsLike) {
+    return false;
+  }
+  // If it's clearly a shirt, don't mis-route.
+  if (/\bshirt\b/i.test(lower) && !/\bpants?\b/i.test(lower)) {
+    return false;
+  }
+  return true;
 }
 
 /** Biz Collection lines with TP in the style / title → Men's/Pants (see `fashionBizListingGenderAudience`). */
@@ -311,6 +327,91 @@ export function resolveProductSubSlug(
 ): string {
   const catMeta = { category };
 
+  /** JB's Wear 5BSNP bib apron: requested to list under Chef → Apron. */
+  const jbApronHay = `${name} ${storeSlug ?? ""}`.toUpperCase();
+  if (/\b5BSNP\b/.test(jbApronHay)) {
+    return "apron";
+  }
+
+  /** Biz Collection BS722M: requested to list under Men's → Jackets. */
+  const bs722mHay = `${name} ${storeSlug ?? ""}`.toUpperCase();
+  if (/\bBS722M\b/.test(bs722mHay)) {
+    return "jackets";
+  }
+
+  /** Biz Care CT247ML: requested to list under Men's → T-shirts. */
+  const ct247mlHay = `${name} ${storeSlug ?? ""}`.toUpperCase();
+  if (/\bCT247ML\b/.test(ct247mlHay)) {
+    return "t-shirts";
+  }
+
+  /** Polo products sometimes leak into T-shirts when DB category is wrong; prefer Polos when text says "polo". */
+  const poloHay = `${name} ${storeSlug ?? ""} ${category ?? ""} ${description ?? ""}`.toLowerCase();
+  if (/\bpolo\b/.test(poloHay) && !/\bpoloneck\b/.test(poloHay)) {
+    return "polos";
+  }
+
+  /** PPE accessories sometimes leak into Men's/T-shirts. Keep them under PPE → Miscellaneous. */
+  const ppeAccessoryHay = `${name} ${storeSlug ?? ""} ${description ?? ""}`.toLowerCase();
+  if (
+    /\bear\s*muffs?\b/.test(ppeAccessoryHay) ||
+    /\bknee\s*pads?\b/.test(ppeAccessoryHay) ||
+    /\bear\s*plugs?\b/.test(ppeAccessoryHay) ||
+    /\bfoot\s*bed\b/.test(ppeAccessoryHay) ||
+    /\bfootbed\b/.test(ppeAccessoryHay)
+  ) {
+    return "miscellaneous";
+  }
+
+  /** Safety glasses often show up as "Spec/Specs" in supplier titles. Route to PPE → Safty Glasses. */
+  const specHay = `${name} ${storeSlug ?? ""} ${category ?? ""} ${description ?? ""}`.toLowerCase();
+  if (
+    /\b(spec|specs|spectacles)\b/.test(specHay) &&
+    !/\bspecification(s)?\b/.test(specHay)
+  ) {
+    return "safty-glasses";
+  }
+
+  /** Shoes should list under PPE → Boots (not under Men's/T-shirts). */
+  const shoeHay = `${name} ${storeSlug ?? ""} ${category ?? ""} ${description ?? ""}`.toLowerCase();
+  if (/\bshoes?\b/.test(shoeHay) || /\bsneakers?\b/.test(shoeHay)) {
+    return "boots";
+  }
+
+  /** Rugby tops should list under Polos (not under T-shirts). */
+  const rugbyHay = `${name} ${storeSlug ?? ""} ${category ?? ""} ${description ?? ""}`.toLowerCase();
+  if (
+    /\brugby\b/.test(rugbyHay) &&
+    !/\bshorts?\b/.test(rugbyHay) &&
+    !/\b(pant|pants|trouser|trousers|jogger|joggers|overalls?)\b/.test(rugbyHay)
+  ) {
+    return "polos";
+  }
+
+  /** Bisley BB101: must list under PPE → Miscellaneous only (see `isProductVisibleInCategoryBrowse` exception). */
+  const bb101Hay = `${name} ${storeSlug ?? ""}`.toUpperCase();
+  if (/\bBB101\b/.test(bb101Hay)) {
+    return "miscellaneous";
+  }
+
+  /** Bisley BS6404: requested to list under Men's → Polos (see `isProductVisibleInCategoryBrowse` exception). */
+  const bs6404Hay = `${name} ${storeSlug ?? ""}`.toUpperCase();
+  if (/\bBS6404\b/.test(bs6404Hay)) {
+    return "polos";
+  }
+
+  /** JB knit vests: requested to list under Men's → Jumper (not under Workwear/Hi-vis Vest). */
+  const jbKnitVestHay = `${name} ${storeSlug ?? ""}`.toUpperCase();
+  if (/\b6ATV\b/.test(jbKnitVestHay) || /\b6V\b/.test(jbKnitVestHay)) {
+    return "jumper";
+  }
+
+  /** Biz Care CID940U: requested to list under PPE → Miscellaneous. */
+  const cid940uHay = `${name} ${storeSlug ?? ""}`.toUpperCase();
+  if (/\bCID940U\b/.test(cid940uHay)) {
+    return "miscellaneous";
+  }
+
   if (isSocksKeywordProduct(name, catMeta)) {
     return "miscellaneous";
   }
@@ -418,6 +519,13 @@ export function resolveProductSubSlug(
     nameIndicatesMensPantsProduct(name)
   ) {
     return "pants";
+  }
+  if (fromCategory === "shirts" || fromCategory === "work-shirts") {
+    const inferred = inferSubSlugFromNameHeuristics(name);
+    // Mis-bucketed jackets in supplier folders / CSV imports should not stay under Shirts.
+    if (inferred === "jackets") {
+      return "jackets";
+    }
   }
   if (fromCategory) {
     return fromCategory;

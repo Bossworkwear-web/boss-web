@@ -10,6 +10,7 @@ import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
 import { TopNav } from "@/app/components/top-nav";
 import { WorkwearCategoryTopAd } from "@/app/components/workwear-category-top-ad";
 import { getDiscountPercent } from "@/lib/discounts";
+import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
 import { getMainCategory, getSubCategoriesForMain, SUB_CATEGORIES } from "@/lib/catalog";
 import {
   CATEGORY_BROWSE_PAGE_SIZE,
@@ -60,12 +61,26 @@ const DEFAULT_IMAGE_BY_SUB: Record<string, string> = {
     "https://images.unsplash.com/photo-1584308666744-24d5cfdc7ae8?auto=format&fit=crop&w=1600&q=80",
 };
 
-function subPageHref(mainSlug: string, subSlug: string, page: number, brand?: string) {
+function heroOverrideCardImageUrl(item: CategoryBrowseProductRow): string | null {
+  const code = fashionBizStyleCodeFromListing(item.name, item.slug ?? null);
+  if (code?.toUpperCase() === "CL542UL") {
+    const want = "CL542UL_TALENT_MIDNIGHTNAVY_07.JPG";
+    const hit = (item.image_urls ?? []).find((u) => String(u).toUpperCase().includes(want));
+    return hit?.trim() ? hit.trim() : null;
+  }
+  return null;
+}
+
+function subPageHref(mainSlug: string, subSlug: string, page: number, brand?: string, sort?: string) {
   const base = `/categories/${mainSlug}/${subSlug}`;
   const params = new URLSearchParams();
   const b = String(brand ?? "").trim();
   if (b) {
     params.set("brand", b);
+  }
+  const s = String(sort ?? "").trim();
+  if (s) {
+    params.set("sort", s);
   }
   if (page > 1) {
     params.set("page", String(page));
@@ -89,11 +104,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function SubCategoryBrowsePage({ params, searchParams }: Props) {
   const { slug, subSlug } = await params;
-  const { page: pageParam, brand: brandParamRaw } = await searchParams;
+  const { page: pageParam, brand: brandParamRaw, sort: sortParamRaw } = await searchParams;
+
+  // Normalize case (users often type `/Miscellaneous` etc). Next route params preserve case.
+  if (subSlug !== subSlug.toLowerCase()) {
+    redirect(`/categories/${slug}/${subSlug.toLowerCase()}`);
+  }
 
   if (slug === "workwear") {
     const alias: Record<string, string> = {
       jumpers: "jumper",
+      misc: "miscellaneous",
     };
     const mapped = alias[subSlug];
     if (mapped) {
@@ -174,6 +195,28 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
     return "";
   };
 
+  const jbLooksHiVis = (item: { name: string; slug?: string | null; category?: string | null; description?: string | null }) => {
+    const hay = `${item.name} ${item.slug ?? ""} ${item.category ?? ""} ${item.description ?? ""}`.toLowerCase();
+    return /\bhv\b/.test(hay) || /\bhi[\s-]*vis\b/.test(hay) || /\bhigh[\s-]*vis\b/.test(hay);
+  };
+
+  const looksWorkwearShirtKeywords = (item: {
+    name: string;
+    slug?: string | null;
+    category?: string | null;
+    description?: string | null;
+  }) => {
+    const hay = `${item.name} ${item.slug ?? ""} ${item.category ?? ""} ${item.description ?? ""}`.toLowerCase();
+    return (
+      /\bhv\b/.test(hay) ||
+      /\bhi[\s-]*vis\b/.test(hay) ||
+      /\bhigh[\s-]*vis\b/.test(hay) ||
+      /\bwork\s*shirt\b/.test(hay) ||
+      /\bwork\s*shirts?\b/.test(hay) ||
+      /\breflective\b/.test(hay)
+    );
+  };
+
   const filteredAllBrands = filterProductsForSubCategoryBrowse(slug, subSlug, allRows)
     .filter((item) => {
       if (slug === "workwear") {
@@ -182,10 +225,12 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
           if (isJbWorkwearExcludedHeadwearOrSocks(item.name, { category: item.category ?? null })) {
             return false;
           }
-          return isJbWearSixSeriesListing(item.name, {
-            slug: item.slug ?? null,
-            supplier_name: item.supplier_name ?? null,
-          });
+          return (
+            isJbWearSixSeriesListing(item.name, {
+              slug: item.slug ?? null,
+              supplier_name: item.supplier_name ?? null,
+            }) || jbLooksHiVis(item)
+          );
         }
         return true;
       }
@@ -199,6 +244,7 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const brandParam = String(brandParamRaw ?? "").trim();
+  const sortParam = String(sortParamRaw ?? "").trim();
   const brandsForDropdown = (() => {
     const fromRows = new Set(
       filteredAllBrands.map((r) => inferredBrandForFilter(r)).filter((s) => s.length > 0),
@@ -231,12 +277,38 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
         })
       : filteredAllBrands;
 
+  const sortEffective = sortParam === "price-asc" || sortParam === "price-desc" ? sortParam : "";
+  const sorted =
+    sortEffective.length > 0
+      ? [...filtered].sort((a, b) => {
+          const ap = storefrontRetailFromSupplierBase(a.base_price) ?? Number.POSITIVE_INFINITY;
+          const bp = storefrontRetailFromSupplierBase(b.base_price) ?? Number.POSITIVE_INFINITY;
+          if (ap !== bp) {
+            return sortEffective === "price-asc" ? ap - bp : bp - ap;
+          }
+          return a.name.localeCompare(b.name);
+        })
+      : filtered;
+
   const parsed = Number.parseInt(String(pageParam ?? "1"), 10);
   const requestedPage = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
-  const totalPages = Math.max(1, Math.ceil(filtered.length / CATEGORY_BROWSE_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(sorted.length / CATEGORY_BROWSE_PAGE_SIZE));
   const currentPage = Math.min(requestedPage, totalPages);
   const offset = (currentPage - 1) * CATEGORY_BROWSE_PAGE_SIZE;
-  const pageItems = filtered.slice(offset, offset + CATEGORY_BROWSE_PAGE_SIZE);
+  const pageItems = sorted.slice(offset, offset + CATEGORY_BROWSE_PAGE_SIZE);
+
+  const pageWindow = (() => {
+    const maxButtons = 5;
+    const count = Math.min(totalPages, maxButtons);
+    const half = Math.floor(count / 2);
+    let start = Math.max(1, currentPage - half);
+    let end = start + count - 1;
+    if (end > totalPages) {
+      end = totalPages;
+      start = Math.max(1, end - count + 1);
+    }
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  })();
 
   const matchAnySub = allRows.filter((item) => {
     const resolved = resolveProductSubSlug(item.name, item.category, item.slug, item.description);
@@ -289,6 +361,7 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
                   ? (resolveChefCategoryBrowseSubSlug(item) ?? subSlug)
                   : (resolveProductSubSlug(item.name, item.category, item.slug, item.description) ?? subSlug);
               const imageUrl =
+                heroOverrideCardImageUrl(item) ??
                 item.image_urls?.[0] ??
                 DEFAULT_IMAGE_BY_SUB[resolvedSub] ??
                 DEFAULT_IMAGE_BY_SUB["t-shirts"];
@@ -353,14 +426,14 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
             })}
           </div>
 
-          {totalPages > 1 && filtered.length > 0 ? (
+          {totalPages > 1 && sorted.length > 0 ? (
             <nav
               className="mt-10 flex flex-wrap items-center justify-center gap-4 border-t border-brand-navy/10 pt-8 text-[1.05rem] leading-snug"
               aria-label="Product list pagination"
             >
               {currentPage > 1 ? (
                 <Link
-                  href={subPageHref(slug, subSlug, currentPage - 1, brandParamEffective)}
+                  href={subPageHref(slug, subSlug, currentPage - 1, brandParamEffective, sortEffective)}
                   className="rounded-lg border border-brand-navy/20 px-4 py-2 font-semibold text-brand-navy transition hover:border-brand-orange hover:text-brand-orange"
                 >
                   Previous
@@ -370,14 +443,30 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
                   Previous
                 </span>
               )}
-              <p className="text-brand-navy/70">
-                Page <span className="font-semibold text-brand-navy">{currentPage}</span> of{" "}
-                <span className="font-semibold text-brand-navy">{totalPages}</span>
-                <span className="text-brand-navy/55"> ({filtered.length} products)</span>
-              </p>
+              <div className="flex items-center gap-2">
+                {pageWindow.map((p) =>
+                  p === currentPage ? (
+                    <span
+                      key={p}
+                      className="rounded-lg border border-brand-orange bg-brand-orange/10 px-3 py-2 font-semibold text-brand-orange"
+                      aria-current="page"
+                    >
+                      {p}
+                    </span>
+                  ) : (
+                    <Link
+                      key={p}
+                      href={subPageHref(slug, subSlug, p, brandParamEffective, sortEffective)}
+                      className="rounded-lg border border-brand-navy/20 px-3 py-2 font-semibold text-brand-navy transition hover:border-brand-orange hover:text-brand-orange"
+                    >
+                      {p}
+                    </Link>
+                  ),
+                )}
+              </div>
               {currentPage < totalPages ? (
                 <Link
-                  href={subPageHref(slug, subSlug, currentPage + 1, brandParamEffective)}
+                  href={subPageHref(slug, subSlug, currentPage + 1, brandParamEffective, sortEffective)}
                   className="rounded-lg border border-brand-navy/20 px-4 py-2 font-semibold text-brand-navy transition hover:border-brand-orange hover:text-brand-orange"
                 >
                   Next

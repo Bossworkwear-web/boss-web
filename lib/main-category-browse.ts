@@ -2,16 +2,20 @@ import { getSubCategoriesForMain } from "@/lib/catalog";
 import { getDiscountPercent } from "@/lib/discounts";
 import {
   hasStorefrontListNameAndPrice,
+  isChefJacketsForcedStyleCode,
   isFashionBizChefLineListing,
   isProductEligibleForSiteSearch,
   isProductVisibleInCategoryBrowse,
+  isWomensJacketsForceWomensJumperStyleCode,
   isYesChefCatalogProduct,
 } from "@/lib/product-visibility";
+import { storefrontStripSupplierBranding } from "@/lib/product-display-name";
 import {
   inferSubSlugFromNameHeuristics,
   resolveProductSubSlug,
   subSlugFromDbCategory,
 } from "@/lib/product-subslug";
+import { SYZMIK_STYLE_MARKETING_TITLE } from "@/lib/syzmik-style-titles.generated";
 
 export type CategoryBrowseProductRow = {
   id: string;
@@ -60,6 +64,18 @@ function rowLooksLikeApronGarment(item: CategoryBrowseProductRow): boolean {
 
 /** Map DB/listing `chef` sub-slug into real Chef menu subs (jackets / pants / apron / miscellaneous). */
 export function resolveChefCategoryBrowseSubSlug(item: CategoryBrowseProductRow): string | null {
+  const forcedChefJacketMeta = {
+    slug: item.slug ?? null,
+    category: item.category ?? null,
+    description: item.description ?? null,
+    supplier_name: item.supplier_name ?? null,
+    audience: item.audience ?? null,
+    storefront_hidden: item.storefront_hidden ?? null,
+  };
+  if (isChefJacketsForcedStyleCode(item.name, forcedChefJacketMeta)) {
+    return "jackets";
+  }
+
   const blendedForChef = [item.name, item.category, item.description]
     .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
     .join(" ");
@@ -152,6 +168,49 @@ function workwearCategoryBrowseTextBlob(item: CategoryBrowseProductRow): string 
     .toLowerCase();
 }
 
+/** Tee / singlet / tank-style tops (used for Syzmik Polos → T-shirts and Work Shirts ordering). */
+function looksLikeSyzmikTeeGarmentInBlob(blob: string): boolean {
+  return /\b(tee|t-shirt|t shirt|singlet|tank top|\btank\b|crew neck|v-neck|v neck|scoop neck|raglan|cotton tee|sleeveless tee)\b/i.test(
+    blob,
+  );
+}
+
+function looksLikeSyzmikTeeGarmentRow(item: CategoryBrowseProductRow): boolean {
+  return looksLikeSyzmikTeeGarmentInBlob(workwearCategoryBrowseTextBlob(item));
+}
+
+function syzmikStyleCodesForBrowseRow(item: CategoryBrowseProductRow): { code: string; base: string } | null {
+  const stripped = storefrontStripSupplierBranding(item.name).trim();
+  const head = stripped.split(/\s+/)[0]?.toUpperCase().replace(/[^A-Z0-9-]/g, "") ?? "";
+  let code: string | null = null;
+  if (/^Z[A-Z0-9]{2,}$/i.test(head)) {
+    code = head;
+  } else {
+    const m = `${item.name} ${item.slug ?? ""}`.toUpperCase().match(/\b(ZH[L]?\d{3})\b/);
+    if (m) {
+      code = m[1];
+    }
+  }
+  if (!code) {
+    return null;
+  }
+  const upper = code.toUpperCase();
+  return { code: upper, base: upper.replace(/-CLEARANCE$/i, "") };
+}
+
+function syzmikCsvMarketingTitleForBrowseRow(item: CategoryBrowseProductRow): string | null {
+  const keys = syzmikStyleCodesForBrowseRow(item);
+  if (!keys) {
+    return null;
+  }
+  const raw = SYZMIK_STYLE_MARKETING_TITLE[keys.code] ?? SYZMIK_STYLE_MARKETING_TITLE[keys.base];
+  return raw?.trim() ? raw.trim() : null;
+}
+
+function syzmikCsvTitleImpliesTee(title: string): boolean {
+  return looksLikeSyzmikTeeGarmentInBlob(title.toLowerCase());
+}
+
 /** Jackets → Jumper when knit-layer keywords present and not clearly outerwear jacket. */
 function looksLikeWorkwearJacketsToJumperRow(item: CategoryBrowseProductRow): boolean {
   const blob = workwearCategoryBrowseTextBlob(item);
@@ -171,6 +230,18 @@ function looksLikeWorkwearJacketsToJumperRow(item: CategoryBrowseProductRow): bo
 function looksLikeWorkwearTshirtsToJumperRow(item: CategoryBrowseProductRow): boolean {
   const blob = workwearCategoryBrowseTextBlob(item);
   return /\b(fleece|hoodie|hoody|pullover|jumper|sweatshirt)\b/.test(blob);
+}
+
+/** Men's jackets grid often catches hoodies/sweaters; route those to Men's/Jumper. */
+function looksLikeMensJacketsToJumperRow(item: CategoryBrowseProductRow): boolean {
+  const blob = workwearCategoryBrowseTextBlob(item);
+  const wantsJumper = /\b(hoodie|hoody|sweatshirt|jumper|sweater|pullover|fleece|knit(?:ted)?)\b/i.test(blob);
+  if (!wantsJumper) {
+    return false;
+  }
+  const looksLikeOuterwear =
+    /\b(jacket|coat|parka|windbreaker|bomber|anorak|softshell|hard\s*shell|hardshell|rain|puffer)\b/i.test(blob);
+  return !looksLikeOuterwear;
 }
 
 /** Syzmik style codes that must list under Workwear/Jumper even when DB/subslug says T-shirts. */
@@ -224,7 +295,7 @@ function looksLikeSyzmikWorkShirtsFormalOrWovenShirt(item: CategoryBrowseProduct
   if (/\b(polo|pique)\b/i.test(blob)) {
     return false;
   }
-  if (/\b(tee|t-shirt|t shirt|singlet|tank top|tank\b|crew neck|v-neck|v neck|scoop neck|raglan)\b/i.test(blob)) {
+  if (looksLikeSyzmikTeeGarmentInBlob(blob)) {
     return false;
   }
   return (
@@ -233,6 +304,41 @@ function looksLikeSyzmikWorkShirtsFormalOrWovenShirt(item: CategoryBrowseProduct
     ) ||
     /\bwork shirt\b/i.test(blob) ||
     (/\bshirt\b/i.test(blob) && /\bbutton\b/i.test(blob))
+  );
+}
+
+/**
+ * Bottoms mis-filed under Workwear / Shirts (DB `Shirts` or `Work Shirts`). Uses name/category/description/slug
+ * only — avoids bare "short" so "short sleeve shirt" rows are not treated as shorts.
+ */
+function looksLikeWorkwearBottomGarmentRow(item: CategoryBrowseProductRow): boolean {
+  const blob = workwearCategoryBrowseTextBlob(item);
+  return (
+    /\bjeans?\b/i.test(blob) ||
+    /\bjeggings?\b/i.test(blob) ||
+    /\b(trousers?|pants?|joggers?|overalls?)\b/i.test(blob) ||
+    /\bshorts\b/i.test(blob) ||
+    /\b(cargo|work|board|chino|rugby|stretch|summer|walk|golf|bermuda|utility|drill|denim)\s+short\b/i.test(blob)
+  );
+}
+
+function looksLikeWorkwearTankOrSingletRow(item: CategoryBrowseProductRow): boolean {
+  const blob = workwearCategoryBrowseTextBlob(item);
+  return /\b(singlet|tank top|\btank\b)\b/i.test(blob);
+}
+
+function looksLikeWorkwearWovenShirtRow(item: CategoryBrowseProductRow): boolean {
+  const blob = workwearCategoryBrowseTextBlob(item);
+  // Don't steal tees/polos from their correct buckets.
+  if (looksLikeSyzmikTeeGarmentInBlob(blob) || /\b(polo|pique)\b/i.test(blob)) {
+    return false;
+  }
+  // Common woven/work shirt signals.
+  return (
+    /\b(work shirt|work-shirt|utility shirt|overshirt|flannel shirt|oxford shirt|dress shirt|business shirt)\b/i.test(
+      blob,
+    ) ||
+    (/\bshirt\b/i.test(blob) && /\b(button|buttons|button-up|button up)\b/i.test(blob))
   );
 }
 
@@ -249,7 +355,39 @@ function resolveWorkwearCategoryBrowseSubSlug(
   if (workwearSyzmikStyleForcedTshirts(item)) {
     return "t-shirts";
   }
+  // Workwear/Miscellaneous sometimes contains vest items (from supplier buckets / misc codes).
+  // Always list vests under Workwear/Hi-vis Vest instead.
+  if (resolved === "miscellaneous") {
+    const blob = workwearCategoryBrowseTextBlob(item);
+    if (/\bvests?\b/i.test(blob)) {
+      return "hi-vis-vest";
+    }
+  }
+  // Workwear/Shirts often receives singlets/tanks via supplier folders; always show under Workwear/T-shirts.
+  if (
+    (resolved === "shirts" || resolved === "work-shirts") &&
+    looksLikeWorkwearTankOrSingletRow(item)
+  ) {
+    return "t-shirts";
+  }
+  // Workwear/Pants sometimes receives woven shirts via supplier folders; always list under Workwear/Shirts.
+  if (resolved === "pants" && looksLikeWorkwearWovenShirtRow(item)) {
+    return "shirts";
+  }
+  if (
+    (resolved === "shirts" || resolved === "work-shirts") &&
+    looksLikeWorkwearBottomGarmentRow(item)
+  ) {
+    return "pants";
+  }
   if (isWorkwearBrowseRowSyzmik(item) && resolved === "work-shirts") {
+    const csvTitle = syzmikCsvMarketingTitleForBrowseRow(item);
+    if (
+      (csvTitle != null && syzmikCsvTitleImpliesTee(csvTitle)) ||
+      looksLikeSyzmikTeeGarmentRow(item)
+    ) {
+      return "t-shirts";
+    }
     const blob = workwearCategoryBrowseTextBlob(item);
     if (/\b(polo|pique)\b/i.test(blob)) {
       return "polos";
@@ -258,10 +396,49 @@ function resolveWorkwearCategoryBrowseSubSlug(
       return "t-shirts";
     }
   }
+  if (isWorkwearBrowseRowSyzmik(item) && resolved === "polos") {
+    const csvTitle = syzmikCsvMarketingTitleForBrowseRow(item);
+    if (
+      (csvTitle != null && syzmikCsvTitleImpliesTee(csvTitle)) ||
+      looksLikeSyzmikTeeGarmentRow(item)
+    ) {
+      return "t-shirts";
+    }
+  }
   if (resolved === "jackets" && looksLikeWorkwearJacketsToJumperRow(item)) {
     return "jumper";
   }
   if (resolved === "t-shirts" && looksLikeWorkwearTshirtsToJumperRow(item)) {
+    return "jumper";
+  }
+  return resolved;
+}
+
+function resolveMensCategoryBrowseSubSlug(resolved: string | null, item: CategoryBrowseProductRow): string | null {
+  if (resolved == null || resolved === "") {
+    return null;
+  }
+  if (resolved === "jackets" && looksLikeMensJacketsToJumperRow(item)) {
+    return "jumper";
+  }
+  return resolved;
+}
+
+function resolveWomensCategoryBrowseSubSlug(resolved: string | null, item: CategoryBrowseProductRow): string | null {
+  if (resolved == null || resolved === "") {
+    return null;
+  }
+  if (
+    resolved === "jackets" &&
+    isWomensJacketsForceWomensJumperStyleCode(item.name, {
+      slug: item.slug ?? null,
+      category: item.category ?? null,
+      description: item.description ?? null,
+      supplier_name: item.supplier_name ?? null,
+      audience: item.audience ?? null,
+      storefront_hidden: item.storefront_hidden ?? null,
+    })
+  ) {
     return "jumper";
   }
   return resolved;
@@ -314,7 +491,13 @@ export function filterProductsForMainCategoryBrowse(
           (mainSlug === "workwear" && isSyzmikOrBisleyWorkwearRow(item) ? "t-shirts" : null);
 
     const workwearResolved =
-      mainSlug === "workwear" ? resolveWorkwearCategoryBrowseSubSlug(resolved, item) : resolved;
+      mainSlug === "workwear"
+        ? resolveWorkwearCategoryBrowseSubSlug(resolved, item)
+        : mainSlug === "mens"
+          ? resolveMensCategoryBrowseSubSlug(resolved, item)
+          : mainSlug === "womens"
+            ? resolveWomensCategoryBrowseSubSlug(resolved, item)
+            : resolved;
 
     if (workwearResolved == null) {
       return false;
@@ -362,11 +545,18 @@ export function filterProductsForSubCategoryBrowse(
           inferSubSlugFromNameHeuristics(item.name);
 
     const workwearResolved =
-      mainSlug === "workwear" ? resolveWorkwearCategoryBrowseSubSlug(resolved, item) : resolved;
+      mainSlug === "workwear"
+        ? resolveWorkwearCategoryBrowseSubSlug(resolved, item)
+        : mainSlug === "mens"
+          ? resolveMensCategoryBrowseSubSlug(resolved, item)
+          : mainSlug === "womens"
+            ? resolveWomensCategoryBrowseSubSlug(resolved, item)
+            : resolved;
     const matches =
       workwearResolved === subSlug ||
       // Workwear > Shirts: include Work Shirts so Bisley work shirts appear under "Shirts" too.
-      (mainSlug === "workwear" && subSlug === "shirts" && resolved === "work-shirts");
+      // Use workwearResolved so rows remapped to Pants / T-shirts / Polos do not stay in Shirts.
+      (mainSlug === "workwear" && subSlug === "shirts" && workwearResolved === "work-shirts");
     if (!matches) {
       return false;
     }
