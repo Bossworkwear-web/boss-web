@@ -1,12 +1,14 @@
-import { isBizCareListingInMiscGeneratedSet } from "@/lib/biz-care-misc-route";
 import { PPE_EXCLUSIVE_SUB_SLUGS } from "@/lib/catalog";
 import { fashionBizListingGenderAudience } from "@/lib/fashion-biz-gender-route";
+import {
+  isHealthCareCatalogListing,
+  resolveHealthCareBrowseSubSlug,
+} from "@/lib/health-care-browse";
 import { inferSubSlugFromProductName, resolveProductSubSlug } from "@/lib/product-subslug";
 import {
   isBagKeywordProduct,
   isBisleyCatalogProduct,
-  isBizCareCatalogProduct,
-  isBizCareHatLikeProduct,
+  isChefMiscellaneousExclusiveJbStyleListing,
   isHeadWearKeywordProduct,
   isJbWearSixSeriesListing,
   isSocksKeywordProduct,
@@ -30,15 +32,20 @@ const PPE_SUBS = new Set(PPE_EXCLUSIVE_SUB_SLUGS);
 export function inferMainSlugForProduct(
   name: string,
   subSlug: string,
-  meta?: { slug?: string | null; category?: string | null; supplier_name?: string | null },
+  meta?: {
+    slug?: string | null;
+    category?: string | null;
+    supplier_name?: string | null;
+    description?: string | null;
+  },
 ): string {
+  if (isHealthCareCatalogListing(name, meta)) {
+    return "health-care";
+  }
   if (isSocksKeywordProduct(name, meta)) {
     return "ppe";
   }
   if (isBagKeywordProduct(name, meta)) {
-    return "ppe";
-  }
-  if (isBizCareCatalogProduct(name, meta) && isBizCareHatLikeProduct(name, meta)) {
     return "ppe";
   }
   if (isJbWearSixSeriesListing(name, meta)) {
@@ -53,9 +60,6 @@ export function inferMainSlugForProduct(
     }
   }
   if (isHeadWearKeywordProduct(name)) {
-    return "ppe";
-  }
-  if (isBizCareListingInMiscGeneratedSet(name, meta?.slug ?? null)) {
     return "ppe";
   }
   if (isSyzmikZaPpeMiscListing(name, meta)) {
@@ -130,6 +134,7 @@ export function syncSidebarNavFromProductIfNeeded(
   category?: string | null,
   storeSlug?: string | null,
   supplierName?: string | null,
+  description?: string | null,
 ): void {
   if (typeof window === "undefined") {
     return;
@@ -137,6 +142,33 @@ export function syncSidebarNavFromProductIfNeeded(
   const inferredSub = resolveProductSubSlug(productName, category ?? null, storeSlug ?? null);
   const stored = readSidebarNavClient();
   const jbSixMeta = { slug: storeSlug ?? null, supplier_name: supplierName ?? null };
+
+  const healthSub = resolveHealthCareBrowseSubSlug(productName, {
+    slug: storeSlug ?? null,
+    category: category ?? null,
+    description: description ?? null,
+  });
+  if (healthSub != null) {
+    if (stored?.mainSlug === "health-care" && stored?.subSlug === healthSub) {
+      return;
+    }
+    persistSidebarNavClient("health-care", healthSub);
+    return;
+  }
+
+  const chefMiscExclusiveMeta = {
+    slug: storeSlug ?? null,
+    category: category ?? null,
+    description: description ?? null,
+    supplier_name: supplierName ?? null,
+  };
+  if (isChefMiscellaneousExclusiveJbStyleListing(productName, chefMiscExclusiveMeta)) {
+    if (stored?.mainSlug === "chef" && stored?.subSlug === "miscellaneous") {
+      return;
+    }
+    persistSidebarNavClient("chef", "miscellaneous");
+    return;
+  }
 
   if (isSocksKeywordProduct(productName, { category })) {
     if (stored?.mainSlug === "ppe" && stored?.subSlug === "miscellaneous") {
@@ -147,14 +179,6 @@ export function syncSidebarNavFromProductIfNeeded(
   }
 
   if (isBagKeywordProduct(productName, { category })) {
-    if (stored?.mainSlug === "ppe" && stored?.subSlug === "miscellaneous") {
-      return;
-    }
-    persistSidebarNavClient("ppe", "miscellaneous");
-    return;
-  }
-
-  if (isBizCareCatalogProduct(productName, { category }) && isBizCareHatLikeProduct(productName, { category })) {
     if (stored?.mainSlug === "ppe" && stored?.subSlug === "miscellaneous") {
       return;
     }
@@ -175,14 +199,6 @@ export function syncSidebarNavFromProductIfNeeded(
       return;
     }
     persistSidebarNavClient("ppe", "head-wear");
-    return;
-  }
-
-  if (isBizCareListingInMiscGeneratedSet(productName, storeSlug ?? null)) {
-    if (stored?.mainSlug === "ppe" && stored?.subSlug === "miscellaneous") {
-      return;
-    }
-    persistSidebarNavClient("ppe", "miscellaneous");
     return;
   }
 
@@ -218,6 +234,7 @@ export function syncSidebarNavFromProductIfNeeded(
   const main = inferMainSlugForProduct(productName, inferredSub, {
     ...workwearMeta,
     supplier_name: supplierName ?? null,
+    description: description ?? null,
   });
   persistSidebarNavClient(main, inferredSub);
 }

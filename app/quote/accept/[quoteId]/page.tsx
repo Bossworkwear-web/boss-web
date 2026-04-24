@@ -4,6 +4,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase";
 import { DEFAULT_QUOTE_EMAIL_LEAD_TIME } from "@/lib/crm/quote-email-draft";
 import { initialQuoteEmailLinesForPortal } from "@/lib/crm/quote-portal-initial-lines";
 
+import { TopNav } from "@/app/components/top-nav";
+
 import { QuoteAcceptClient } from "./quote-accept-client";
 
 export const dynamic = "force-dynamic";
@@ -125,17 +127,20 @@ export default async function QuoteAcceptPage({ params, searchParams }: PageProp
   const leadTimeDisplay = r.quote_email_lead_time?.trim() || DEFAULT_QUOTE_EMAIL_LEAD_TIME;
 
   return (
-    <QuoteAcceptClient
-      embed={embedMode}
-      quoteId={r.id}
-      token={tok}
-      companyName={r.company_name}
-      contactName={r.contact_name}
-      staffProductLines={staffProductLines}
-      staffDelivery={staffDelivery}
-      leadTimeDisplay={leadTimeDisplay}
-      alreadyAccepted={alreadyAccepted}
-      acceptedSummary={acceptedSummary}
-    />
+    <>
+      {!embedMode ? <TopNav /> : null}
+      <QuoteAcceptClient
+        embed={embedMode}
+        quoteId={r.id}
+        token={tok}
+        companyName={r.company_name}
+        contactName={r.contact_name}
+        staffProductLines={staffProductLines}
+        staffDelivery={staffDelivery}
+        leadTimeDisplay={leadTimeDisplay}
+        alreadyAccepted={alreadyAccepted}
+        acceptedSummary={acceptedSummary}
+      />
+    </>
   );
 }

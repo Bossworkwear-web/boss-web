@@ -13,6 +13,7 @@ import {
 import { FASHION_BIZ_STYLE_GENDER } from "@/lib/fashion-biz-gender.generated";
 import { FASHION_BIZ_LISTING_SUBSLUG } from "@/lib/fashion-biz-listing-subslug.generated";
 import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
+import { resolveHealthCareBrowseSubSlug } from "@/lib/health-care-browse";
 
 const WORKWEAR_MAIN_SLUG = "workwear";
 const MENS_MAIN_SLUG = "mens";
@@ -77,6 +78,36 @@ function jbStyleCodeTailFromSlug(slug: string): string | null {
   }
   const compact = rest.replace(/-/g, "").toUpperCase();
   return compact.length > 0 ? compact : null;
+}
+
+function jbStyleCodeUpperFromListing(productName: string, meta?: Pick<WorkwearOnlyBrandMeta, "slug">): string | null {
+  const fromSlug = jbStyleCodeTailFromSlug(String(meta?.slug ?? ""));
+  if (fromSlug) {
+    return fromSlug.toUpperCase().replace(/-CLEARANCE$/i, "");
+  }
+  const m = String(productName).trim().match(/\s*\(([A-Za-z0-9][A-Za-z0-9/_-]*)\)\s*$/);
+  return m ? m[1].toUpperCase().replace(/-CLEARANCE$/i, "") : null;
+}
+
+/**
+ * JB rows that must appear only under PPE → Miscellaneous (never Chef, Workwear, Men's, … browse grids).
+ */
+const JB_PPE_MISCELLANEOUS_EXCLUSIVE_STYLE_CODES = new Set(
+  ["8M001", "8M050", "9KPI", "8M055", "9EFB", "9KPE", "8P060", "8P085"].map((c) => c.toUpperCase()),
+);
+
+export function isJbPpeMiscellaneousExclusiveListing(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  const isJbRow =
+    isJbWearSupplierName(meta?.supplier_name ?? null) ||
+    jbCatalogSubslugForVisibility(String(meta?.slug ?? "")) != null;
+  if (!isJbRow) {
+    return false;
+  }
+  const code = jbStyleCodeUpperFromListing(productName, meta);
+  return code != null && JB_PPE_MISCELLANEOUS_EXCLUSIVE_STYLE_CODES.has(code);
 }
 
 /**
@@ -468,7 +499,69 @@ export function isWorkwearMiscToPantsExclusiveListing(productName: string, meta?
   return false;
 }
 
+/** Coverall / overall(s) — Workwear/Coverall only on category browse (never other mains or subs). */
+export function listingLooksLikeCoverallOverallGarment(
+  productName: string,
+  meta?: Pick<WorkwearOnlyBrandMeta, "slug" | "category" | "description"> | WorkwearOnlyBrandMeta | null,
+): boolean {
+  const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`.toLowerCase();
+  return (
+    /\bcover\s*alls?\b/.test(hay) ||
+    /\bcoveralls?\b/.test(hay) ||
+    /\boveralls?\b/.test(hay)
+  );
+}
+
+export function isWorkwearCoverallOverallExclusiveListing(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  return listingLooksLikeCoverallOverallGarment(productName, meta);
+}
+
+/**
+ * Waterproof jacket rows mis-filed under Workwear/Hi-vis Vest — Workwear/Jackets only (never other mains or subs).
+ * Requires workwear / hi-vis context so casual rain jackets on Men's are not pulled in.
+ */
+export function isWorkwearWaterproofJacketExclusiveListing(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  const title = productName.toLowerCase();
+  const cat = String(meta?.category ?? "").toLowerCase();
+  const h = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${cat}`.toLowerCase();
+
+  const hasWaterproofJacket =
+    /\bwaterproof[\s/-]+jacket\b/.test(h) ||
+    /\bjacket[\s/-]+waterproof\b/.test(h) ||
+    (/\bwaterproof\b/.test(title) && /\bjacket\b/.test(title));
+
+  if (!hasWaterproofJacket) {
+    return false;
+  }
+
+  const hvHay = `${productName} ${meta?.slug ?? ""} ${meta?.category ?? ""} ${meta?.description ?? ""}`.toLowerCase();
+  const hasHvToken = /\bhv\b/.test(hvHay) || /\bhi[\s-]*vis\b/.test(hvHay) || /\bhigh[\s-]*vis\b/.test(hvHay);
+
+  return (
+    isJbWearSupplierName(meta?.supplier_name ?? null) ||
+    isSyzmikCatalogProduct(productName, meta) ||
+    isBisleyCatalogProduct(productName, meta) ||
+    hasHvToken ||
+    cat.includes("hi-vis") ||
+    cat.includes("hi vis") ||
+    cat.includes("high vis") ||
+    cat.includes("vest") ||
+    cat.includes("workwear") ||
+    cat.includes("safety") ||
+    /\b(hi[\s-]*vis|high[\s-]*vis|hv\b|safety\s+vest|reflective|rail)\b/.test(h)
+  );
+}
+
 function isJbHiVisVestListing(productName: string, meta?: WorkwearOnlyBrandMeta): boolean {
+  if (isWorkwearWaterproofJacketExclusiveListing(productName, meta)) {
+    return false;
+  }
   if (!isJbWearSupplierName(meta?.supplier_name ?? null)) {
     return false;
   }
@@ -646,22 +739,6 @@ export function isJbMensPantsFeaturesToWorkwearPantsExclusiveListing(
   return false;
 }
 
-/** Style `4SRP` (often filed under Men's/Pants) — Men's/Scrubs only (never other mains or subs). */
-export function isMensPants4srpMensScrubsExclusiveListing(
-  productName: string,
-  meta?: WorkwearOnlyBrandMeta,
-): boolean {
-  const code = fashionBizStyleCodeFromListing(productName, meta?.slug ?? null);
-  if (code) {
-    const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
-    if (base === "4SRP") {
-      return true;
-    }
-  }
-  const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`;
-  return /\b4SRP\b/i.test(hay);
-}
-
 /** Style `S3FSZ` (often filed under Men's/Pants) — Men's/Jumper only (never other mains or subs). */
 export function isMensPantsS3fszMensJumperExclusiveListing(
   productName: string,
@@ -678,6 +755,22 @@ export function isMensPantsS3fszMensJumperExclusiveListing(
   return /\bS3FSZ\b/i.test(hay);
 }
 
+/** Style `WV619M` (often Men's/Jackets) — Men's/Jumper only (never other mains or subs). */
+export function isWv619mMensJumperExclusiveListing(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  const code = fashionBizStyleCodeFromListing(productName, meta?.slug ?? null);
+  if (code) {
+    const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+    if (base === "WV619M") {
+      return true;
+    }
+  }
+  const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`;
+  return /\bWV619M\b/i.test(hay);
+}
+
 /** Style `TP3160B` (often filed under Men's/Pants) — Kid's/Pants only (never other mains or subs). */
 export function isTp3160bKidsPantsExclusiveListing(
   productName: string,
@@ -692,6 +785,290 @@ export function isTp3160bKidsPantsExclusiveListing(
   }
   const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`;
   return /\bTP3160B\b/i.test(hay);
+}
+
+const JB_WORKWEAR_POLOS_EXCLUSIVE_STYLE_CODES = new Set(
+  ["6SPPL", "6SPPS", "6HSSP", "6HSSR"].map((c) => c.toUpperCase()),
+);
+
+/** JB `6SPPL` / `6SPPS` / `6HSSP` / `6HSSR` (often Men's/Polos) — Workwear/Polos only (never other mains or subs). */
+export function isJbSixSpplWorkwearPolosExclusiveListing(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  const code = fashionBizStyleCodeFromListing(productName, meta?.slug ?? null);
+  if (code) {
+    const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+    if (JB_WORKWEAR_POLOS_EXCLUSIVE_STYLE_CODES.has(base)) {
+      return true;
+    }
+  }
+  const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`;
+  for (const raw of JB_WORKWEAR_POLOS_EXCLUSIVE_STYLE_CODES) {
+    const esc = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`\\b${esc}\\b`, "i").test(hay)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Style `6DARL` (often Men's/Jackets) — Workwear/Jackets only (never other mains or subs). */
+export function isJb6darlWorkwearJacketsExclusiveListing(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  const code = fashionBizStyleCodeFromListing(productName, meta?.slug ?? null);
+  if (code) {
+    const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+    if (base === "6DARL") {
+      return true;
+    }
+  }
+  const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`;
+  return /\b6DARL\b/i.test(hay);
+}
+
+/** Text/slug/category heuristics aligned with `resolveProductSubSlug` polo + rugby routing. */
+function listingLooksLikePolosGarment(productName: string, meta?: WorkwearOnlyBrandMeta): boolean {
+  const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`.toLowerCase();
+  if (/\bpolo\b/.test(hay) && !/\bpoloneck\b/.test(hay)) {
+    return true;
+  }
+  if (
+    /\brugby\b/.test(hay) &&
+    !/\bshorts?\b/.test(hay) &&
+    !/\b(pant|pants|trouser|trousers|jogger|joggers|overalls?)\b/.test(hay)
+  ) {
+    return true;
+  }
+  const code = fashionBizStyleCodeFromListing(productName, meta?.slug ?? null);
+  if (!code) {
+    return false;
+  }
+  const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+  return FASHION_BIZ_LISTING_SUBSLUG[base] === "polos";
+}
+
+/**
+ * Biz Care/Collection kid polo lines where the title omits "polo" — still Fashion-Biz `kids` audience (KS polos, P7700B, …).
+ * Excludes kid-only jackets/pants/tees handled elsewhere.
+ */
+function isKidsAudienceBizPoloByStyleCode(productName: string, meta?: WorkwearOnlyBrandMeta): boolean {
+  const slug = meta?.slug ?? null;
+  const category = meta?.category ?? null;
+  if (!isBizCareOrCollectionListing(productName, slug, category)) {
+    return false;
+  }
+  if (fashionBizListingGenderAudience(productName, slug, category) !== "kids") {
+    return false;
+  }
+  const code = fashionBizStyleCodeFromListing(productName, slug);
+  if (!code) {
+    return false;
+  }
+  const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+  if (
+    BIZ_COLLECTION_KIDS_ONLY_JACKETS_CODES.has(base) ||
+    BIZ_COLLECTION_KIDS_ONLY_PANTS_CODES.has(base) ||
+    BIZ_COLLECTION_KIDS_ONLY_T_SHIRTS_CODES.has(base)
+  ) {
+    return false;
+  }
+  if (base === "P7700B" || base.includes("KS")) {
+    return true;
+  }
+  return FASHION_BIZ_LISTING_SUBSLUG[base] === "polos";
+}
+
+/**
+ * Kid-line polos that file under Men's/Polos — Kid's/Polos only (never other mains or subs).
+ * Kid-only tees (T10032 / *KS tees / …) stay on Kid's/T-shirts via existing rules.
+ */
+export function isKidsLinePolosExclusiveCategoryBrowseListing(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  if (isKidsOnlyTshirtT10032Product(productName, meta)) {
+    return false;
+  }
+  const slug = meta?.slug ?? null;
+  const category = meta?.category ?? null;
+  const code = fashionBizStyleCodeFromListing(productName, slug);
+  if (code) {
+    const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+    if (BIZ_COLLECTION_KIDS_ONLY_T_SHIRTS_CODES.has(base)) {
+      return false;
+    }
+  }
+
+  const poloLike = listingLooksLikePolosGarment(productName, meta) || isKidsAudienceBizPoloByStyleCode(productName, meta);
+  if (!poloLike) {
+    return false;
+  }
+
+  if (normalizeAudience(meta?.audience ?? null) === "kids") {
+    return true;
+  }
+  if (fashionBizListingGenderAudience(productName, slug, category) === "kids") {
+    return true;
+  }
+
+  const n = productName.toLowerCase();
+  const cat = String(category ?? "").toLowerCase();
+  const kidWords =
+    /\b(kids|kid's|kid\s|children|child|youth|junior|boys?|girls?|infants?|toddlers?)\b/i;
+  if (kidWords.test(n) || kidWords.test(cat)) {
+    return true;
+  }
+  return false;
+}
+
+/** Text/slug/category + Fashion Biz subslug — aligned with common Men's/Jackets browse rows. */
+function listingLooksLikeJacketsGarment(productName: string, meta?: WorkwearOnlyBrandMeta): boolean {
+  const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`.toLowerCase();
+  if (
+    /\b(jacket|jackets|coat|coats|blazer|parka|anorak|windbreaker|bomber|outerwear|hoodie|hoody|shell)\b/i.test(
+      hay,
+    ) ||
+    (/\bfleece\b/i.test(hay) && /\b(jacket|coat|hood|zip|pullover)\b/i.test(hay))
+  ) {
+    if (/\bpolo\b/.test(hay) && !/\b(jacket|coat|parka|shell|outerwear)\b/i.test(hay)) {
+      return false;
+    }
+    return true;
+  }
+  const code = fashionBizStyleCodeFromListing(productName, meta?.slug ?? null);
+  if (!code) {
+    return false;
+  }
+  const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+  return FASHION_BIZ_LISTING_SUBSLUG[base] === "jackets";
+}
+
+/**
+ * Biz Care/Collection kid jacket lines where the title omits "jacket" — CSV `kids` + jacket subslug or kid-only jacket codes.
+ */
+function isKidsAudienceBizJacketByStyleCode(productName: string, meta?: WorkwearOnlyBrandMeta): boolean {
+  const slug = meta?.slug ?? null;
+  const category = meta?.category ?? null;
+  if (!isBizCareOrCollectionListing(productName, slug, category)) {
+    return false;
+  }
+  if (fashionBizListingGenderAudience(productName, slug, category) !== "kids") {
+    return false;
+  }
+  const code = fashionBizStyleCodeFromListing(productName, slug);
+  if (!code) {
+    return false;
+  }
+  const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+  if (BIZ_COLLECTION_KIDS_ONLY_PANTS_CODES.has(base) || BIZ_COLLECTION_KIDS_ONLY_T_SHIRTS_CODES.has(base)) {
+    return false;
+  }
+  if (BIZ_COLLECTION_KIDS_ONLY_JACKETS_CODES.has(base)) {
+    return true;
+  }
+  return FASHION_BIZ_LISTING_SUBSLUG[base] === "jackets";
+}
+
+/**
+ * Kid-line jackets that file under Men's/Jackets — Kid's/Jackets only (never other mains or subs).
+ * Kid-only tees / pants-only SKUs stay on their existing Kid's routes (`T10032`, TP3160B, …).
+ */
+export function isKidsLineJacketsExclusiveCategoryBrowseListing(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  if (isKidsOnlyTshirtT10032Product(productName, meta)) {
+    return false;
+  }
+  if (isTp3160bKidsPantsExclusiveListing(productName, meta)) {
+    return false;
+  }
+  const slug = meta?.slug ?? null;
+  const category = meta?.category ?? null;
+  const code = fashionBizStyleCodeFromListing(productName, slug);
+  if (code) {
+    const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+    if (BIZ_COLLECTION_KIDS_ONLY_T_SHIRTS_CODES.has(base) || BIZ_COLLECTION_KIDS_ONLY_PANTS_CODES.has(base)) {
+      return false;
+    }
+  }
+
+  const jacketLike =
+    listingLooksLikeJacketsGarment(productName, meta) || isKidsAudienceBizJacketByStyleCode(productName, meta);
+  if (!jacketLike) {
+    return false;
+  }
+
+  if (normalizeAudience(meta?.audience ?? null) === "kids") {
+    return true;
+  }
+  if (fashionBizListingGenderAudience(productName, slug, category) === "kids") {
+    return true;
+  }
+
+  const n = productName.toLowerCase();
+  const cat = String(category ?? "").toLowerCase();
+  const kidWords =
+    /\b(kids|kid's|kid\s|children|child|youth|junior|boys?|girls?|infants?|toddlers?)\b/i;
+  if (kidWords.test(n) || kidWords.test(cat)) {
+    return true;
+  }
+  return false;
+}
+
+const WOMENS_JACKETS_J236ML_3WSJ1_EXCLUSIVE_STYLE_CODES = new Set(
+  ["J236ML", "3WSJ1"].map((c) => c.toUpperCase()),
+);
+
+/** `J236ML` / `3WSJ1` (often Men's/Jackets) — Women's/Jackets only (never other mains or subs). */
+export function isWomensJacketsJ236ml3wsj1ExclusiveListing(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  const code = fashionBizStyleCodeFromListing(productName, meta?.slug ?? null);
+  if (code) {
+    const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+    if (WOMENS_JACKETS_J236ML_3WSJ1_EXCLUSIVE_STYLE_CODES.has(base)) {
+      return true;
+    }
+  }
+  const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`;
+  for (const raw of WOMENS_JACKETS_J236ML_3WSJ1_EXCLUSIVE_STYLE_CODES) {
+    const esc = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`\\b${esc}\\b`, "i").test(hay)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const KIDS_JACKETS_J307K_J3150B_J740K_EXCLUSIVE_STYLE_CODES = new Set(
+  ["J307K", "J3150B", "J740K"].map((c) => c.toUpperCase()),
+);
+
+/** `J307K` / `J3150B` / `J740K` (often Men's/Jackets) — Kid's/Jackets only (never other mains or subs). */
+export function isKidsJacketsJ307kJ3150bJ740kExclusiveListing(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  const code = fashionBizStyleCodeFromListing(productName, meta?.slug ?? null);
+  if (code) {
+    const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+    if (KIDS_JACKETS_J307K_J3150B_J740K_EXCLUSIVE_STYLE_CODES.has(base)) {
+      return true;
+    }
+  }
+  const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`;
+  for (const raw of KIDS_JACKETS_J307K_J3150B_J740K_EXCLUSIVE_STYLE_CODES) {
+    const esc = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`\\b${esc}\\b`, "i").test(hay)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function isStreetPolosListing(productName: string, meta?: WorkwearOnlyBrandMeta): boolean {
@@ -744,6 +1121,128 @@ function isFashionBizMensMOrMnListing(productName: string, meta?: WorkwearOnlyBr
   return u.endsWith("MN") || (u.endsWith("M") && !u.endsWith("WM") && !u.endsWith("FM"));
 }
 
+/**
+ * Women's/T-shirts browse: hide rows that read as men's when DB `audience` is empty or ambiguous.
+ * (MS/ML + M/MN style codes are handled separately — same as Polos/Jackets.)
+ */
+function isMensLeanTeeTextOrAudienceForWomensTshirtsBrowse(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  if (fashionBizListingGenderAudience(productName, meta?.slug ?? null, meta?.category ?? null) === "mens") {
+    return true;
+  }
+  if (normalizeAudience(meta?.audience ?? null) === "mens") {
+    return true;
+  }
+  const hay = [productName, meta?.slug ?? "", meta?.category ?? ""]
+    .filter((s) => typeof s === "string" && s.trim().length > 0)
+    .join("\n")
+    .toLowerCase();
+  if (/\b(women|women's|womens|ladies|lady|female)\b/.test(hay)) {
+    return false;
+  }
+  if (/\b(kids|kid's|children|child|boys|girls)\b/.test(hay)) {
+    return false;
+  }
+  if (/\b(men's|mens)\b/.test(hay)) {
+    return true;
+  }
+  if (/\bfor men\b/.test(hay)) {
+    return true;
+  }
+  if (/\b(male fit|men's fit|mens fit)\b/.test(hay)) {
+    return true;
+  }
+  return false;
+}
+
+/** Longer codes first so `1LSNC` wins over `1LS` prefix. */
+const WOMENS_TSHIRTS_EXCLUDED_STYLE_CODES_SORTED = [
+  "T10012",
+  "S1NFT",
+  "1LSNC",
+  "1LST",
+  "1TI",
+  "7PNFT",
+  "7PLFT",
+  "7KBS2",
+  "7STT",
+  "7PS",
+  "1JT",
+  "1LS",
+  "1S",
+  "1HT",
+  "1VT",
+].map((c) => c.toUpperCase());
+
+function listingCodeMatchesWomensTshirtsExcludedBase(parsedCode: string): boolean {
+  const u = parsedCode.toUpperCase().replace(/-CLEARANCE$/i, "");
+  for (const raw of WOMENS_TSHIRTS_EXCLUDED_STYLE_CODES_SORTED) {
+    if (u === raw) {
+      return true;
+    }
+    if (u.startsWith(raw) && u.length > raw.length) {
+      const rest = u.slice(raw.length);
+      if (/^[A-Z]+$/.test(rest)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** Requested: these SKUs must not appear under Women's/T-shirts (still allowed elsewhere, e.g. Men's). */
+function isWomensTshirtsExcludedSkuListing(productName: string, meta?: WorkwearOnlyBrandMeta): boolean {
+  const code = fashionBizStyleCodeFromListing(productName, meta?.slug ?? null);
+  if (code && listingCodeMatchesWomensTshirtsExcludedBase(code)) {
+    return true;
+  }
+  const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`;
+  for (const raw of WOMENS_TSHIRTS_EXCLUDED_STYLE_CODES_SORTED) {
+    const esc = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`\\b${esc}[A-Z]*\\b`, "i").test(hay)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Longer codes first (extend with multi-token exclusions if needed). */
+const WOMENS_JUMPER_EXCLUDED_STYLE_CODES_SORTED = ["6ATV"].map((c) => c.toUpperCase());
+
+function listingCodeMatchesWomensJumperExcludedBase(parsedCode: string): boolean {
+  const u = parsedCode.toUpperCase().replace(/-CLEARANCE$/i, "");
+  for (const raw of WOMENS_JUMPER_EXCLUDED_STYLE_CODES_SORTED) {
+    if (u === raw) {
+      return true;
+    }
+    if (u.startsWith(raw) && u.length > raw.length) {
+      const rest = u.slice(raw.length);
+      if (/^[A-Z]+$/.test(rest)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** Requested: these SKUs must not appear under Women's/Jumper (other mains/subs unchanged). */
+function isWomensJumperExcludedSkuListing(productName: string, meta?: WorkwearOnlyBrandMeta): boolean {
+  const code = fashionBizStyleCodeFromListing(productName, meta?.slug ?? null);
+  if (code && listingCodeMatchesWomensJumperExcludedBase(code)) {
+    return true;
+  }
+  const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`;
+  for (const raw of WOMENS_JUMPER_EXCLUDED_STYLE_CODES_SORTED) {
+    const esc = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`\\b${esc}[A-Z]*\\b`, "i").test(hay)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function isBizCollectionMensJacketListing(productName: string, meta?: WorkwearOnlyBrandMeta): boolean {
   if (!productName.toLowerCase().includes("biz collection")) {
     return false;
@@ -772,11 +1271,17 @@ const WOMENS_SHIRTS_FORCE_MENS_STYLE_CODES = new Set(
     "SH817",
     "40S",
     "4P",
+    "6ESS1",
     "6E",
     "4PUL",
     "4MSI",
     "4M",
   ].map((c) => c.toUpperCase()),
+);
+
+/** Longer tokens first so `6ESS1` wins over `6E`, `4PUL` over `4P`. */
+const MENS_SHIRTS_EXCLUSIVE_FROM_WOMENS_SHIRTS_SORTED = [...WOMENS_SHIRTS_FORCE_MENS_STYLE_CODES].sort(
+  (a, b) => b.length - a.length,
 );
 
 const WOMENS_JACKETS_FORCE_MENS_STYLE_CODES = new Set(
@@ -799,6 +1304,32 @@ const WOMENS_JACKETS_FORCE_MENS_STYLE_CODES = new Set(
 
 /** JB-style chef jacket SKUs: list under Chef/Jackets only (not Women's/Men's → Jackets). */
 const CHEF_JACKETS_FORCE_STYLE_CODES = new Set(["5CJ1", "5CJL1", "5CJ21", "5CJS1"].map((c) => c.toUpperCase()));
+
+/** Listed SKUs — Chef/Miscellaneous only (never Chef/Tops `jackets`, Men's/Women's, or other subs). */
+const CHEF_MISCELLANEOUS_EXCLUSIVE_JB_STYLE_CODES = new Set(
+  ["5BT", "5KB", "5CVC", "5FC", "CH235"].map((c) => c.toUpperCase()),
+);
+
+export function isChefMiscellaneousExclusiveJbStyleListing(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  const code = fashionBizStyleCodeFromListing(productName, meta?.slug ?? null);
+  if (code) {
+    const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+    if (CHEF_MISCELLANEOUS_EXCLUSIVE_JB_STYLE_CODES.has(base)) {
+      return true;
+    }
+  }
+  const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`;
+  for (const raw of CHEF_MISCELLANEOUS_EXCLUSIVE_JB_STYLE_CODES) {
+    const esc = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`\\b${esc}\\b`, "i").test(hay)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /** Women's browse: these style codes list under Women's/Jumper instead of Women's/Jackets. */
 const WOMENS_JACKETS_FORCE_WOMENS_JUMPER_STYLE_CODES = new Set(
@@ -1014,11 +1545,28 @@ export function isFashionBizMensJumperToWomensJumperExclusiveListing(
 
 function isFashionBizForceMensShirtsCode(productName: string, meta?: WorkwearOnlyBrandMeta): boolean {
   const code = fashionBizStyleCodeFromListing(productName, meta?.slug ?? null);
-  if (!code) {
-    return false;
+  if (code) {
+    const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+    for (const raw of MENS_SHIRTS_EXCLUSIVE_FROM_WOMENS_SHIRTS_SORTED) {
+      if (base === raw) {
+        return true;
+      }
+      if (base.startsWith(raw) && base.length > raw.length) {
+        const rest = base.slice(raw.length);
+        if (/^[A-Z]+$/.test(rest)) {
+          return true;
+        }
+      }
+    }
   }
-  const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
-  return WOMENS_SHIRTS_FORCE_MENS_STYLE_CODES.has(base);
+  const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`;
+  for (const raw of MENS_SHIRTS_EXCLUSIVE_FROM_WOMENS_SHIRTS_SORTED) {
+    const esc = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`\\b${esc}[A-Z]*\\b`, "i").test(hay)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function isFashionBizForceMensJacketsCode(productName: string, meta?: WorkwearOnlyBrandMeta): boolean {
@@ -1213,7 +1761,7 @@ export function isChefCategoryJacketListing(productName: string, meta?: Workwear
   if (blob.includes("yes chef")) {
     return true;
   }
-  if (/\bchefs?\b/i.test(productName)) {
+  if (/\bchef(?:'s|s)?\b/i.test(productName)) {
     return true;
   }
   if (/\bcook\s+(coat|jacket)\b/i.test(n)) {
@@ -1231,6 +1779,35 @@ export function isChefCategoryJacketListing(productName: string, meta?: Workwear
     (cat.includes("chef") || cat.includes("chefwear") || desc.includes("chef") || desc.includes("kitchen")) &&
     /\b(jacket|coat|blazer)\b/i.test(n)
   ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Chef-wear jacket lines (Yes Chef / JB chef / Fashion Biz `chef` bucket, …) — Chef/Jackets only on category browse.
+ * Excludes chef trousers/aprons that still match loose "Yes Chef" jacket listing heuristics.
+ */
+export function isChefLineJacketsExclusiveCategoryBrowseListing(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  if (isChefMiscellaneousExclusiveJbStyleListing(productName, meta)) {
+    return false;
+  }
+  if (isChefJacketsForcedStyleCode(productName, meta)) {
+    return true;
+  }
+  if (isFashionBizChefLineListing(productName, meta?.slug ?? null)) {
+    if (isChefCategoryPantsListing(productName, meta)) {
+      return false;
+    }
+    return listingLooksLikeJacketsGarment(productName, meta);
+  }
+  if (isChefCategoryJacketListing(productName, meta)) {
+    if (isChefCategoryPantsListing(productName, meta) && !listingLooksLikeJacketsGarment(productName, meta)) {
+      return false;
+    }
     return true;
   }
   return false;
@@ -1310,6 +1887,18 @@ export function isProductVisibleInCategoryBrowse(
   if (isBizCorporatesCatalogProduct(productName, meta)) {
     return false;
   }
+  if (isJbPpeMiscellaneousExclusiveListing(productName, meta)) {
+    return mainSlug === PPE_MAIN_SLUG && subSlug === PPE_MISCELLANEOUS_SUB_SLUG;
+  }
+
+  const healthCareSub = resolveHealthCareBrowseSubSlug(productName, meta);
+  if (healthCareSub != null) {
+    return mainSlug === "health-care" && subSlug === healthCareSub;
+  }
+
+  if (isChefMiscellaneousExclusiveJbStyleListing(productName, meta)) {
+    return mainSlug === CHEF_MAIN_SLUG && subSlug === "miscellaneous";
+  }
 
   // Requested: Biz Collection — never Workwear browse (any sub-category).
   if (mainSlug === WORKWEAR_MAIN_SLUG && isBizCollectionListing(productName, meta?.slug ?? null, meta?.category ?? null)) {
@@ -1341,14 +1930,54 @@ export function isProductVisibleInCategoryBrowse(
     return mainSlug === KIDS_MAIN_SLUG && subSlug === "pants";
   }
 
+  // Requested: Kid-line polos under Men's/Polos — Kid's/Polos only (before JB / Hi-Vis / Workwear polo routing).
+  if (isKidsLinePolosExclusiveCategoryBrowseListing(productName, meta)) {
+    return mainSlug === KIDS_MAIN_SLUG && subSlug === "polos";
+  }
+
+  // Requested: J236ML / 3WSJ1 — Women's/Jackets only (often Men's/Jackets; before broad Kid's jackets heuristic).
+  if (isWomensJacketsJ236ml3wsj1ExclusiveListing(productName, meta)) {
+    return mainSlug === WOMENS_MAIN_SLUG && subSlug === "jackets";
+  }
+
+  // Requested: J307K / J3150B / J740K — Kid's/Jackets only (often Men's/Jackets; before Chef / broad Kid's jackets rules).
+  if (isKidsJacketsJ307kJ3150bJ740kExclusiveListing(productName, meta)) {
+    return mainSlug === KIDS_MAIN_SLUG && subSlug === "jackets";
+  }
+
+  // Requested: Yes Chef / Chef's / JB chef / Fashion Biz hospitality jackets — Chef/Jackets only (before Kid's jackets + JB splits).
+  if (isChefLineJacketsExclusiveCategoryBrowseListing(productName, meta)) {
+    return mainSlug === CHEF_MAIN_SLUG && subSlug === "jackets";
+  }
+
+  // Requested: Kid-line jackets under Men's/Jackets — Kid's/Jackets only (before JB / Workwear jacket splits).
+  if (isKidsLineJacketsExclusiveCategoryBrowseListing(productName, meta)) {
+    return mainSlug === KIDS_MAIN_SLUG && subSlug === "jackets";
+  }
+
+  // Requested: JB 6SPPL / 6SPPS / 6HSSP / 6HSSR — Workwear/Polos only (often Men's/Polos; before Workwear JB six-series broad allow).
+  if (isJbSixSpplWorkwearPolosExclusiveListing(productName, meta)) {
+    return mainSlug === WORKWEAR_MAIN_SLUG && subSlug === "polos";
+  }
+
+  // Requested: JB `6DARL` — Workwear/Jackets only (often Men's/Jackets; before Workwear JB six-series broad allow).
+  if (isJb6darlWorkwearJacketsExclusiveListing(productName, meta)) {
+    return mainSlug === WORKWEAR_MAIN_SLUG && subSlug === "jackets";
+  }
+
+  // Requested: Waterproof Jacket (often Workwear/Hi-vis Vest) — Workwear/Jackets only (before JB hi-vis vest gate).
+  if (isWorkwearWaterproofJacketExclusiveListing(productName, meta)) {
+    return mainSlug === WORKWEAR_MAIN_SLUG && subSlug === "jackets";
+  }
+
+  // Requested: Coverall / Overall(s) — Workwear/Coverall only (often Workwear/Pants).
+  if (isWorkwearCoverallOverallExclusiveListing(productName, meta)) {
+    return mainSlug === WORKWEAR_MAIN_SLUG && subSlug === "coverall";
+  }
+
   // Requested: any women's / ladies' bottoms still filing under Men's/Pants — Women's/Pants only (never other mains/subs).
   if (isWomensPantLinesExclusiveToWomensPantsOnlyListing(productName, meta)) {
     return mainSlug === WOMENS_MAIN_SLUG && subSlug === "pants";
-  }
-
-  // Requested: style `4SRP` (Men's/Pants) — Men's/Scrubs only.
-  if (isMensPants4srpMensScrubsExclusiveListing(productName, meta)) {
-    return mainSlug === MENS_MAIN_SLUG && subSlug === "scrubs";
   }
 
   // Requested: style `S3FSZ` (Men's/Pants) — Men's/Jumper only.
@@ -1356,9 +1985,19 @@ export function isProductVisibleInCategoryBrowse(
     return mainSlug === MENS_MAIN_SLUG && subSlug === "jumper";
   }
 
+  // Requested: style `WV619M` (Men's/Jackets) — Men's/Jumper only.
+  if (isWv619mMensJumperExclusiveListing(productName, meta)) {
+    return mainSlug === MENS_MAIN_SLUG && subSlug === "jumper";
+  }
+
   // Requested: JB Men's/Pants (reflective / cargo / Multi Pkt / 6DFP / …) — Workwear/Pants only.
   if (isJbMensPantsFeaturesToWorkwearPantsExclusiveListing(productName, meta)) {
     return mainSlug === WORKWEAR_MAIN_SLUG && subSlug === "pants";
+  }
+
+  // Requested: shirt SKUs (40S, 4P, 6ESS1, 6E, 4PUL, 4MSI, 4M, …) — Men's/Shirts only (never Women's/Workwear/other mains or subs).
+  if (isFashionBizForceMensShirtsCode(productName, meta)) {
+    return mainSlug === MENS_MAIN_SLUG && subSlug === "shirts";
   }
 
   // Requested: Biz Collection K315LS / K624LS / … / S626LL — Women's/Shirts only (never Workwear or any other browse grid).
@@ -1383,11 +2022,6 @@ export function isProductVisibleInCategoryBrowse(
 
   // Requested: Women's/Shirts rows with MS/ML Fashion Biz codes should live under Men's/Shirts.
   if (subSlug === "shirts" && isFashionBizMensMsMlListing(productName, meta)) {
-    return mainSlug === MENS_MAIN_SLUG;
-  }
-
-  // Requested: specific women's shirts SKUs should list under Men's/Shirts.
-  if (subSlug === "shirts" && isFashionBizForceMensShirtsCode(productName, meta)) {
     return mainSlug === MENS_MAIN_SLUG;
   }
 
@@ -1451,11 +2085,6 @@ export function isProductVisibleInCategoryBrowse(
   }
   if (subSlug === "jackets" && mainSlug === WOMENS_MAIN_SLUG && isWomensJacketsForceWomensJumperStyleCode(productName, meta)) {
     return false;
-  }
-
-  // Requested: specific chef jacket style codes (e.g. JB 5CJ*) — Chef/Jackets only; must run before JB → Women's/Men's jackets split.
-  if (subSlug === "jackets" && isChefJacketsForcedStyleCode(productName, meta)) {
-    return mainSlug === CHEF_MAIN_SLUG;
   }
 
   // Requested: JB hi-vis vests — Workwear/Hi-vis Vest only (must run before JB → Men's/Women's jackets split).
@@ -1524,11 +2153,6 @@ export function isProductVisibleInCategoryBrowse(
     }
   }
 
-  // Requested: chef jackets should list under Chef/Jackets only (not Men's/Women's/Jackets).
-  if (subSlug === "jackets" && isChefCategoryJacketListing(productName, meta)) {
-    return mainSlug === CHEF_MAIN_SLUG && subSlug === "jackets";
-  }
-
   // Requested: Biz Collection men's jackets should not appear under Women's/Jackets.
   if (subSlug === "jackets" && isBizCollectionMensJacketListing(productName, meta)) {
     return mainSlug === MENS_MAIN_SLUG;
@@ -1568,6 +2192,30 @@ export function isProductVisibleInCategoryBrowse(
   // Requested: Hi-Vis ("Hv") tees should live under Workwear/T-shirts (not Men's/T-shirts).
   if (subSlug === "t-shirts" && isHiVisHvListing(productName, meta)) {
     return mainSlug === WORKWEAR_MAIN_SLUG;
+  }
+
+  // Requested: Women's/T-shirts rows with MS/ML Fashion Biz codes — Men's/T-shirts only (mirror Polos/Shirts).
+  if (subSlug === "t-shirts" && isFashionBizMensMsMlListing(productName, meta)) {
+    return mainSlug === MENS_MAIN_SLUG;
+  }
+
+  // Requested: Women's/T-shirts rows with M/MN men's line codes — Men's/T-shirts only (mirror Jackets).
+  if (subSlug === "t-shirts" && isFashionBizMensMOrMnListing(productName, meta)) {
+    return mainSlug === MENS_MAIN_SLUG;
+  }
+
+  // Requested: no men's-leaning tees under Women's/T-shirts (titles/categories + Biz audience when DB audience is empty).
+  if (mainSlug === WOMENS_MAIN_SLUG && subSlug === "t-shirts") {
+    if (isWomensTshirtsExcludedSkuListing(productName, meta)) {
+      return false;
+    }
+    if (isMensLeanTeeTextOrAudienceForWomensTshirtsBrowse(productName, meta)) {
+      return false;
+    }
+  }
+
+  if (mainSlug === WOMENS_MAIN_SLUG && subSlug === "jumper" && isWomensJumperExcludedSkuListing(productName, meta)) {
+    return false;
   }
 
   // Requested: JB hi-vis polos should live under Workwear/Polos (not Men's/Polos).
@@ -1642,7 +2290,7 @@ export function isProductVisibleInCategoryBrowse(
   }
 
   if (mainSlug === CHEF_MAIN_SLUG && subSlug === "jackets") {
-    return isChefCategoryJacketListing(productName, meta) || isChefJacketsForcedStyleCode(productName, meta);
+    return isChefLineJacketsExclusiveCategoryBrowseListing(productName, meta);
   }
 
   if (mainSlug === CHEF_MAIN_SLUG && subSlug === "pants") {

@@ -2,14 +2,15 @@ import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
 import { storefrontProductNameWithoutBrand } from "@/lib/product-display-name";
 
 /**
- * Home / nav search: match product `name`, URL `slug` segments, Fashion Biz style code from name/slug,
- * and brand-stripped display tail (e.g. `Syzmik ZH145` → `ZH145`).
+ * Home / nav search: match product `name`, URL `slug` segments, DB `category` / `description`,
+ * Fashion Biz style code from name/slug, and brand-stripped display tail (e.g. `Syzmik ZH145` → `ZH145`).
  */
 export function productMatchesSearchQuery(
   name: string,
   slug: string | null | undefined,
   category: string | null | undefined,
   rawQuery: string,
+  description?: string | null,
 ): boolean {
   const q = rawQuery.trim();
   if (!q) {
@@ -19,7 +20,7 @@ export function productMatchesSearchQuery(
   const stripped = storefrontProductNameWithoutBrand(name);
   const listingCode = fashionBizStyleCodeFromListing(name, slug ?? null);
 
-  const parts: string[] = [name, stripped, category ?? "", slug ?? ""];
+  const parts: string[] = [name, stripped, category ?? "", slug ?? "", description ?? ""];
   if (listingCode) {
     parts.push(listingCode);
   }
@@ -41,7 +42,7 @@ export function productMatchesSearchQuery(
     return false;
   }
 
-  const blob = [name, stripped, slug ?? "", listingCode ?? ""].join(" ").toUpperCase();
+  const blob = [name, stripped, slug ?? "", listingCode ?? "", description ?? ""].join(" ").toUpperCase();
   const compactBlob = blob.replace(/[\s_-]+/g, "");
   if (compactBlob.includes(compactQ)) {
     return true;

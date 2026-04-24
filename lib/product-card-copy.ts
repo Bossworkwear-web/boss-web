@@ -3,6 +3,7 @@ import {
   storefrontDescriptionForDisplay,
   storefrontStripSupplierBranding,
 } from "@/lib/product-display-name";
+import { BIZ_CARE_COLLECTION_STYLE_MARKETING_TITLE } from "@/lib/biz-care-collection-style-titles.generated";
 import { SYZMIK_STYLE_MARKETING_TITLE } from "@/lib/syzmik-style-titles.generated";
 
 export type ProductCardDisplay = {
@@ -202,32 +203,192 @@ function bisleyCardTitleFromName(name: string, codeKey: string): string | null {
   return s;
 }
 
+const JB_SUFFIX_STRIP_MIN_TITLE_WORDS = 2;
+
+function jbNormWordForMatch(w: string): string {
+  return w
+    .toLowerCase()
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+/** Longest-first token list so alternation prefers `XXL` over `XL` and `XS` over `S`. */
+const JB_STANDARD_SIZE_TAIL_ALT =
+  "XXS|2XS|XS|XXL|2XL|XXXL|3XL|4XL|5XL|6XL|7XL|8XL|9XL|10XL|\\d+XL|XL|L|M|S|OSFM|OSFA|O\\/S|O\\s*/\\s*S|OS|FRE|ONE\\s*SIZE";
+
 /**
- * JB supplier titles often append a variant colour (e.g. `… Beanie Camo`) even though colours are a separate PDP control.
- * When `availableColors` is known (PDP), drop a trailing segment that matches a listed colour (longest match first).
+ * Drop a trailing segment that matches one of `options` (longest match first).
+ * Allows a space, ` - `, `|`, or `/` before the option (supplier CSV mixes these).
  */
-function jbStripKnownColorSuffixFromTitle(
+function jbStripListedSuffixFlexible(
   title: string,
-  colorOptions?: readonly string[] | null,
+  options: readonly string[] | null | undefined,
+  minWordsInTitle: number,
 ): string {
   const t = title.trim();
-  const opts = (colorOptions ?? []).map((c) => String(c).trim()).filter((c) => c.length > 0);
+  const opts = (options ?? []).map((c) => String(c).trim()).filter((c) => c.length > 0);
   if (!t || opts.length === 0) {
     return t;
   }
   const words = t.split(/\s+/).filter(Boolean);
-  if (words.length < 3) {
+  if (words.length < minWordsInTitle) {
     return t;
   }
 
   const sorted = [...opts].sort((a, b) => b.length - a.length);
   for (const c of sorted) {
     const pat = c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(`(?:\\s+${pat})$`, "i");
-    if (re.test(t)) {
-      return t.replace(re, "").trim();
+    const res = [
+      new RegExp(`(?:\\s+|\\s*[-–|/]\\s+)${pat}\\s*$`, "i"),
+      new RegExp(`(?:\\s+${pat})$`, "i"),
+    ];
+    for (const re of res) {
+      if (re.test(t)) {
+        const next = t.replace(re, "").trim();
+        if (next.length > 0) {
+          return next;
+        }
+      }
     }
   }
+  return t;
+}
+
+/**
+ * When the listing title ends with the same colour / size phrase as the PDP options but with different
+ * spacing or hyphens (e.g. `Stone Grey` vs option `Stone-Grey`), peel trailing words by phrase match.
+ */
+function jbStripTrailingListedPhrasesAsWords(
+  title: string,
+  options: readonly string[] | null | undefined,
+  minWordsRemain: number,
+): string {
+  let words = title.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= minWordsRemain) {
+    return title.trim();
+  }
+
+  const phrases: string[][] = [];
+  for (const raw of options ?? []) {
+    const s = String(raw).trim();
+    if (!s) {
+      continue;
+    }
+    for (const chunk of s.split(/[/|]+/g).map((p) => p.trim()).filter(Boolean)) {
+      const pw = chunk.split(/[\s–—-]+/g).map((w) => w.trim()).filter(Boolean);
+      if (pw.length > 0) {
+        phrases.push(pw);
+      }
+    }
+  }
+  const sorted = [...phrases].sort((a, b) => b.length - a.length);
+
+  let changed = true;
+  while (changed && words.length > minWordsRemain) {
+    changed = false;
+    for (const phrase of sorted) {
+      if (phrase.length === 0 || phrase.length > words.length) {
+        continue;
+      }
+      if (phrase.length === 1 && /^\d+$/.test(phrase[0] ?? "")) {
+        continue;
+      }
+      let ok = true;
+      for (let i = 0; i < phrase.length; i++) {
+        const tw = words[words.length - phrase.length + i] ?? "";
+        const pw = phrase[i] ?? "";
+        if (jbNormWordForMatch(tw) !== jbNormWordForMatch(pw)) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) {
+        words = words.slice(0, -phrase.length);
+        changed = true;
+        break;
+      }
+    }
+  }
+  return words.join(" ").trim();
+}
+
+/** `Name | Colour | Size` (and similar) — keep the style name only. */
+function jbStripLeadingSegmentBeforePipes(title: string): string {
+  const t = title.trim();
+  if (!t.includes("|")) {
+    return t;
+  }
+  const parts = t.split(/\s*\|\s*/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= 3) {
+    return parts[0] ?? t;
+  }
+  if (parts.length === 2) {
+    const tail = parts[1] ?? "";
+    const tailWords = tail.split(/\s+/).filter(Boolean);
+    const sizeRe = new RegExp(`^(?:${JB_STANDARD_SIZE_TAIL_ALT})$`, "i");
+    const tailLooksSizeOnly =
+      (tailWords.length === 1 && sizeRe.test(tailWords[0]!.replace(/\s+/g, ""))) ||
+      (tailWords.length === 2 &&
+        /^(?:size|sz)$/i.test(tailWords[0] ?? "") &&
+        /^\d{1,3}$/.test(tailWords[1] ?? ""));
+    if (tailLooksSizeOnly || tailWords.length <= 2) {
+      return parts[0] ?? t;
+    }
+  }
+  return t;
+}
+
+/**
+ * JB CSV titles often append size after colour; grids may not pass `available_sizes`.
+ * Strip trailing apparel size tokens (after whitespace or `-` / `|` / `/`).
+ */
+function jbStripStandardTrailingApparelSize(title: string): string {
+  const t = title.trim();
+  if (!t) {
+    return t;
+  }
+  const re = new RegExp(`(?:\\s*[-–|/]\\s*|\\s+)(?:${JB_STANDARD_SIZE_TAIL_ALT})\\s*$`, "i");
+  const next = t.replace(re, "").trim();
+  return next.length > 0 ? next : t;
+}
+
+function jbStripAllStandardTrailingSizes(title: string): string {
+  let t = title.trim();
+  let prev = "";
+  let guard = 0;
+  while (t !== prev && guard < 8) {
+    prev = t;
+    t = jbStripStandardTrailingApparelSize(t);
+    guard += 1;
+  }
+  return t;
+}
+
+function jbWearSanitizeDisplayTitle(
+  title: string,
+  colorOptions?: readonly string[] | null,
+  sizeOptions?: readonly string[] | null,
+): string {
+  let t = title.trim();
+  if (!t) {
+    return t;
+  }
+  const minW = JB_SUFFIX_STRIP_MIN_TITLE_WORDS;
+
+  t = jbStripLeadingSegmentBeforePipes(t);
+
+  t = jbStripListedSuffixFlexible(t, sizeOptions, minW);
+  t = jbStripTrailingListedPhrasesAsWords(t, sizeOptions, 1);
+  t = jbStripAllStandardTrailingSizes(t);
+  t = jbStripListedSuffixFlexible(t, colorOptions, minW);
+  t = jbStripTrailingListedPhrasesAsWords(t, colorOptions, 1);
+
+  t = jbStripListedSuffixFlexible(t, sizeOptions, minW);
+  t = jbStripTrailingListedPhrasesAsWords(t, sizeOptions, 1);
+  t = jbStripAllStandardTrailingSizes(t);
+  t = jbStripListedSuffixFlexible(t, colorOptions, minW);
+  t = jbStripTrailingListedPhrasesAsWords(t, colorOptions, 1);
+
   return t;
 }
 
@@ -411,6 +572,39 @@ function syzmikMarketingTitleFallback(
   return cleaned.length > 0 ? cleaned : fromCsv.trim();
 }
 
+function isFashionBizCareOrCollectionListing(
+  name: string,
+  storeSlug?: string | null,
+  supplierName?: string | null,
+): boolean {
+  if (fashionBizStyleCodeFromListing(name, storeSlug)) {
+    return true;
+  }
+  const sup = String(supplierName ?? "").trim().toLowerCase();
+  return sup === "biz care" || sup === "biz collection";
+}
+
+/** Biz Care / Biz Collection sum.csv `short_description` when `products.name` is only `Brand {STYLE}`. */
+function bizCareCollectionMarketingTitleFallback(
+  name: string,
+  codeKey: string,
+  storeSlug?: string | null,
+  supplierName?: string | null,
+): string | null {
+  if (!isFashionBizCareOrCollectionListing(name, storeSlug, supplierName)) {
+    return null;
+  }
+  const baseKey = codeKey.replace(/-CLEARANCE$/i, "");
+  const fromCsv =
+    BIZ_CARE_COLLECTION_STYLE_MARKETING_TITLE[codeKey] ??
+    BIZ_CARE_COLLECTION_STYLE_MARKETING_TITLE[baseKey];
+  if (!fromCsv?.trim()) {
+    return null;
+  }
+  const cleaned = storefrontStripSupplierBranding(fromCsv.trim());
+  return cleaned.length > 0 ? cleaned : fromCsv.trim();
+}
+
 /**
  * Category grid: product name above, style code below.
  * PDP (`forStorefrontBrowseGrid` false) may still use `description` for Fashion Biz–style marketing titles.
@@ -424,6 +618,8 @@ export function productCardDisplayLines(
   availableColorsForJbTitle?: readonly string[] | null,
   /** Category & subcategory browse: never use `description` as the card title — only listing name + JB/Syzmik helpers. */
   forStorefrontBrowseGrid?: boolean,
+  /** Pass `available_sizes` when known so JB titles do not repeat a trailing size token (e.g. `… Navy 2XL`). */
+  availableSizesForJbTitle?: readonly string[] | null,
 ): ProductCardDisplay {
   const productCode = cardProductCode(name, storeSlug, supplierName);
   const codeKey = productCode.toUpperCase();
@@ -436,7 +632,20 @@ export function productCardDisplayLines(
   if (!productName) {
     productName = syzmikMarketingTitleFallback(name, codeKey, storeSlug);
   }
-  if (!productName && !forStorefrontBrowseGrid && raw.length > 0) {
+  if (!productName) {
+    productName = bizCareCollectionMarketingTitleFallback(name, codeKey, storeSlug, supplierName);
+  }
+  /**
+   * Category grids normally avoid `description` (stable card titles from `products.name`).
+   * Fashion Biz rows are often `Biz Care {STYLE}` only — stripping the brand leaves a bare SKU in the title slot.
+   * Use the CSV marketing line from `description` on browse grids for those listings (e.g. Health care / Biz Care).
+   */
+  const fashionBizStyle = fashionBizStyleCodeFromListing(name, storeSlug);
+  const useDescriptionTitleOnBrowseGrid = Boolean(
+    forStorefrontBrowseGrid &&
+      (fashionBizStyle || isFashionBizCareOrCollectionListing(name, storeSlug, supplierName)),
+  );
+  if (!productName && raw.length > 0 && (!forStorefrontBrowseGrid || useDescriptionTitleOnBrowseGrid)) {
     productName = cardMarketingTitleFromDescription(raw, name, codeKey);
   }
   if (!productName && isBisleyListingContext(storeSlug, supplierName, name)) {
@@ -446,12 +655,12 @@ export function productCardDisplayLines(
     productName = browseListingTitleFromName(name, productCode);
   }
 
-  if (
-    productName &&
-    availableColorsForJbTitle?.length &&
-    isJbWearListingContext(storeSlug, supplierName, name)
-  ) {
-    productName = jbStripKnownColorSuffixFromTitle(productName, availableColorsForJbTitle);
+  if (productName && isJbWearListingContext(storeSlug, supplierName, name)) {
+    productName = jbWearSanitizeDisplayTitle(
+      productName,
+      availableColorsForJbTitle,
+      availableSizesForJbTitle,
+    );
   }
 
   return { productName, productCode };

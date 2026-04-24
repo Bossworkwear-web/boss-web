@@ -5,8 +5,10 @@
  * collecting colors + sizes + image URLs and using min reseller price.
  *
  * Usage (from repo root):
- *   node scripts/import-jbswear-xlsx.mjs --file="data/supplier/JB/2026 JBswear SKU - Reseller.xlsx" --dry-run --limit=5
+ *   node scripts/import-jbswear-xlsx.mjs --file="data/supplier/JB/JBswear SKU - Reseller.xlsx" --dry-run --limit=5
+ *   node scripts/import-jbswear-xlsx.mjs --names-only --dry-run
  *   npm run import:jbswear
+ *   npm run update:jb-names
  *
  * Env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  */
@@ -20,10 +22,12 @@ import { getBossWebRoot, loadEnvLocal } from "./lib/load-env.mjs";
 loadEnvLocal();
 
 function parseArgs(argv) {
-  const out = { file: null, dryRun: false, limit: Infinity, onlyStyle: null };
+  const out = { file: null, dryRun: false, limit: Infinity, onlyStyle: null, namesOnly: false };
   for (const a of argv) {
     if (a === "--dry-run") {
       out.dryRun = true;
+    } else if (a === "--names-only") {
+      out.namesOnly = true;
     } else if (a.startsWith("--file=")) {
       out.file = a.slice("--file=".length).trim() || null;
     } else if (a.startsWith("--only-style=")) {
@@ -288,11 +292,95 @@ async function upsertProductsBatch(supabase, batch) {
   }
 }
 
+const DEFAULT_JB_XLSX_CANDIDATES = [
+  "data/supplier/JB/JBswear SKU - Reseller.xlsx",
+  "data/supplier/JB/2026 JBswear SKU - Reseller.xlsx",
+];
+
+function resolveJbXlsxPath(root, fileArg) {
+  if (fileArg) {
+    return resolve(root, fileArg);
+  }
+  for (const rel of DEFAULT_JB_XLSX_CANDIDATES) {
+    const p = resolve(root, rel);
+    if (existsSync(p)) {
+      return p;
+    }
+  }
+  return resolve(root, DEFAULT_JB_XLSX_CANDIDATES[0]);
+}
+
+/**
+ * Apply `products.name` from the workbook only (slug match `jb-…`, supplier JB's Wear).
+ */
+async function updateJbProductNamesOnly(supabase, productRows, dryRun) {
+  const slugs = [...new Set(productRows.map((r) => r.slug).filter(Boolean))];
+  const bySlug = new Map();
+  const CHUNK = 150;
+  for (let i = 0; i < slugs.length; i += CHUNK) {
+    const chunk = slugs.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from("products")
+      .select("id, slug, name")
+      .eq("supplier_name", "JB's Wear")
+      .in("slug", chunk);
+    if (error) {
+      throw error;
+    }
+    for (const row of data ?? []) {
+      if (row.slug) {
+        bySlug.set(row.slug, row);
+      }
+    }
+  }
+
+  let updated = 0;
+  let unchanged = 0;
+  let missing = 0;
+  const samples = [];
+
+  for (const row of productRows) {
+    const hit = bySlug.get(row.slug);
+    if (!hit) {
+      missing += 1;
+      continue;
+    }
+    if (hit.name === row.name) {
+      unchanged += 1;
+      continue;
+    }
+    if (samples.length < 8) {
+      samples.push({ slug: row.slug, was: hit.name, now: row.name });
+    }
+    if (!dryRun) {
+      const { error } = await supabase.from("products").update({ name: row.name }).eq("id", hit.id);
+      if (error) {
+        throw error;
+      }
+    }
+    updated += 1;
+  }
+
+  console.log(
+    JSON.stringify(
+      {
+        mode: dryRun ? "dry-run (names only)" : "names only",
+        workbookStyles: productRows.length,
+        updated,
+        unchanged,
+        missing,
+        sampleChanges: samples,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const root = getBossWebRoot();
-  const fileArg = args.file ?? "data/supplier/JB/2026 JBswear SKU - Reseller.xlsx";
-  const xlsxPath = resolve(root, fileArg);
+  const xlsxPath = resolveJbXlsxPath(root, args.file);
   if (!existsSync(xlsxPath)) {
     console.error(`XLSX not found: ${xlsxPath}`);
     process.exit(1);
@@ -450,8 +538,7 @@ async function main() {
 
   console.log(`JB's Wear XLSX: ${grouped.size} style codes → ${productRows.length} storefront products`);
   console.log("Sample:", JSON.stringify(productRows.slice(0, 2), null, 2));
-
-  if (args.dryRun) return;
+  console.log(`Using file: ${xlsxPath}`);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -466,6 +553,16 @@ async function main() {
   const supabase = createClient(supabaseUrl, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+
+  if (args.namesOnly) {
+    await updateJbProductNamesOnly(supabase, productRows, args.dryRun);
+    console.log(args.dryRun ? "Dry run finished (no DB writes)." : "Done (names only).");
+    return;
+  }
+
+  if (args.dryRun) {
+    return;
+  }
 
   const columns = await getProductColumns(supabase);
   const BATCH = 50;

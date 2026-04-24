@@ -7,7 +7,6 @@ import { mergeProductLinesWithCustomer } from "@/lib/crm/quote-customer-accept-m
 import type { QuoteAcceptCustomerPayload } from "@/lib/crm/quote-customer-accept-types";
 import { canCustomerAcceptQuote, getCustomerAcceptValidationError } from "@/lib/crm/quote-customer-accept-validation";
 import { buildQuoteCustomerEmailBody, computeTotalCentsFromProductLines } from "@/lib/crm/quote-email-draft";
-import { TopNav } from "@/app/components/top-nav";
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
 import { SITE_PAGE_INNER_SHELL_CLASS } from "@/lib/site-layout";
 
@@ -160,7 +159,6 @@ export function QuoteAcceptClient({
     const body = done ? emailPreview : acceptedSummary ?? "";
     return (
       <div className="min-h-screen bg-slate-50 text-slate-900">
-        {!embed ? <TopNav /> : null}
         <MainWithSupplierRail>
           <div className={`${SITE_PAGE_INNER_SHELL_CLASS} py-10`}>
             <h1 className="text-2xl font-semibold text-brand-navy">Thank you</h1>
@@ -188,7 +186,6 @@ export function QuoteAcceptClient({
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      {!embed ? <TopNav /> : null}
       <MainWithSupplierRail>
         <div className={`${SITE_PAGE_INNER_SHELL_CLASS} py-8`}>
           {!embed ? (

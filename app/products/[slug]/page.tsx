@@ -13,6 +13,9 @@ import { createSupabaseClient } from "@/lib/supabase";
 
 import { normalizeProductSizeOptions } from "@/lib/product-sizes";
 import { getGoogleRatingForProductSlug } from "@/lib/product-google-rating";
+import { productCardDisplayLines } from "@/lib/product-card-copy";
+
+import { TopNav } from "@/app/components/top-nav";
 
 import type { PlacementData, ProductDetailData } from "../premium-work-polo/premium-work-polo-client";
 
@@ -560,7 +563,7 @@ export async function getDetailData(
   }
   return unstable_cache(
     async () => getDetailDataInternal(slug),
-    ["storefront-pdp-v1", slug],
+    ["storefront-pdp-v2", slug],
     { revalidate: 120 },
   )();
 }
@@ -577,7 +580,16 @@ export async function generateMetadata({ params }: ProductDetailPageProps): Prom
     return { title: "Product" };
   }
   const { product } = detail;
-  const title = product.name;
+  const { productName: displayTitle } = productCardDisplayLines(
+    product.name,
+    product.description,
+    product.slug,
+    product.supplierName ?? null,
+    product.colorOptions,
+    false,
+    product.sizeOptions,
+  );
+  const title = (displayTitle?.trim() ? displayTitle : product.name).trim();
   const sale = product.basePrice;
   const was = product.originalPrice;
   const pricePhrase =
@@ -603,6 +615,9 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   }
 
   return (
-    <PremiumWorkPoloClientDynamic product={detailData.product} placements={detailData.placements} />
+    <>
+      <TopNav />
+      <PremiumWorkPoloClientDynamic product={detailData.product} placements={detailData.placements} />
+    </>
   );
 }

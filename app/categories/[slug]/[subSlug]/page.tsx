@@ -10,8 +10,8 @@ import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
 import { TopNav } from "@/app/components/top-nav";
 import { WorkwearCategoryTopAd } from "@/app/components/workwear-category-top-ad";
 import { getDiscountPercent } from "@/lib/discounts";
-import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
-import { getMainCategory, getSubCategoriesForMain, SUB_CATEGORIES } from "@/lib/catalog";
+import { categoryBrowseCardImageUrl } from "@/lib/category-browse-card-image";
+import { getMainCategory, getSubCategoriesForMain, HEALTH_CARE_MAIN_SLUG, SUB_CATEGORIES } from "@/lib/catalog";
 import {
   CATEGORY_BROWSE_PAGE_SIZE,
   filterProductsForSubCategoryBrowse,
@@ -21,6 +21,7 @@ import {
 import { productCardDisplayLines } from "@/lib/product-card-copy";
 import { isJbWearSixSeriesListing, isJbWorkwearExcludedHeadwearOrSocks } from "@/lib/product-visibility";
 import { productPathSegment } from "@/lib/product-path-slug";
+import { resolveHealthCareBrowseSubSlug } from "@/lib/health-care-browse";
 import { resolveProductSubSlug } from "@/lib/product-subslug";
 import { storefrontRetailFromSupplierBase, STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { getCachedActiveProductsBrowseRows } from "@/lib/cached-storefront-products";
@@ -37,39 +38,6 @@ type Props = {
   params: Promise<{ slug: string; subSlug: string }>;
   searchParams: Promise<{ page?: string; brand?: string }>;
 };
-
-const DEFAULT_IMAGE_BY_SUB: Record<string, string> = {
-  "t-shirts": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1600&q=80",
-  polos: "https://images.unsplash.com/photo-1592878940526-0214b0f374f6?auto=format&fit=crop&w=1600&q=80",
-  shirts: "https://images.unsplash.com/photo-1592878904946-b3cd8ae243d0?auto=format&fit=crop&w=1600&q=80",
-  "work-shirts": "https://images.unsplash.com/photo-1592878904946-b3cd8ae243d0?auto=format&fit=crop&w=1600&q=80",
-  jackets: "https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=1600&q=80",
-  jumper: "https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=1600&q=80",
-  pants: "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&w=1600&q=80",
-  scrubs: "https://images.unsplash.com/photo-1612532275214-e4ca76d0e4d1?auto=format&fit=crop&w=1600&q=80",
-  chef: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&w=1600&q=80",
-  apron: "https://images.unsplash.com/photo-1604909052743-94e9cf232b2b?auto=format&fit=crop&w=1600&q=80",
-  boots: "https://images.unsplash.com/photo-1542281286-9e0a16bb7368?auto=format&fit=crop&w=1600&q=80",
-  glove: "https://images.unsplash.com/photo-1584735175097-719d848f8449?auto=format&fit=crop&w=1600&q=80",
-  "safty-glasses": "https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&fit=crop&w=1600&q=80",
-  "safety-glasses": "https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&fit=crop&w=1600&q=80",
-  "head-wear":
-    "https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?auto=format&fit=crop&w=1600&q=80",
-  "hi-vis-vest":
-    "https://images.unsplash.com/photo-1584308666744-24d5cfdc7ae8?auto=format&fit=crop&w=1600&q=80",
-  miscellaneous:
-    "https://images.unsplash.com/photo-1584308666744-24d5cfdc7ae8?auto=format&fit=crop&w=1600&q=80",
-};
-
-function heroOverrideCardImageUrl(item: CategoryBrowseProductRow): string | null {
-  const code = fashionBizStyleCodeFromListing(item.name, item.slug ?? null);
-  if (code?.toUpperCase() === "CL542UL") {
-    const want = "CL542UL_TALENT_MIDNIGHTNAVY_07.JPG";
-    const hit = (item.image_urls ?? []).find((u) => String(u).toUpperCase().includes(want));
-    return hit?.trim() ? hit.trim() : null;
-  }
-  return null;
-}
 
 function subPageHref(mainSlug: string, subSlug: string, page: number, brand?: string, sort?: string) {
   const base = `/categories/${mainSlug}/${subSlug}`;
@@ -91,7 +59,11 @@ function subPageHref(mainSlug: string, subSlug: string, page: number, brand?: st
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug, subSlug } = await params;
-  const subLabel = SUB_CATEGORIES.find((s) => s.slug === subSlug)?.label ?? subSlug;
+  const subsForMeta = getSubCategoriesForMain(slug);
+  const subLabel =
+    subsForMeta.find((s) => s.slug === subSlug)?.label ??
+    SUB_CATEGORIES.find((s) => s.slug === subSlug)?.label ??
+    subSlug;
   const main = getMainCategory(slug);
   const title = main ? `${main.label} — ${subLabel}` : subLabel;
   return {
@@ -126,6 +98,10 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
     redirect(subSlug === "apron" ? "/categories/chef/apron" : "/categories/chef/miscellaneous");
   }
 
+  if ((slug === "mens" || slug === "womens") && subSlug === "scrubs") {
+    redirect("/categories/health-care/tops");
+  }
+
   // Chef aliases (users may type singular paths).
   if (slug === "chef") {
     const alias: Record<string, string> = {
@@ -149,7 +125,7 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
     polos: "mens",
     shirts: "mens",
     "work-shirts": "mens",
-    scrubs: "mens",
+    scrubs: HEALTH_CARE_MAIN_SLUG,
   };
   if (legacyToMain[slug]) {
     redirect(`/categories/${legacyToMain[slug]}/${subSlug}`);
@@ -355,16 +331,19 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
                 item.supplier_name ?? null,
                 item.available_colors ?? null,
                 true,
+                item.available_sizes ?? null,
               );
               const resolvedSub =
                 slug === "chef"
                   ? (resolveChefCategoryBrowseSubSlug(item) ?? subSlug)
-                  : (resolveProductSubSlug(item.name, item.category, item.slug, item.description) ?? subSlug);
-              const imageUrl =
-                heroOverrideCardImageUrl(item) ??
-                item.image_urls?.[0] ??
-                DEFAULT_IMAGE_BY_SUB[resolvedSub] ??
-                DEFAULT_IMAGE_BY_SUB["t-shirts"];
+                  : slug === HEALTH_CARE_MAIN_SLUG
+                    ? (resolveHealthCareBrowseSubSlug(item.name, {
+                        slug: item.slug,
+                        category: item.category,
+                        description: item.description,
+                      }) ?? subSlug)
+                    : (resolveProductSubSlug(item.name, item.category, item.slug, item.description) ?? subSlug);
+              const imageUrl = categoryBrowseCardImageUrl(item, resolvedSub);
               const imgAlt =
                 productName != null && productName.length > 0
                   ? `${productName} (${productCode})`
@@ -495,7 +474,11 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
                   <Link href={`/categories/${slug}`} className="font-semibold text-brand-orange hover:underline">
                     all {main.label}
                   </Link>{" "}
-                  or search from the home page.
+                  or use{" "}
+                  <Link href="/search" className="font-semibold text-brand-orange hover:underline">
+                    Search
+                  </Link>
+                  .
                 </p>
               )}
             </div>

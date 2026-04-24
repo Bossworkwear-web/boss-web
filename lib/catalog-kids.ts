@@ -18,7 +18,9 @@ export function filterSubCategoriesForKidsMain<
       item.slug !== "chef" &&
       item.slug !== "apron" &&
       item.slug !== "scrubs" &&
+      item.slug !== "tops" &&
       item.slug !== "hi-vis-vest" &&
+      item.slug !== "coverall" &&
       !ppe.has(item.slug),
   );
 }

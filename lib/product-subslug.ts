@@ -14,6 +14,7 @@ import {
   isBizCareCatalogProduct,
   isBizCareHatLikeProduct,
   isHeadWearKeywordProduct,
+  listingLooksLikeCoverallOverallGarment,
   isSocksKeywordProduct,
   isSyzmikCatalogProduct,
   isSyzmikZaPpeMiscListing,
@@ -142,6 +143,10 @@ export function subSlugFromDbCategory(category: string | null | undefined): stri
     misc: "miscellaneous",
     other: "miscellaneous",
     "ppe miscellaneous": "miscellaneous",
+    coverall: "coverall",
+    coveralls: "coverall",
+    overall: "coverall",
+    overalls: "coverall",
   };
 
   if (exact[key]) {
@@ -165,6 +170,9 @@ export function subSlugFromDbCategory(category: string | null | undefined): stri
   }
   if (key.includes("jumper")) {
     return "jumper";
+  }
+  if (key.includes("coverall") || key.includes("overall")) {
+    return "coverall";
   }
   if (key.includes("pant") || key.includes("trouser")) {
     return "pants";
@@ -264,11 +272,17 @@ export function inferSubSlugFromNameHeuristics(name: string): string {
     return "safty-glasses";
   }
   if (
+    /\bcover\s*alls?\b/.test(normalized) ||
+    /\bcoveralls?\b/.test(normalized) ||
+    /\boveralls?\b/.test(normalized)
+  ) {
+    return "coverall";
+  }
+  if (
     normalized.includes("pant") ||
     normalized.includes("trouser") ||
     /\bshorts\b/i.test(normalized) ||
     /\bjoggers?\b/i.test(normalized) ||
-    /\boveralls?\b/i.test(normalized) ||
     /\bleggings?\b/i.test(normalized) ||
     /\bcargo\s+(pant|trouser|short)/i.test(normalized)
   ) {
@@ -406,7 +420,7 @@ export function resolveProductSubSlug(
     return "jumper";
   }
 
-  /** Biz Care CID940U: requested to list under PPE → Miscellaneous. */
+  /** Biz Care CID940U: Health care → Miscellaneous only (`resolveHealthCareBrowseSubSlug` + category browse visibility). */
   const cid940uHay = `${name} ${storeSlug ?? ""}`.toUpperCase();
   if (/\bCID940U\b/.test(cid940uHay)) {
     return "miscellaneous";
@@ -428,6 +442,9 @@ export function resolveProductSubSlug(
   }
   if (isHiVisVestListingName(name)) {
     return "hi-vis-vest";
+  }
+  if (listingLooksLikeCoverallOverallGarment(name, { slug: storeSlug ?? null, category, description })) {
+    return "coverall";
   }
   if (isHeadWearKeywordProduct(name)) {
     return "head-wear";
@@ -498,6 +515,9 @@ export function resolveProductSubSlug(
   }
   if (fromCategory === "pants") {
     const inferred = inferSubSlugFromNameHeuristics(name);
+    if (inferred === "coverall") {
+      return "coverall";
+    }
     if (inferred === "jackets") {
       return "jackets";
     }

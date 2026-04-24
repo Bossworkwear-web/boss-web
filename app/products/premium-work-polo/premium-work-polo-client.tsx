@@ -9,7 +9,6 @@ import { STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { storefrontLeadingSupplierBrand } from "@/lib/product-display-name";
 import { STORE_MAIN_SHELL_CLASS } from "@/lib/store-main-shell";
 import { SITE_PAGE_INSET_X_CLASS } from "@/lib/site-layout";
-import { TopNav } from "@/app/components/top-nav";
 import { uploadStoreCheckoutReferenceImages } from "@/app/orders/actions";
 import { addCartItem, getCartItems, removeCartItem, updateCartItem, type CartItem } from "@/lib/cart";
 import { productPathSegment } from "@/lib/product-path-slug";
@@ -662,8 +661,17 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
         product.slug,
         product.supplierName ?? null,
         product.colorOptions,
+        undefined,
+        product.sizeOptions,
       ),
-    [product.colorOptions, product.description, product.name, product.slug, product.supplierName],
+    [
+      product.colorOptions,
+      product.description,
+      product.name,
+      product.sizeOptions,
+      product.slug,
+      product.supplierName,
+    ],
   );
   const brandAndModelLine = useMemo(() => {
     const fromName = storefrontLeadingSupplierBrand(product.name);
@@ -1193,8 +1201,9 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
           product.category,
           product.slug,
           product.supplierName?.trim() ?? null,
+          product.description,
         );
-  }, [product.category, product.name, product.slug, product.supplierName]);
+  }, [product.category, product.description, product.name, product.slug, product.supplierName]);
 
   const showDecoratedServiceFlow =
     !ppePlainOnly && (isEmbroiderySelected || isPrintingSelected);
@@ -1292,7 +1301,6 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
 
   return (
     <main className="product-detail-page min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
-      <TopNav />
       <div className={STORE_MAIN_SHELL_CLASS}>
         <section className={`${SITE_PAGE_INSET_X_CLASS} pb-6 pt-6 sm:pb-10 sm:pt-10`}>
         <div className="mx-auto grid w-full max-w-none gap-8 lg:grid-cols-[1fr_1fr] lg:gap-10">

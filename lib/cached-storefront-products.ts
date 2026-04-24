@@ -10,11 +10,11 @@ import { createSupabaseClient } from "@/lib/supabase";
 async function fetchActiveProductsBrowseRows(): Promise<CategoryBrowseProductRow[]> {
   const supabase = createSupabaseClient();
   const selectWithAudience =
-    "id, name, base_price, image_urls, category, slug, description, storefront_hidden, audience, supplier_name, available_colors";
+    "id, name, base_price, image_urls, category, slug, description, storefront_hidden, audience, supplier_name, available_colors, available_sizes";
   const selectWithoutAudience =
-    "id, name, base_price, image_urls, category, slug, description, storefront_hidden, supplier_name, available_colors";
+    "id, name, base_price, image_urls, category, slug, description, storefront_hidden, supplier_name, available_colors, available_sizes";
   const selectBare =
-    "id, name, base_price, image_urls, category, slug, description, storefront_hidden, available_colors";
+    "id, name, base_price, image_urls, category, slug, description, storefront_hidden, available_colors, available_sizes";
 
   async function fetchAll(select: string): Promise<{ data: CategoryBrowseProductRow[]; error: unknown }> {
     const pageSize = 1000;
@@ -53,10 +53,10 @@ async function fetchActiveProductsBrowseRows(): Promise<CategoryBrowseProductRow
         : selectBare.replace("storefront_hidden", "storefront_hidden, audience")
       : missingAudience
         ? missingImageUrls
-          ? "id, name, base_price, category, slug, description, storefront_hidden, supplier_name, available_colors"
+          ? "id, name, base_price, category, slug, description, storefront_hidden, supplier_name, available_colors, available_sizes"
           : selectWithoutAudience
         : missingImageUrls
-          ? "id, name, base_price, category, slug, description, storefront_hidden, audience, supplier_name, available_colors"
+          ? "id, name, base_price, category, slug, description, storefront_hidden, audience, supplier_name, available_colors, available_sizes"
           : selectWithAudience;
 
     const secondary = await fetchAll(fallbackSelect);
@@ -74,7 +74,7 @@ async function fetchActiveProductsBrowseRows(): Promise<CategoryBrowseProductRow
   if (rows.length === 0) {
     // Some environments may have image_urls missing or restricted; keep page usable.
     const minimal = await fetchAll(
-      "id, name, base_price, category, slug, description, storefront_hidden, available_colors",
+      "id, name, base_price, category, slug, description, storefront_hidden, available_colors, available_sizes",
     );
     return (minimal.data ?? []).map((r) => ({ ...r, image_urls: null }));
   }
@@ -85,6 +85,6 @@ async function fetchActiveProductsBrowseRows(): Promise<CategoryBrowseProductRow
 export const getCachedActiveProductsBrowseRows =
   process.env.NODE_ENV === "development"
     ? fetchActiveProductsBrowseRows
-    : unstable_cache(fetchActiveProductsBrowseRows, ["storefront-active-products-browse-v10"], {
+    : unstable_cache(fetchActiveProductsBrowseRows, ["storefront-active-products-browse-v12"], {
         revalidate: 60,
       });

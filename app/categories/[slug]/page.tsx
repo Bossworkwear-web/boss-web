@@ -9,9 +9,9 @@ import { ProductNavLink } from "@/app/components/product-nav-link";
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
 import { TopNav } from "@/app/components/top-nav";
 import { WorkwearCategoryTopAd } from "@/app/components/workwear-category-top-ad";
+import { categoryBrowseCardImageUrl } from "@/lib/category-browse-card-image";
 import { getDiscountPercent } from "@/lib/discounts";
-import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
-import { getMainCategory } from "@/lib/catalog";
+import { getMainCategory, HEALTH_CARE_MAIN_SLUG } from "@/lib/catalog";
 import {
   CATEGORY_BROWSE_PAGE_SIZE,
   filterProductsForMainCategoryBrowse,
@@ -25,6 +25,7 @@ import {
 } from "@/lib/product-visibility";
 import { productCardDisplayLines } from "@/lib/product-card-copy";
 import { productPathSegment } from "@/lib/product-path-slug";
+import { resolveHealthCareBrowseSubSlug } from "@/lib/health-care-browse";
 import { resolveProductSubSlug } from "@/lib/product-subslug";
 import { storefrontRetailFromSupplierBase, STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { getCachedActiveProductsBrowseRows } from "@/lib/cached-storefront-products";
@@ -49,38 +50,6 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
       canonical: `/categories/${slug}`,
     },
   };
-}
-
-const DEFAULT_IMAGE_BY_SUB: Record<string, string> = {
-  "t-shirts": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1600&q=80",
-  polos: "https://images.unsplash.com/photo-1592878940526-0214b0f374f6?auto=format&fit=crop&w=1600&q=80",
-  shirts: "https://images.unsplash.com/photo-1592878904946-b3cd8ae243d0?auto=format&fit=crop&w=1600&q=80",
-  "work-shirts": "https://images.unsplash.com/photo-1592878904946-b3cd8ae243d0?auto=format&fit=crop&w=1600&q=80",
-  jackets: "https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=1600&q=80",
-  pants: "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&w=1600&q=80",
-  scrubs: "https://images.unsplash.com/photo-1612532275214-e4ca76d0e4d1?auto=format&fit=crop&w=1600&q=80",
-  chef: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&w=1600&q=80",
-  apron: "https://images.unsplash.com/photo-1604909052743-94e9cf232b2b?auto=format&fit=crop&w=1600&q=80",
-  boots: "https://images.unsplash.com/photo-1542281286-9e0a16bb7368?auto=format&fit=crop&w=1600&q=80",
-  glove: "https://images.unsplash.com/photo-1584735175097-719d848f8449?auto=format&fit=crop&w=1600&q=80",
-  "safty-glasses": "https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&fit=crop&w=1600&q=80",
-  "safety-glasses": "https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&fit=crop&w=1600&q=80",
-  "head-wear":
-    "https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?auto=format&fit=crop&w=1600&q=80",
-  "hi-vis-vest":
-    "https://images.unsplash.com/photo-1584308666744-24d5cfdc7ae8?auto=format&fit=crop&w=1600&q=80",
-  miscellaneous:
-    "https://images.unsplash.com/photo-1584308666744-24d5cfdc7ae8?auto=format&fit=crop&w=1600&q=80",
-};
-
-function heroOverrideCardImageUrl(item: CategoryBrowseProductRow): string | null {
-  const code = fashionBizStyleCodeFromListing(item.name, item.slug ?? null);
-  if (code?.toUpperCase() === "CL542UL") {
-    const want = "CL542UL_TALENT_MIDNIGHTNAVY_07.JPG";
-    const hit = (item.image_urls ?? []).find((u) => String(u).toUpperCase().includes(want));
-    return hit?.trim() ? hit.trim() : null;
-  }
-  return null;
 }
 
 function pageHref(slug: string, page: number, brand?: string, sort?: string) {
@@ -110,7 +79,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     polos: "mens",
     shirts: "mens",
     "work-shirts": "mens",
-    scrubs: "mens",
+    scrubs: HEALTH_CARE_MAIN_SLUG,
   };
   if (legacyToMain[slug]) {
     redirect(`/categories/${legacyToMain[slug]}`);
@@ -312,16 +281,19 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
                 item.supplier_name ?? null,
                 item.available_colors ?? null,
                 true,
+                item.available_sizes ?? null,
               );
               const resolvedSub =
                 slug === "chef"
                   ? (resolveChefCategoryBrowseSubSlug(item) ?? "miscellaneous")
-                  : resolveProductSubSlug(item.name, item.category, item.slug, item.description) ?? "t-shirts";
-              const imageUrl =
-                heroOverrideCardImageUrl(item) ??
-                item.image_urls?.[0] ??
-                DEFAULT_IMAGE_BY_SUB[resolvedSub] ??
-                DEFAULT_IMAGE_BY_SUB["t-shirts"];
+                  : slug === HEALTH_CARE_MAIN_SLUG
+                    ? (resolveHealthCareBrowseSubSlug(item.name, {
+                        slug: item.slug,
+                        category: item.category,
+                        description: item.description,
+                      }) ?? "tops")
+                    : resolveProductSubSlug(item.name, item.category, item.slug, item.description) ?? "t-shirts";
+              const imageUrl = categoryBrowseCardImageUrl(item, resolvedSub);
               const imgAlt =
                 productName != null && productName.length > 0
                   ? `${productName} (${productCode})`
@@ -449,7 +421,11 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
               ) : (
                 <p>
                   <span className="font-semibold text-brand-navy">Nothing to list.</span> Products may be
-                  hidden by storefront rules or need missing title/price. Try search from the home page.
+                  hidden by storefront rules or need missing title/price. Try{" "}
+                  <Link href="/search" className="font-semibold text-brand-orange hover:underline">
+                    Search
+                  </Link>
+                  .
                 </p>
               )}
             </div>
