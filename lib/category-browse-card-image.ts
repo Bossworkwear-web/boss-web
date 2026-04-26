@@ -39,17 +39,18 @@ export function heroOverrideCardImageUrl(item: BrowseCardImageRow): string | nul
     const want = "CL542UL_TALENT_MIDNIGHTNAVY_07.JPG";
     const hit = (item.image_urls ?? []).find((u) => String(u).toUpperCase().includes(want));
     const picked = hit?.trim() ? hit.trim() : null;
-    return picked ? resolveStorefrontImageUrl(picked) : null;
+    if (!picked) return null;
+    return resolveStorefrontImageUrl(picked) || picked;
   }
   return null;
 }
 
 export function categoryBrowseCardImageUrl(item: BrowseCardImageRow, resolvedSubSlug: string): string {
-  const fromDb = item.image_urls?.[0];
-  const resolvedDb = fromDb ? resolveStorefrontImageUrl(fromDb) : null;
+  const rawFirst = item.image_urls?.[0]?.trim() ?? "";
+  const dbUrl = rawFirst ? resolveStorefrontImageUrl(rawFirst) || rawFirst : null;
   return (
     heroOverrideCardImageUrl(item) ??
-    (resolvedDb && resolvedDb.length > 0 ? resolvedDb : null) ??
+    dbUrl ??
     DEFAULT_IMAGE_BY_SUB[resolvedSubSlug] ??
     DEFAULT_IMAGE_BY_SUB["t-shirts"]
   );

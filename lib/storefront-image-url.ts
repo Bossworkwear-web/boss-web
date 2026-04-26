@@ -1,59 +1,77 @@
-import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
-
 const MEDIA_PREFIX = "/api/supplier-media/";
 const MEDIA_PREFIX_LOOSE = "api/supplier-media/";
 
-function supplierImagesBucket(): string {
-  return process.env.SUPPLIER_IMAGES_BUCKET ?? "supplier-product-images";
+function collapseSlashes(path: string): string {
+  return path.replace(/\/+/g, "/");
 }
 
 /**
- * Catalogue rows often store `/api/supplier-media/<supplier>/…`; middleware redirects that to
- * Supabase public storage, but `<img src>` is more reliable with the final HTTPS URL (CDN,
- * crawlers, rare redirect edge cases). Same object key as the redirect path.
+ * If `raw` is (or contains) a supplier-media catalogue path, return normalized `/api/supplier-media/…`.
+ * Otherwise return null so callers keep the original URL (e.g. full https Supabase, Unsplash).
+ */
+function normalizedSupplierMediaPath(raw: string): string | null {
+  const s0 = raw.trim();
+  if (!s0) return null;
+
+  if (s0.startsWith("http://") || s0.startsWith("https://")) {
+    if (!s0.includes("/api/supplier-media/")) {
+      return null;
+    }
+    try {
+      const pathOnly = new URL(s0).pathname;
+      if (!pathOnly.startsWith(MEDIA_PREFIX)) {
+        return null;
+      }
+      return collapseSlashes(pathOnly);
+    } catch {
+      return null;
+    }
+  }
+
+  if (s0.startsWith(MEDIA_PREFIX)) {
+    return collapseSlashes(s0);
+  }
+
+  const idx = s0.toLowerCase().indexOf(MEDIA_PREFIX_LOOSE);
+  if (idx >= 0) {
+    const tail = s0.slice(idx + MEDIA_PREFIX_LOOSE.length).replace(/^\/+/, "");
+    return collapseSlashes(`${MEDIA_PREFIX}${tail}`);
+  }
+
+  return null;
+}
+
+/**
+ * Catalogue `image_urls` often store `/api/supplier-media/<supplier>/…`. Keep them as **same-origin**
+ * paths so the browser always loads `https://<your-site>/api/…` and Edge middleware issues 307 to
+ * Supabase public storage. Avoids client/build-time `NEXT_PUBLIC_SUPABASE_URL` and encoding drift
+ * when rewriting to absolute storage URLs in React.
+ *
+ * Already-absolute URLs (Supabase, CDNs, data:, etc.) are left unchanged unless they wrap our
+ * `/api/supplier-media/` path (then we normalize to the path only).
  */
 export function resolveStorefrontImageUrl(url: string | null | undefined): string {
-  let raw = typeof url === "string" ? url.trim() : "";
+  const raw = typeof url === "string" ? url.trim() : "";
   if (!raw) return "";
-
-  if ((raw.startsWith("http://") || raw.startsWith("https://")) && raw.includes("/api/supplier-media/")) {
-    try {
-      const pathOnly = new URL(raw).pathname;
-      if (pathOnly.startsWith(MEDIA_PREFIX)) {
-        raw = pathOnly;
-      } else {
-        return typeof url === "string" ? url.trim() : "";
-      }
-    } catch {
-      return typeof url === "string" ? url.trim() : "";
-    }
-  } else if (raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith("data:")) {
+  if (raw.startsWith("data:")) {
     return raw;
   }
 
-  let rest: string | null = null;
-  if (raw.startsWith(MEDIA_PREFIX)) {
-    rest = raw.slice(MEDIA_PREFIX.length);
-  } else {
-    const lower = raw.toLowerCase();
-    const idx = lower.indexOf(MEDIA_PREFIX_LOOSE);
-    if (idx >= 0) {
-      rest = raw.slice(idx + MEDIA_PREFIX_LOOSE.length);
-    } else {
-      return raw;
-    }
+  const norm = normalizedSupplierMediaPath(raw);
+  if (norm) {
+    return norm;
   }
-
-  const parts = rest.split("/").filter(Boolean);
-  if (parts.length < 2) {
-    return typeof url === "string" ? url.trim() : "";
-  }
-  const objectPath = parts.join("/").replace(/\/+/g, "/");
-  const out = publicStorageObjectUrl(supplierImagesBucket(), objectPath);
-  return out || (typeof url === "string" ? url.trim() : "");
+  return raw;
 }
 
 export function resolveStorefrontImageUrlList(urls: string[] | null | undefined): string[] {
   if (!Array.isArray(urls)) return [];
-  return urls.map((u) => resolveStorefrontImageUrl(u)).filter((s) => s.length > 0);
+  return urls
+    .map((u) => {
+      const t = typeof u === "string" ? u.trim() : "";
+      if (!t) return "";
+      const r = resolveStorefrontImageUrl(t);
+      return r.length > 0 ? r : t;
+    })
+    .filter((s) => s.length > 0);
 }

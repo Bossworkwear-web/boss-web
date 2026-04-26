@@ -187,10 +187,11 @@ export default function CartPage() {
           <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
             <div className="space-y-4">
               {items.map((item) => {
-                const heroSrc =
-                  typeof item.imageUrl === "string" && item.imageUrl.trim().length > 0
-                    ? resolveStorefrontImageUrl(item.imageUrl.trim()) || CART_LINE_FALLBACK_IMAGE
-                    : CART_LINE_FALLBACK_IMAGE;
+                const heroSrc = (() => {
+                  const raw = typeof item.imageUrl === "string" ? item.imageUrl.trim() : "";
+                  if (!raw) return CART_LINE_FALLBACK_IMAGE;
+                  return resolveStorefrontImageUrl(raw) || raw || CART_LINE_FALLBACK_IMAGE;
+                })();
                 const thumbAlt =
                   item.productName.trim().length > 0 ? `${item.productName} — preview` : "Product preview";
                 return (
