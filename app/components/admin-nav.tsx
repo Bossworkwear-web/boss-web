@@ -58,11 +58,14 @@ export function AdminNav() {
 
   return (
     <aside className="fixed bottom-0 left-0 top-0 z-40 hidden w-[306px] flex-col border-r border-slate-700 bg-slate-900 text-white lg:flex">
-      <div className="border-b border-slate-700 px-6 py-8">
+      <div className="shrink-0 border-b border-slate-700 px-6 py-8">
         <p className="text-[1.125rem] font-semibold uppercase tracking-[0.12em] text-slate-400">Admin</p>
         <p className="mt-1 text-[1.6875rem] font-medium leading-tight">Boss Web</p>
       </div>
-      <nav className="flex flex-1 flex-col gap-2 p-4">
+      <nav
+        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden p-4 overscroll-contain"
+        aria-label="Admin sections"
+      >
         {LINKS.map((item) => {
           const active = activeHref ? item.href === activeHref : false;
           return (
@@ -91,7 +94,7 @@ export function AdminNav() {
           );
         })}
       </nav>
-      <div className="border-t border-slate-700 p-4">
+      <div className="shrink-0 border-t border-slate-700 bg-slate-900 p-4">
         <Link
           href="/"
           className="mb-2 block rounded-xl px-[1.125rem] py-[0.9375rem] text-[1.3125rem] font-semibold text-slate-300 hover:bg-slate-800"

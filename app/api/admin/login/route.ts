@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Invalid body" }, { status: 400 });
   }
 
-  const password = String(body.password ?? "");
+  const password = String(body.password ?? "").trim();
   const user = String(body.user ?? "").trim();
   if (password !== expected) {
     return NextResponse.json({ ok: false, error: "Invalid password" }, { status: 401 });

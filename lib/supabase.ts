@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
 
 function getSupabaseUrl() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   if (!url) {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL");
   }
@@ -11,7 +11,7 @@ function getSupabaseUrl() {
 }
 
 function getSupabaseAnonKey() {
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   if (!anonKey) {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY");
   }

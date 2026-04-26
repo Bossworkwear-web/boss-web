@@ -1,5 +1,8 @@
 import { AdminNav } from "@/app/components/admin-nav";
 
+/** Admin routes need Supabase at render time; skip static prerender so `next build` succeeds without build-time env. */
+export const dynamic = "force-dynamic";
+
 /** Admin main: half the storefront row inset (`px-[5cm]` → `2.5cm` each side). */
 const ADMIN_PANEL_ROW_CLASS = "mx-auto w-full max-w-none px-[2.5cm]";
 
