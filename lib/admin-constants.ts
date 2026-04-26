@@ -1,4 +1,7 @@
-/** Cookie name set after successful admin login (httpOnly). */
+/**
+ * Cookie name set after successful admin login (httpOnly).
+ * If renamed, update the duplicate in root `middleware.ts` (Vercel Edge cannot import `@/lib/...` there).
+ */
 export const ADMIN_SESSION_COOKIE = "boss_admin_session";
 
 /** Human identifier (email/name) chosen at login (httpOnly). */

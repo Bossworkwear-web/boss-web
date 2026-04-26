@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-import { ADMIN_SESSION_COOKIE } from "@/lib/admin-constants";
+/** Must stay in sync with `lib/admin-constants.ts` — Vercel Edge middleware cannot import app `@/` paths. */
+const ADMIN_SESSION_COOKIE = "boss_admin_session";
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
