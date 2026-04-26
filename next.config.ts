@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 /** Absolute project root — avoids Turbopack mis-inferring `app/` when the repo path has spaces. */
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
+/** On Vercel, forcing `turbopack.root` can break the deployed output (edge returns NOT_FOUND). Only use locally when needed. */
+const useCustomTurbopackRoot = !process.env.VERCEL && projectRoot.includes(" ");
 
 const nextConfig: NextConfig = {
   async headers() {
@@ -19,9 +21,7 @@ const nextConfig: NextConfig = {
   },
   /** pdfkit loads AFM metrics from disk; bundling breaks at runtime. */
   serverExternalPackages: ["pdfkit"],
-  turbopack: {
-    root: projectRoot,
-  },
+  ...(useCustomTurbopackRoot ? { turbopack: { root: projectRoot } } : {}),
   experimental: {
     // Allow uploading larger files via Server Actions (default is 1MB).
     // Needed for Admin → Production file uploads.
