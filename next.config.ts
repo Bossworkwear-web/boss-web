@@ -8,9 +8,6 @@ const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 const useCustomTurbopackRoot = !process.env.VERCEL && projectRoot.includes(" ");
 
 const nextConfig: NextConfig = {
-  outputFileTracingExcludes: {
-    "/api/supplier-media/[supplier]/[...path]": ["./data/supplier/**/*"],
-  },
   async headers() {
     return [
       {

@@ -5,7 +5,7 @@
  * (copy data/supplier/_template/catalog.config.example.json).
  *
  * Images:
- *   --images=local    → /api/supplier-media/<supplier>/… (dev / Node server)
+ *   --images=local    → /api/supplier-media/<supplier>/… (307 to Supabase public URL; objects must exist in bucket)
  *   --images=storage  → https://…/storage/v1/object/public/<bucket>/<supplier>/…
  *
  * Usage:
