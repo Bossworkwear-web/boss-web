@@ -1,7 +1,9 @@
 import { readFile } from "fs/promises";
-import { extname, join, resolve } from "path";
+import { extname, resolve } from "path";
 
 import { NextResponse } from "next/server";
+
+import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
 
 const MIME: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -18,6 +20,17 @@ export async function GET(
   const { supplier, path: segments } = await context.params;
   if (!supplier || !segments?.length) {
     return new NextResponse("Not found", { status: 404 });
+  }
+
+  /** Vercel: never bundle `data/supplier/**` into this function (1GB+); images live in Supabase Storage. */
+  if (process.env.VERCEL) {
+    const bucket = process.env.SUPPLIER_IMAGES_BUCKET ?? "supplier-product-images";
+    const objectPath = [supplier, ...segments].join("/").replace(/\/+/g, "/");
+    const url = publicStorageObjectUrl(bucket, objectPath);
+    if (!url) {
+      return new NextResponse("Storage not configured", { status: 503 });
+    }
+    return NextResponse.redirect(url, 307);
   }
 
   const root = resolve(process.cwd(), "data", "supplier", supplier);
