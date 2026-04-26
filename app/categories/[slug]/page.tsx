@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { CategoryBrowseTitle } from "@/app/components/category-browse-title";
 import { CategoryBrandFilter } from "@/app/components/category-brand-filter";
 import { CategoryGetAQuoteCta } from "@/app/components/category-get-a-quote-cta";
+import { ProductGridPriceCells } from "@/app/components/product-grid-price";
 import { ProductNavLink } from "@/app/components/product-nav-link";
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
 import { TopNav } from "@/app/components/top-nav";
@@ -29,18 +30,14 @@ import { resolveHealthCareBrowseSubSlug } from "@/lib/health-care-browse";
 import { resolveProductSubSlug } from "@/lib/product-subslug";
 import { storefrontRetailFromSupplierBase, STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { getCachedActiveProductsBrowseRows } from "@/lib/cached-storefront-products";
-import {
-  PRODUCT_CARD_CODE_PRICE_SEPARATOR,
-  productCardModelPriceDiscountGroupStyle,
-  productCardModelPriceRowStyle,
-} from "@/lib/product-card-model-price-layout";
+import { PRODUCT_CARD_CODE_PRICE_SEPARATOR, productCardModelPriceRowStyle } from "@/lib/product-card-model-price-layout";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
 export const dynamic = "force-dynamic";
 
 type CategoryPageProps = {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ page?: string; brand?: string }>;
+  searchParams: Promise<{ page?: string; brand?: string; sort?: string }>;
 };
 
 export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
@@ -334,18 +331,11 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
                           >
                             {PRODUCT_CARD_CODE_PRICE_SEPARATOR}
                           </span>
-                          {discountPercent > 0 ? (
-                            <span style={productCardModelPriceDiscountGroupStyle}>
-                              <span className="product-card-grid-price-was font-light text-brand-navy/55 line-through">
-                                ${listPrice.toFixed(2)}
-                              </span>
-                              <span className="product-card-grid-price-sale font-semibold text-red-600">
-                                ${(listPrice * (1 - discountPercent / 100)).toFixed(2)}
-                              </span>
-                            </span>
-                          ) : (
-                            <span className="product-card-grid-price font-light">${listPrice.toFixed(2)}</span>
-                          )}
+                          <ProductGridPriceCells
+                            listPrice={listPrice}
+                            salePriceRaw={item.sale_price}
+                            discountPercent={discountPercent}
+                          />
                         </>
                       ) : null}
                     </div>

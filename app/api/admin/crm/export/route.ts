@@ -114,7 +114,7 @@ export async function GET() {
 
     const lines = [headers.join(",")];
     for (const raw of data ?? []) {
-      const row = raw as ExportRow;
+      const row = raw as unknown as ExportRow;
       lines.push(
         [
           csvEscape(row.id),

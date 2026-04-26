@@ -19,7 +19,12 @@ import { STORE_MAIN_SHELL_CLASS } from "@/lib/store-main-shell";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
 function toCurrency(amount: number) {
-  return amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  return amount.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
 }
 
 function getCookieValue(name: string) {

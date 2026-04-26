@@ -23,6 +23,8 @@
     "import:products": "node scripts/import-products.mjs",
     "import:bisley": "node scripts/import-bisley-csv.mjs --file=data/supplier/bisley/myPIP_Product_Listing.20260420.csv",
     "import:jbswear": "node scripts/import-jbswear-xlsx.mjs",
+    "import:blue-whale": "node scripts/import-blue-whale-numbers.mjs",
+    "set:bj6976": "node scripts/set-bisley-bj6976-retail.mjs --target=101.4",
     "update:jb-names": "node scripts/import-jbswear-xlsx.mjs --names-only",
     "fix:jb-products": "node scripts/fix-jb-product-name-description.mjs",
     "move:jb-six-workwear": "node scripts/move-jb-six-series-workwear.mjs",

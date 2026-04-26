@@ -1,15 +1,30 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
-import { setProductsStorefrontHidden, setProductStorefrontHidden, updateProductStock } from "./actions";
+import { storefrontRetailFromSupplierBase, supplierBaseFromTargetRetail } from "@/lib/product-price";
+
+import {
+  applyDefaultPriceToMissing,
+  setProductsStorefrontHidden,
+  setProductStorefrontHidden,
+  updateProductBasePrice,
+  updateProductSalePrice,
+  updateProductStock,
+} from "./actions";
+
+function formatSaleDraft(n: number) {
+  return String(Math.round(n * 10) / 10);
+}
 
 export type StockRow = {
   id: string;
   name: string;
   category: string | null;
   supplierName: string | null;
+  base_price: number | null;
+  sale_price: number | null;
   stock_quantity: number;
   storefront_hidden: boolean | null;
   storefront_hidden_at: string | null;
@@ -26,8 +41,11 @@ export function StockTable({ products, lowStockThreshold }: StockTableProps) {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ id: string; text: string; ok: boolean } | null>(null);
   const [hiddenMessage, setHiddenMessage] = useState<{ id: string; text: string; ok: boolean } | null>(null);
+  const [priceMessage, setPriceMessage] = useState<{ id: string; text: string; ok: boolean } | null>(null);
+  const [saleMessage, setSaleMessage] = useState<{ id: string; text: string; ok: boolean } | null>(null);
   const [filter, setFilter] = useState<"all" | "visible" | "hidden">("all");
   const [brand, setBrand] = useState<string>("__ALL__");
+  const [query, setQuery] = useState<string>("");
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   const brandOptions = useMemo(() => {
@@ -59,6 +77,17 @@ export function StockTable({ products, lowStockThreshold }: StockTableProps) {
     if (brand === "__UNKNOWN__") return filteredProducts.filter((p) => !(p.supplierName ?? "").trim());
     return filteredProducts.filter((p) => (p.supplierName ?? "").trim() === brand);
   }, [brand, filteredProducts]);
+
+  const filteredByQuery = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return filteredByBrand;
+    return filteredByBrand.filter((p) => {
+      const name = (p.name ?? "").toLowerCase();
+      const id = (p.id ?? "").toLowerCase();
+      const category = (p.category ?? "").toLowerCase();
+      return name.includes(q) || id.includes(q) || category.includes(q);
+    });
+  }, [filteredByBrand, query]);
 
   function saveRow(productId: string, value: string) {
     const n = Number.parseInt(value, 10);
@@ -103,12 +132,12 @@ export function StockTable({ products, lowStockThreshold }: StockTableProps) {
   function toggleSelectAll(on: boolean) {
     setSelected(() => {
       if (!on) return new Set();
-      return new Set(filteredByBrand.map((p) => p.id));
+      return new Set(filteredByQuery.map((p) => p.id));
     });
   }
 
   const selectedCount = selected.size;
-  const allOnPageSelected = filteredByBrand.length > 0 && filteredByBrand.every((p) => selected.has(p.id));
+  const allOnPageSelected = filteredByQuery.length > 0 && filteredByQuery.every((p) => selected.has(p.id));
 
   function bulkHideSelected() {
     const ids = [...selected];
@@ -137,6 +166,22 @@ export function StockTable({ products, lowStockThreshold }: StockTableProps) {
       const result = await setProductsStorefrontHidden(ids, false);
       if (result.ok) {
         setSelected(new Set());
+        router.refresh();
+      } else {
+        alert(result.error);
+      }
+    });
+  }
+
+  function bulkApplyDefaultPriceToMissing() {
+    const ok = window.confirm(
+      "Apply the default supplier price ($25.00) to products that are missing a supplier price?\n\nThis only affects rows where base_price is currently empty.",
+    );
+    if (!ok) return;
+    setPriceMessage(null);
+    startTransition(async () => {
+      const result = await applyDefaultPriceToMissing(25.0);
+      if (result.ok) {
         router.refresh();
       } else {
         alert(result.error);
@@ -183,47 +228,56 @@ export function StockTable({ products, lowStockThreshold }: StockTableProps) {
           </button>
         </div>
 
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          <button
-            type="button"
-            onClick={() => setBrand("__ALL__")}
-            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-              brand === "__ALL__"
-                ? "border-brand-navy bg-brand-navy text-white"
-                : "border-brand-navy/20 bg-white text-brand-navy hover:border-brand-orange"
-            }`}
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <label className="text-xs font-semibold text-brand-navy/60">Brand</label>
+          <select
+            value={brand}
+            onChange={(e) => setBrand(e.target.value)}
+            disabled={pending}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-brand-navy focus:border-brand-orange focus:outline-none sm:w-[240px]"
+            aria-label="Filter by brand"
           >
-            All brands
-          </button>
-          {brandOptions.map((b) => (
+            <option value="__ALL__">All brands</option>
+            <option value="__UNKNOWN__">Unknown</option>
+            {brandOptions.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search product name…"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-brand-navy placeholder:text-slate-400 focus:border-brand-orange focus:outline-none sm:w-[280px]"
+            disabled={pending}
+            aria-label="Search products by name"
+          />
+          {query.trim() ? (
             <button
-              key={b}
               type="button"
-              onClick={() => setBrand(b)}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                brand === b
-                  ? "border-brand-orange bg-brand-orange/15 text-brand-navy"
-                  : "border-brand-navy/20 bg-white text-brand-navy hover:border-brand-orange"
-              }`}
+              onClick={() => setQuery("")}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:border-brand-orange/40"
+              disabled={pending}
             >
-              {b}
+              Clear
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setBrand("__UNKNOWN__")}
-            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-              brand === "__UNKNOWN__"
-                ? "border-slate-700 bg-slate-700 text-white"
-                : "border-brand-navy/20 bg-white text-brand-navy hover:border-brand-orange"
-            }`}
-          >
-            Unknown
-          </button>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-brand-navy/60">Selected: {selectedCount}</span>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={bulkApplyDefaultPriceToMissing}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-navy transition hover:border-brand-orange/40 disabled:opacity-50"
+          >
+            Apply default price to missing
+          </button>
           <button
             type="button"
             disabled={pending || selectedCount === 0}
@@ -243,7 +297,7 @@ export function StockTable({ products, lowStockThreshold }: StockTableProps) {
         </div>
       </div>
 
-      <table className="w-full min-w-[760px] text-left text-sm">
+      <table className="w-full min-w-[960px] text-left text-sm">
         <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-600">
           <tr>
             <th className="px-4 py-3 w-10">
@@ -258,6 +312,9 @@ export function StockTable({ products, lowStockThreshold }: StockTableProps) {
             <th className="px-4 py-3 w-40"></th>
             <th className="px-4 py-3">PRODUCT</th>
             <th className="px-4 py-3">Category</th>
+            <th className="px-4 py-3 w-36">Supplier</th>
+            <th className="px-4 py-3 w-36">Retail</th>
+            <th className="px-4 py-3 w-36">Sale</th>
             <th className="px-4 py-3 w-28">Hidden at</th>
             <th className="px-4 py-3 w-32">Stock</th>
             <th className="px-4 py-3 w-28">Status</th>
@@ -265,14 +322,14 @@ export function StockTable({ products, lowStockThreshold }: StockTableProps) {
           </tr>
         </thead>
         <tbody>
-          {filteredByBrand.length === 0 ? (
+          {filteredByQuery.length === 0 ? (
             <tr>
-              <td colSpan={9} className="px-4 py-8 text-center text-slate-500">
+              <td colSpan={12} className="px-4 py-8 text-center text-slate-500">
                 No products found for this filter.
               </td>
             </tr>
           ) : (
-            filteredByBrand.map((p) => {
+            filteredByQuery.map((p) => {
               const low = p.stock_quantity <= lowStockThreshold;
               return (
                 <StockRowEditor
@@ -283,8 +340,34 @@ export function StockTable({ products, lowStockThreshold }: StockTableProps) {
                   pending={pending}
                   message={message?.id === p.id ? message : null}
                   hiddenMessage={hiddenMessage?.id === p.id ? hiddenMessage : null}
+                  priceMessage={priceMessage?.id === p.id ? priceMessage : null}
+                  saleMessage={saleMessage?.id === p.id ? saleMessage : null}
                   onSave={saveRow}
                   onToggleHidden={toggleHidden}
+                  onSavePrice={(id, base) => {
+                    setPriceMessage(null);
+                    startTransition(async () => {
+                      const result = await updateProductBasePrice(id, base);
+                      if (result.ok) {
+                        setPriceMessage({ id, text: "Saved", ok: true });
+                        router.refresh();
+                      } else {
+                        setPriceMessage({ id, text: result.error, ok: false });
+                      }
+                    });
+                  }}
+                  onSaveSale={(id, sale) => {
+                    setSaleMessage(null);
+                    startTransition(async () => {
+                      const result = await updateProductSalePrice(id, sale);
+                      if (result.ok) {
+                        setSaleMessage({ id, text: "Saved", ok: true });
+                        router.refresh();
+                      } else {
+                        setSaleMessage({ id, text: result.error, ok: false });
+                      }
+                    });
+                  }}
                   selected={selected.has(p.id)}
                   onSelect={toggleSelected}
                 />
@@ -304,8 +387,12 @@ function StockRowEditor({
   pending,
   message,
   hiddenMessage,
+  priceMessage,
+  saleMessage,
   onSave,
   onToggleHidden,
+  onSavePrice,
+  onSaveSale,
   selected,
   onSelect,
 }: {
@@ -315,13 +402,35 @@ function StockRowEditor({
   pending: boolean;
   message: { text: string; ok: boolean } | null;
   hiddenMessage: { text: string; ok: boolean } | null;
+  priceMessage: { text: string; ok: boolean } | null;
+  saleMessage: { text: string; ok: boolean } | null;
   onSave: (id: string, value: string) => void;
   onToggleHidden: (id: string, nextHidden: boolean) => void;
+  onSavePrice: (id: string, basePrice: number) => void;
+  onSaveSale: (id: string, salePrice: number | null) => void;
   selected: boolean;
   onSelect: (id: string, on: boolean) => void;
 }) {
   const [value, setValue] = useState(String(product.stock_quantity));
+  const [supplierValue, setSupplierValue] = useState(
+    product.base_price == null ? "" : String(product.base_price.toFixed(2)),
+  );
+  const [retailValue, setRetailValue] = useState(() => {
+    const n = product.base_price == null ? null : storefrontRetailFromSupplierBase(product.base_price);
+    return n == null ? "" : String(n.toFixed(1));
+  });
+  const [saleValue, setSaleValue] = useState(
+    product.sale_price == null ? "" : formatSaleDraft(product.sale_price),
+  );
   const [imageExpanded, setImageExpanded] = useState(false);
+
+  useEffect(() => {
+    setValue(String(product.stock_quantity));
+    setSupplierValue(product.base_price == null ? "" : String(product.base_price.toFixed(2)));
+    const retail = product.base_price == null ? null : storefrontRetailFromSupplierBase(product.base_price);
+    setRetailValue(retail == null ? "" : String(retail.toFixed(1)));
+    setSaleValue(product.sale_price == null ? "" : formatSaleDraft(product.sale_price));
+  }, [product.id, product.stock_quantity, product.base_price, product.sale_price]);
 
   return (
     <tr className="border-b border-slate-100 hover:bg-slate-50/80">
@@ -380,6 +489,118 @@ function StockRowEditor({
       </td>
       <td className="px-4 py-3 font-semibold text-brand-navy">{product.name}</td>
       <td className="px-4 py-3 text-slate-600">{product.category ?? "—"}</td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <input
+            value={supplierValue}
+            onChange={(e) => {
+              const next = e.target.value;
+              setSupplierValue(next);
+              const n = Number.parseFloat(next);
+              const retail = Number.isFinite(n) ? storefrontRetailFromSupplierBase(n) : null;
+              setRetailValue(retail == null ? "" : String(retail.toFixed(1)));
+            }}
+            inputMode="decimal"
+            className="w-full rounded-md border border-slate-200 px-2 py-1.5 font-mono text-sm"
+            placeholder="25.00"
+            disabled={pending}
+          />
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              const n = Number.parseFloat(supplierValue);
+              const base = Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 25.0;
+              onSavePrice(product.id, base);
+            }}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-navy hover:border-brand-orange/40 disabled:opacity-50"
+          >
+            Save
+          </button>
+        </div>
+        {priceMessage ? (
+          <span className={`mt-1 block text-xs ${priceMessage.ok ? "text-green-700" : "text-red-600"}`}>
+            {priceMessage.text}
+          </span>
+        ) : null}
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <input
+            value={retailValue}
+            onChange={(e) => {
+              const next = e.target.value;
+              setRetailValue(next);
+              const n = Number.parseFloat(next);
+              const base = Number.isFinite(n) ? supplierBaseFromTargetRetail(n) : null;
+              setSupplierValue(base == null ? "" : String(base.toFixed(2)));
+            }}
+            inputMode="decimal"
+            className="w-full rounded-md border border-slate-200 px-2 py-1.5 font-mono text-sm"
+            placeholder="0.0"
+            disabled={pending}
+          />
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              const n = Number.parseFloat(retailValue);
+              const base = Number.isFinite(n) && n > 0 ? supplierBaseFromTargetRetail(n) : 25.0;
+              onSavePrice(product.id, base);
+            }}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-navy hover:border-brand-orange/40 disabled:opacity-50"
+          >
+            Save
+          </button>
+        </div>
+      </td>
+      <td className="px-4 py-3">
+        <p className="mb-1 text-[0.65rem] font-medium uppercase tracking-wide text-slate-500">GST incl.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={saleValue}
+            onChange={(e) => setSaleValue(e.target.value)}
+            inputMode="decimal"
+            className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1.5 font-mono text-sm"
+            placeholder="Clear = no sale"
+            disabled={pending}
+            aria-label="Sale price"
+          />
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              const t = saleValue.trim();
+              if (!t) {
+                onSaveSale(product.id, null);
+                return;
+              }
+              const n = Number.parseFloat(t);
+              if (!Number.isFinite(n) || n <= 0) {
+                window.alert("Enter a positive sale price (GST incl.), or use Clear to remove the sale.");
+                return;
+              }
+              onSaveSale(product.id, Math.round(n * 100) / 100);
+            }}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-navy hover:border-brand-orange/40 disabled:opacity-50"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onSaveSale(product.id, null)}
+            className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:border-brand-orange/40 disabled:opacity-50"
+          >
+            Clear
+          </button>
+        </div>
+        {saleMessage ? (
+          <span className={`mt-1 block text-xs ${saleMessage.ok ? "text-green-700" : "text-red-600"}`}>
+            {saleMessage.text}
+          </span>
+        ) : null}
+      </td>
       <td className="px-4 py-3 text-xs text-slate-500">
         {product.storefront_hidden ? (product.storefront_hidden_at ? product.storefront_hidden_at.slice(0, 10) : "—") : "—"}
       </td>

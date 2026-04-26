@@ -340,6 +340,26 @@ export function isBisleyWomensPantsExclusiveListing(productName: string, meta?: 
   return false;
 }
 
+/** Biz Collection women's chef / hospitality trousers — Chef/Pants only (never Women's/Pants or any other grid). */
+const BIZ_COLLECTION_WOMENS_CHEF_PANTS_CHEF_PANTS_ONLY_STYLE_CODES = new Set(
+  ["CH234L", "CH432L", "CH433L"].map((c) => c.toUpperCase()),
+);
+
+export function isBizCollectionWomensChefPantsChefPantsExclusiveListing(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  if (!isBizCareOrCollectionListing(productName, meta?.slug ?? null, meta?.category ?? null)) {
+    return false;
+  }
+  const code = fashionBizStyleCodeFromListing(productName, meta?.slug ?? null);
+  if (!code) {
+    return false;
+  }
+  const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+  return BIZ_COLLECTION_WOMENS_CHEF_PANTS_CHEF_PANTS_ONLY_STYLE_CODES.has(base);
+}
+
 function womensPantListingLooksBottomWeighted(
   hayLower: string,
   productName: string,
@@ -370,6 +390,9 @@ export function isWomensPantLinesExclusiveToWomensPantsOnlyListing(
   meta?: WorkwearOnlyBrandMeta,
 ): boolean {
   if (isWomensPantsForceMensStyleCode(productName, meta)) {
+    return false;
+  }
+  if (isBizCollectionWomensChefPantsChefPantsExclusiveListing(productName, meta)) {
     return false;
   }
   const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`.toLowerCase();
@@ -1818,6 +1841,9 @@ export function isChefLineJacketsExclusiveCategoryBrowseListing(
  * Generic work pants stay under Men's or Women's → Pants.
  */
 export function isChefCategoryPantsListing(productName: string, meta?: WorkwearOnlyBrandMeta): boolean {
+  if (isBizCollectionWomensChefPantsChefPantsExclusiveListing(productName, meta)) {
+    return true;
+  }
   const n = productName.toLowerCase();
   const cat = String(meta?.category ?? "").toLowerCase();
   const desc = String(meta?.description ?? "").toLowerCase();
@@ -1973,6 +1999,11 @@ export function isProductVisibleInCategoryBrowse(
   // Requested: Coverall / Overall(s) — Workwear/Coverall only (often Workwear/Pants).
   if (isWorkwearCoverallOverallExclusiveListing(productName, meta)) {
     return mainSlug === WORKWEAR_MAIN_SLUG && subSlug === "coverall";
+  }
+
+  // Biz Collection CH234L / CH432L / CH433L — Chef/Pants only (never Women's/Pants or any other main/sub).
+  if (isBizCollectionWomensChefPantsChefPantsExclusiveListing(productName, meta)) {
+    return mainSlug === CHEF_MAIN_SLUG && subSlug === "pants";
   }
 
   // Requested: any women's / ladies' bottoms still filing under Men's/Pants — Women's/Pants only (never other mains/subs).

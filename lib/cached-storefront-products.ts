@@ -10,11 +10,21 @@ import { createSupabaseClient } from "@/lib/supabase";
 async function fetchActiveProductsBrowseRows(): Promise<CategoryBrowseProductRow[]> {
   const supabase = createSupabaseClient();
   const selectWithAudience =
-    "id, name, base_price, image_urls, category, slug, description, storefront_hidden, audience, supplier_name, available_colors, available_sizes";
+    "id, name, base_price, sale_price, image_urls, category, slug, description, storefront_hidden, audience, supplier_name, available_colors, available_sizes";
   const selectWithoutAudience =
-    "id, name, base_price, image_urls, category, slug, description, storefront_hidden, supplier_name, available_colors, available_sizes";
+    "id, name, base_price, sale_price, image_urls, category, slug, description, storefront_hidden, supplier_name, available_colors, available_sizes";
   const selectBare =
-    "id, name, base_price, image_urls, category, slug, description, storefront_hidden, available_colors, available_sizes";
+    "id, name, base_price, sale_price, image_urls, category, slug, description, storefront_hidden, available_colors, available_sizes";
+
+  function withoutSalePrice(select: string): string {
+    return select
+      .replace(/,\s*sale_price\s*,/i, ", ")
+      .replace(/,\s*sale_price\s*$/i, "")
+      .replace(/^\s*sale_price\s*,\s*/i, "")
+      .replace(/\s{2,}/g, " ")
+      .replace(/,\s*,/g, ",")
+      .trim();
+  }
 
   async function fetchAll(select: string): Promise<{ data: CategoryBrowseProductRow[]; error: unknown }> {
     const pageSize = 1000;
@@ -42,10 +52,11 @@ async function fetchActiveProductsBrowseRows(): Promise<CategoryBrowseProductRow
   const primary = await fetchAll(selectWithAudience);
 
   if (primary.error) {
-    const msg = String(primary.error.message ?? primary.error).toLowerCase();
+    const msg = String((primary.error as { message?: unknown } | null)?.message ?? primary.error).toLowerCase();
     const missingAudience = msg.includes("audience");
     const missingSupplierName = msg.includes("supplier_name");
     const missingImageUrls = msg.includes("image_urls");
+    const missingSalePrice = msg.includes("sale_price");
 
     const fallbackSelect = missingSupplierName
       ? missingAudience
@@ -53,17 +64,18 @@ async function fetchActiveProductsBrowseRows(): Promise<CategoryBrowseProductRow
         : selectBare.replace("storefront_hidden", "storefront_hidden, audience")
       : missingAudience
         ? missingImageUrls
-          ? "id, name, base_price, category, slug, description, storefront_hidden, supplier_name, available_colors, available_sizes"
+          ? "id, name, base_price, sale_price, category, slug, description, storefront_hidden, supplier_name, available_colors, available_sizes"
           : selectWithoutAudience
         : missingImageUrls
-          ? "id, name, base_price, category, slug, description, storefront_hidden, audience, supplier_name, available_colors, available_sizes"
+          ? "id, name, base_price, sale_price, category, slug, description, storefront_hidden, audience, supplier_name, available_colors, available_sizes"
           : selectWithAudience;
 
-    const secondary = await fetchAll(fallbackSelect);
+    const secondary = await fetchAll(missingSalePrice ? withoutSalePrice(fallbackSelect) : fallbackSelect);
 
     const data = (secondary.data ?? []) as unknown as CategoryBrowseProductRow[];
     // Preserve image_urls when the fallback select still includes it.
-    if (fallbackSelect.includes("image_urls")) {
+    const effectiveSelect = missingSalePrice ? withoutSalePrice(fallbackSelect) : fallbackSelect;
+    if (effectiveSelect.includes("image_urls")) {
       return data;
     }
     return data.map((r) => ({ ...r, image_urls: null }));
@@ -73,9 +85,16 @@ async function fetchActiveProductsBrowseRows(): Promise<CategoryBrowseProductRow
   // If `audience` column exists, we have it; if not, we still got rows.
   if (rows.length === 0) {
     // Some environments may have image_urls missing or restricted; keep page usable.
-    const minimal = await fetchAll(
-      "id, name, base_price, category, slug, description, storefront_hidden, available_colors, available_sizes",
-    );
+    const minimalSelect =
+      "id, name, base_price, sale_price, category, slug, description, storefront_hidden, available_colors, available_sizes";
+    const minimal = await fetchAll(minimalSelect);
+    if (minimal.error) {
+      const msg = String((minimal.error as { message?: unknown } | null)?.message ?? minimal.error).toLowerCase();
+      if (msg.includes("sale_price")) {
+        const fallback = await fetchAll(withoutSalePrice(minimalSelect));
+        return (fallback.data ?? []).map((r) => ({ ...r, image_urls: null }));
+      }
+    }
     return (minimal.data ?? []).map((r) => ({ ...r, image_urls: null }));
   }
 
@@ -85,6 +104,6 @@ async function fetchActiveProductsBrowseRows(): Promise<CategoryBrowseProductRow
 export const getCachedActiveProductsBrowseRows =
   process.env.NODE_ENV === "development"
     ? fetchActiveProductsBrowseRows
-    : unstable_cache(fetchActiveProductsBrowseRows, ["storefront-active-products-browse-v12"], {
+    : unstable_cache(fetchActiveProductsBrowseRows, ["storefront-active-products-browse-v13"], {
         revalidate: 60,
       });

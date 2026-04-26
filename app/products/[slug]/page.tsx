@@ -5,7 +5,10 @@ import { notFound } from "next/navigation";
 import { getDiscountPercent } from "@/lib/discounts";
 import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
 import { FASHION_BIZ_STYLE_GENDER } from "@/lib/fashion-biz-gender.generated";
-import { storefrontRetailFromSupplierBaseOrFallback } from "@/lib/product-price";
+import {
+  activeManualSaleRetail,
+  storefrontRetailFromSupplierBaseOrFallback,
+} from "@/lib/product-price";
 import { isBizCareCatalogProduct, isBizCorporatesCatalogProduct } from "@/lib/product-visibility";
 import { slugifyProductNameForPath } from "@/lib/product-path-slug";
 import { storefrontDescriptionForDisplay } from "@/lib/product-display-name";
@@ -335,6 +338,7 @@ type ProductRow = {
   id: string;
   name: string;
   base_price: number | null;
+  sale_price?: number | null;
   slug?: string | null;
   category?: string | null;
   description?: string | null;
@@ -348,9 +352,9 @@ type ProductRow = {
 };
 
 const PRODUCT_SELECT_RICH =
-  "id, name, base_price, slug, category, description, features, specifications, image_urls, available_colors, available_sizes, supplier_name, storefront_hidden";
+  "id, name, base_price, sale_price, slug, category, description, features, specifications, image_urls, available_colors, available_sizes, supplier_name, storefront_hidden";
 const PRODUCT_SELECT_MID =
-  "id, name, base_price, slug, category, description, image_urls, available_colors, available_sizes, storefront_hidden";
+  "id, name, base_price, sale_price, slug, category, description, image_urls, available_colors, available_sizes, storefront_hidden";
 const PRODUCT_SELECT_MIN = "id, name, base_price, slug, storefront_hidden";
 
 /** Narrow columns while scanning pages for name-derived path slugs (then load full row by id). */
@@ -451,10 +455,16 @@ async function getDetailDataInternal(
 
     const fallbackColors = getFallbackColors(product.name);
 
-    const listRetailAfterMarkup = storefrontRetailFromSupplierBaseOrFallback(product.base_price, 25.0);
+    const listRetail = storefrontRetailFromSupplierBaseOrFallback(product.base_price, 25.0);
+    const saleRaw = "sale_price" in product ? product.sale_price : null;
+    const manualSale = activeManualSaleRetail(listRetail, saleRaw);
     const discountPercent = getDiscountPercent(product.name);
     const basePrice =
-      discountPercent > 0 ? listRetailAfterMarkup * (1 - discountPercent / 100) : listRetailAfterMarkup;
+      manualSale != null
+        ? manualSale
+        : discountPercent > 0
+          ? listRetail * (1 - discountPercent / 100)
+          : listRetail;
 
     const dbDescription =
       product.description != null && String(product.description).trim().length > 0
@@ -524,7 +534,7 @@ async function getDetailDataInternal(
       description:
         dbDescription ?? "Reliable workwear configured for your branding needs.",
       basePrice: Math.round(basePrice * 100) / 100,
-      ...(discountPercent > 0 && { originalPrice: listRetailAfterMarkup }),
+      ...((manualSale != null || discountPercent > 0) && { originalPrice: listRetail }),
       imageUrls: normalizedImageUrls,
       colorOptions: colorOptionsEffective,
       sizeOptions: normalizeProductSizeOptions(
@@ -563,13 +573,18 @@ export async function getDetailData(
   }
   return unstable_cache(
     async () => getDetailDataInternal(slug),
-    ["storefront-pdp-v2", slug],
+    ["storefront-pdp-v3", slug],
     { revalidate: 120 },
   )();
 }
 
 function formatUsdMeta(n: number) {
-  return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
 }
 
 /** Link / search snippets: use storefront retail (same as `getDetailData`), not raw supplier `base_price`. */

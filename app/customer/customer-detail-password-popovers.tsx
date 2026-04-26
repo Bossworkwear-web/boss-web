@@ -194,8 +194,7 @@ export function CustomerDetailPasswordPopovers({
                   )}
                   {passwordStatus === "oauth" && (
                     <p className="rounded-lg border border-brand-navy/15 bg-brand-surface/60 px-4 py-3 text-[1.05rem] text-brand-navy/80">
-                      This account signs in with a social provider or has no email password set. Use the provider
-                      buttons on the log-in page, or add a password under{" "}
+                      This account does not currently have an email password set. Add one under{" "}
                       <Link href="/customer-details" className="font-semibold text-brand-orange hover:underline">
                         customer details
                       </Link>

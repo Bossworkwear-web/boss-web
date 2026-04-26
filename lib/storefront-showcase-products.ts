@@ -1,6 +1,7 @@
 import type { StoreProduct } from "@/app/components/product-showcase";
 import { getCachedActiveProductsBrowseRows } from "@/lib/cached-storefront-products";
-import { storefrontRetailFromSupplierBase } from "@/lib/product-price";
+import { getDiscountPercent } from "@/lib/discounts";
+import { storefrontCardDisplayPrices, storefrontRetailFromSupplierBase } from "@/lib/product-price";
 import { productPathSegment } from "@/lib/product-path-slug";
 import { hasStorefrontListNameAndPrice, isProductEligibleForSiteSearch } from "@/lib/product-visibility";
 
@@ -87,9 +88,13 @@ export async function getStorefrontShowcaseProducts(): Promise<StoreProduct[]> {
           description: typeof item.description === "string" ? item.description : null,
           imageUrls: Array.isArray(item.image_urls) ? item.image_urls : null,
           basePrice: item.base_price,
+          retailPrice: storefrontRetailFromSupplierBase(item.base_price),
+          salePrice: typeof item.sale_price === "number" ? item.sale_price : null,
           priceLabel: (() => {
-            const p = storefrontRetailFromSupplierBase(item.base_price);
-            return p != null ? `$${p.toFixed(2)}` : "";
+            const list = storefrontRetailFromSupplierBase(item.base_price);
+            if (list == null) return "";
+            const { displayPrice } = storefrontCardDisplayPrices(list, item.sale_price, getDiscountPercent(item.name));
+            return `$${displayPrice.toFixed(1)}`;
           })(),
           embroideryAvailable: true,
           supplierName: item.supplier_name ?? null,

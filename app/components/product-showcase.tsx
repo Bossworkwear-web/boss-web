@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRightIcon } from "@/app/components/icons";
+import { ProductGridPriceCells } from "@/app/components/product-grid-price";
 import { ProductNavLink } from "@/app/components/product-nav-link";
 import { TopNavClient } from "@/app/components/top-nav-client";
 import { categoryBrowseCardImageUrl } from "@/lib/category-browse-card-image";
@@ -11,11 +12,7 @@ import { MAIN_CATEGORIES, type StorefrontNavSub } from "@/lib/catalog";
 import { hasStorefrontListNameAndPrice, isProductEligibleForSiteSearch } from "@/lib/product-visibility";
 import { storefrontRetailFromSupplierBase, STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { productCardDisplayLines } from "@/lib/product-card-copy";
-import {
-  PRODUCT_CARD_CODE_PRICE_SEPARATOR,
-  productCardModelPriceDiscountGroupStyle,
-  productCardModelPriceRowStyle,
-} from "@/lib/product-card-model-price-layout";
+import { PRODUCT_CARD_CODE_PRICE_SEPARATOR, productCardModelPriceRowStyle } from "@/lib/product-card-model-price-layout";
 import { productPathSegment } from "@/lib/product-path-slug";
 import { productMatchesSearchQuery } from "@/lib/product-search";
 import { resolveProductSubSlug } from "@/lib/product-subslug";
@@ -36,6 +33,10 @@ export type StoreProduct = {
   description?: string | null;
   imageUrls?: string[] | null;
   basePrice?: number | null;
+  /** GST-inclusive storefront list price (before any discounts). */
+  retailPrice?: number | null;
+  /** Raw DB sale (GST incl.); cards use `ProductGridPriceCells` with list + this. */
+  salePrice?: number | null;
   priceLabel: string;
   embroideryAvailable: boolean;
   supplierName?: string | null;
@@ -62,6 +63,7 @@ type ProductRow = {
   id: string;
   name: string;
   base_price: number | null;
+  sale_price?: number | null;
   slug?: string | null;
   category?: string | null;
   description?: string | null;
@@ -109,6 +111,7 @@ const IN_STORE_SERVICE_CARD_IMAGE = "/service_Emb.png";
 function toStoreProduct(item: ProductRow): StoreProduct {
   const raw = typeof item.slug === "string" && item.slug.trim().length > 0 ? item.slug.trim() : null;
   const dbCat = typeof item.category === "string" ? item.category.trim() : "";
+  const retail = storefrontRetailFromSupplierBase(item.base_price);
   return {
     id: item.id,
     slug: productPathSegment({ name: item.name, slug: raw }),
@@ -118,9 +121,10 @@ function toStoreProduct(item: ProductRow): StoreProduct {
     description: typeof item.description === "string" ? item.description : null,
     imageUrls: Array.isArray(item.image_urls) ? item.image_urls : null,
     basePrice: item.base_price,
+    retailPrice: retail,
+    salePrice: typeof item.sale_price === "number" ? item.sale_price : null,
     priceLabel: (() => {
-      const p = storefrontRetailFromSupplierBase(item.base_price);
-      return p != null ? `$${p.toFixed(2)}` : "";
+      return retail != null ? `$${retail.toFixed(1)}` : "";
     })(),
     embroideryAvailable: true,
     supplierName: item.supplier_name ?? null,
@@ -174,19 +178,35 @@ export function ProductShowcase({
       if (typeof document !== "undefined" && document.visibilityState === "hidden") {
         return;
       }
-      const { data, error } = await supabase
-        .from("products")
-        .select(
-          "id, name, base_price, slug, category, description, image_urls, storefront_hidden, supplier_name, available_colors, available_sizes",
-        )
-        .order("name");
+      /** Match server `getCachedActiveProductsBrowseRows`: active rows only + paginate past PostgREST's default max (~1000). */
+      const select =
+        "id, name, base_price, sale_price, slug, category, description, image_urls, storefront_hidden, supplier_name, available_colors, available_sizes";
+      const pageSize = 1000;
+      const maxScan = 25_000;
+      const rows: ProductRow[] = [];
+      for (let offset = 0; offset < maxScan; offset += pageSize) {
+        const res = await supabase
+          .from("products")
+          .select(select)
+          .eq("is_active", true)
+          .order("name")
+          .range(offset, offset + pageSize - 1);
+        if (!isMounted || res.error || res.data == null) {
+          return;
+        }
+        const chunk = res.data as ProductRow[];
+        rows.push(...chunk);
+        if (chunk.length < pageSize) {
+          break;
+        }
+      }
 
-      if (!isMounted || error || !data) {
+      if (!isMounted) {
         return;
       }
 
       setLiveProducts(
-        data
+        rows
           .filter((item) =>
             hasStorefrontListNameAndPrice((item as ProductRow).name, (item as ProductRow).base_price) &&
             isProductEligibleForSiteSearch((item as ProductRow).name, {
@@ -245,7 +265,7 @@ export function ProductShowcase({
     }
     return liveProducts
       .filter((p) =>
-        productMatchesSearchQuery(p.name, p.storeSlug ?? p.slug, p.category, q, p.description),
+        productMatchesSearchQuery(p.name, p.storeSlug ?? p.slug, p.category, q, p.description, p.id),
       )
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [liveProducts, q]);
@@ -334,7 +354,15 @@ export function ProductShowcase({
               <div className="subcategory-browse-grid subcategory-browse-grid-gap grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5">
                 {searchMatches.map((p) => {
                   const discountPercent = getDiscountPercent(p.name);
-                  const listPrice = storefrontRetailFromSupplierBase(p.basePrice ?? null);
+                  // Avoid hydration mismatch: use server-supplied retailPrice/label instead of recomputing price in render.
+                  const listPrice =
+                    p.retailPrice ??
+                    (() => {
+                      const raw = (p.priceLabel ?? "").trim();
+                      if (!raw) return null;
+                      const n = Number.parseFloat(raw.replace(/[^0-9.]/g, ""));
+                      return Number.isFinite(n) ? n : null;
+                    })();
                   const { productName, productCode } = productCardDisplayLines(
                     p.name,
                     p.description ?? undefined,
@@ -398,18 +426,11 @@ export function ProductShowcase({
                               >
                                 {PRODUCT_CARD_CODE_PRICE_SEPARATOR}
                               </span>
-                              {discountPercent > 0 ? (
-                                <span style={productCardModelPriceDiscountGroupStyle}>
-                                  <span className="product-card-grid-price-was font-light text-brand-navy/55 line-through">
-                                    ${listPrice.toFixed(2)}
-                                  </span>
-                                  <span className="product-card-grid-price-sale font-semibold text-red-600">
-                                    ${(listPrice * (1 - discountPercent / 100)).toFixed(2)}
-                                  </span>
-                                </span>
-                              ) : (
-                                <span className="product-card-grid-price font-light">${listPrice.toFixed(2)}</span>
-                              )}
+                              <ProductGridPriceCells
+                                listPrice={listPrice}
+                                salePriceRaw={p.salePrice}
+                                discountPercent={discountPercent}
+                              />
                             </>
                           ) : null}
                         </div>
@@ -448,7 +469,7 @@ export function ProductShowcase({
                           ) : (
                             <span className="product-card-grid-title font-light text-black">{productCode}</span>
                           )}
-                          {p.priceLabel ? (
+                          {p.retailPrice != null ? (
                             <>
                               <span
                                 className="select-none whitespace-pre text-brand-navy/45"
@@ -456,9 +477,11 @@ export function ProductShowcase({
                               >
                                 {PRODUCT_CARD_CODE_PRICE_SEPARATOR}
                               </span>
-                              <span className="product-card-grid-price font-semibold text-brand-orange">
-                                {p.priceLabel}
-                              </span>
+                              <ProductGridPriceCells
+                                listPrice={p.retailPrice}
+                                salePriceRaw={p.salePrice}
+                                discountPercent={getDiscountPercent(p.name)}
+                              />
                             </>
                           ) : null}
                         </div>

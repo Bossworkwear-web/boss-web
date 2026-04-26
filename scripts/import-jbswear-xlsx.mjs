@@ -457,6 +457,8 @@ async function main() {
       colors: new Set(),
       sizes: new Set(),
       imageUrls: new Set(),
+      /** Row-level (Colour + Colour Image URL) for storefront gallery ↔ colour button sync. */
+      colorImagePairs: [],
       prices: [],
       skus: new Set(),
     };
@@ -470,6 +472,9 @@ async function main() {
     if (color) g.colors.add(color);
     if (size) g.sizes.add(size);
     if (imageUrl) g.imageUrls.add(imageUrl);
+    if (color && imageUrl) {
+      g.colorImagePairs.push({ color: color.trim(), imageUrl: imageUrl.trim() });
+    }
     if (typeof reseller === "number" && reseller > 0) g.prices.push(reseller);
     if (sku) g.skus.add(sku);
 
@@ -489,7 +494,35 @@ async function main() {
     const sizes = sortSizesUnique([...g.sizes]);
     const fromXlsx = [...g.imageUrls].filter(Boolean);
     const fromLocal = localImageUrlsForJbStyle(root, g.styleCode);
-    const image_urls = [...new Set([...fromLocal, ...fromXlsx])];
+
+    const firstUrlByColor = new Map();
+    for (const { color: c0, imageUrl: u0 } of g.colorImagePairs ?? []) {
+      const k = String(c0 ?? "")
+        .trim()
+        .toLowerCase();
+      const u = String(u0 ?? "").trim();
+      if (!k || !u) continue;
+      if (!firstUrlByColor.has(k)) {
+        firstUrlByColor.set(k, u);
+      }
+    }
+    const orderedColourHeroes = colors
+      .map((c) => firstUrlByColor.get(c.trim().toLowerCase()))
+      .filter((u) => typeof u === "string" && u.length > 0);
+    const jbGalleryPrefixComplete =
+      orderedColourHeroes.length > 0 && orderedColourHeroes.length === colors.length;
+
+    let image_urls;
+    if (jbGalleryPrefixComplete) {
+      const seen = new Set(orderedColourHeroes);
+      const rest = [...new Set([...fromLocal, ...fromXlsx])].filter((u) => !seen.has(u));
+      const merged = [...orderedColourHeroes, ...rest];
+      const stripOldJbpc = (u) => String(u).replace(/#jbpc=\d+$/i, "");
+      merged[0] = `${stripOldJbpc(merged[0])}#jbpc=${orderedColourHeroes.length}`;
+      image_urls = merged;
+    } else {
+      image_urls = [...new Set([...fromLocal, ...fromXlsx])];
+    }
     const base_price = g.prices.length ? Math.min(...g.prices) : null;
     const styleStartsSix = /^6/i.test(String(g.styleCode ?? "").trim());
     const cat = styleStartsSix

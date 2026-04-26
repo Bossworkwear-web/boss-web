@@ -2,17 +2,18 @@ import Link from "next/link";
 
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
-import { StockTable } from "./stock-table";
+import { StockTableClientShell } from "./stock-table-client-shell";
 
 const LOW_STOCK_THRESHOLD = 10;
 
 export default async function AdminStockPage() {
   const supabase = createSupabaseAdminClient();
   const selectCandidates = [
-    "id, name, category, supplier_name, stock_quantity, storefront_hidden, storefront_hidden_at, image_urls",
-    "id, name, category, stock_quantity, storefront_hidden, storefront_hidden_at, image_urls",
-    "id, name, category, stock_quantity, storefront_hidden, image_urls",
-    "id, name, category, stock_quantity, image_urls",
+    "id, name, category, supplier_name, base_price, sale_price, stock_quantity, storefront_hidden, storefront_hidden_at, image_urls",
+    "id, name, category, supplier_name, base_price, stock_quantity, storefront_hidden, storefront_hidden_at, image_urls",
+    "id, name, category, base_price, stock_quantity, storefront_hidden, storefront_hidden_at, image_urls",
+    "id, name, category, base_price, stock_quantity, storefront_hidden, image_urls",
+    "id, name, category, base_price, stock_quantity, image_urls",
   ] as const;
 
   type DbRow = Record<string, unknown>;
@@ -27,7 +28,7 @@ export default async function AdminStockPage() {
       if (result.error) {
         return { data: null as DbRow[] | null, error: result.error as DbError };
       }
-      const rows = (result.data as DbRow[] | null) ?? [];
+      const rows = ((result.data ?? []) as unknown as DbRow[]).filter((r) => r && typeof r === "object");
       all.push(...rows);
       if (rows.length < PAGE_SIZE) {
         break;
@@ -59,10 +60,12 @@ export default async function AdminStockPage() {
 
   const rows =
     data?.map((p) => ({
-      id: p.id,
-      name: p.name,
-      category: p.category,
+      id: typeof p.id === "string" ? p.id : String(p.id ?? ""),
+      name: typeof p.name === "string" ? p.name : String(p.name ?? ""),
+      category: typeof p.category === "string" ? p.category : null,
       supplierName: (p as { supplier_name?: string | null }).supplier_name ?? null,
+      base_price: typeof p.base_price === "number" ? p.base_price : null,
+      sale_price: typeof (p as { sale_price?: unknown }).sale_price === "number" ? (p as { sale_price: number }).sale_price : null,
       stock_quantity: typeof p.stock_quantity === "number" ? p.stock_quantity : 0,
       storefront_hidden: (p as { storefront_hidden?: boolean | null }).storefront_hidden ?? null,
       storefront_hidden_at: (p as { storefront_hidden_at?: string | null }).storefront_hidden_at ?? null,
@@ -99,7 +102,7 @@ export default async function AdminStockPage() {
         </p>
       )}
 
-      <StockTable products={rows} lowStockThreshold={LOW_STOCK_THRESHOLD} />
+      <StockTableClientShell products={rows} lowStockThreshold={LOW_STOCK_THRESHOLD} />
     </div>
   );
 }

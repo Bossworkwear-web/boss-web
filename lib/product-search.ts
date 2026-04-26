@@ -11,6 +11,7 @@ export function productMatchesSearchQuery(
   category: string | null | undefined,
   rawQuery: string,
   description?: string | null,
+  productId?: string | null,
 ): boolean {
   const q = rawQuery.trim();
   if (!q) {
@@ -21,6 +22,9 @@ export function productMatchesSearchQuery(
   const listingCode = fashionBizStyleCodeFromListing(name, slug ?? null);
 
   const parts: string[] = [name, stripped, category ?? "", slug ?? "", description ?? ""];
+  if (productId && productId.trim()) {
+    parts.push(productId.trim());
+  }
   if (listingCode) {
     parts.push(listingCode);
   }
@@ -42,7 +46,9 @@ export function productMatchesSearchQuery(
     return false;
   }
 
-  const blob = [name, stripped, slug ?? "", listingCode ?? "", description ?? ""].join(" ").toUpperCase();
+  const blob = [name, stripped, slug ?? "", listingCode ?? "", description ?? "", productId ?? ""]
+    .join(" ")
+    .toUpperCase();
   const compactBlob = blob.replace(/[\s_-]+/g, "");
   if (compactBlob.includes(compactQ)) {
     return true;

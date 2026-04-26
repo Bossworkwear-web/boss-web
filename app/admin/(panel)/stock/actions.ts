@@ -6,6 +6,7 @@ import { assertAdminSession } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 export type UpdateStockResult = { ok: true } | { ok: false; error: string };
+export type UpdatePriceResult = { ok: true } | { ok: false; error: string };
 
 export async function updateProductStock(productId: string, stockQuantity: number): Promise<UpdateStockResult> {
   try {
@@ -37,6 +38,134 @@ export async function updateProductStock(productId: string, stockQuantity: numbe
       };
     }
 
+    revalidatePath("/admin");
+    revalidatePath("/admin/stock");
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Update failed";
+    return { ok: false, error: msg };
+  }
+}
+
+export async function updateProductBasePrice(productId: string, basePrice: number): Promise<UpdatePriceResult> {
+  try {
+    await assertAdminSession();
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  if (!productId || typeof basePrice !== "number" || !Number.isFinite(basePrice) || basePrice < 0) {
+    return { ok: false, error: "Invalid price" };
+  }
+
+  const price = Math.round(basePrice * 100) / 100;
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { error } = await supabase
+      .from("products")
+      .update({ base_price: price })
+      .eq("id", productId);
+
+    if (error) {
+      return {
+        ok: false,
+        error:
+          error.message.includes("base_price") || error.code === "42703"
+            ? "Run migration: add column base_price to products (see supabase/migrations)."
+            : error.message,
+      };
+    }
+
+    revalidatePath("/");
+    revalidatePath("/products");
+    revalidatePath("/categories");
+    revalidatePath("/admin");
+    revalidatePath("/admin/stock");
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Update failed";
+    return { ok: false, error: msg };
+  }
+}
+
+export async function updateProductSalePrice(productId: string, salePrice: number | null): Promise<UpdatePriceResult> {
+  try {
+    await assertAdminSession();
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  if (!productId) {
+    return { ok: false, error: "Invalid product" };
+  }
+
+  const payload =
+    salePrice == null
+      ? { sale_price: null as number | null }
+      : typeof salePrice === "number" && Number.isFinite(salePrice) && salePrice > 0
+        ? { sale_price: Math.round(salePrice * 100) / 100 }
+        : { sale_price: null as number | null };
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { error } = await supabase.from("products").update(payload).eq("id", productId);
+
+    if (error) {
+      return {
+        ok: false,
+        error:
+          error.message.includes("sale_price") || error.code === "42703"
+            ? "Run migration: add column sale_price to products (see supabase/migrations/20260475_products_sale_price.sql)."
+            : error.message,
+      };
+    }
+
+    revalidatePath("/");
+    revalidatePath("/products");
+    revalidatePath("/categories");
+    revalidatePath("/admin");
+    revalidatePath("/admin/stock");
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Update failed";
+    return { ok: false, error: msg };
+  }
+}
+
+export async function applyDefaultPriceToMissing(defaultBasePrice: number): Promise<UpdatePriceResult> {
+  try {
+    await assertAdminSession();
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  if (typeof defaultBasePrice !== "number" || !Number.isFinite(defaultBasePrice) || defaultBasePrice <= 0) {
+    return { ok: false, error: "Invalid default price" };
+  }
+
+  const price = Math.round(defaultBasePrice * 100) / 100;
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { error } = await supabase
+      .from("products")
+      .update({ base_price: price })
+      .is("base_price", null);
+
+    if (error) {
+      return {
+        ok: false,
+        error:
+          error.message.includes("base_price") || error.code === "42703"
+            ? "Run migration: add column base_price to products (see supabase/migrations)."
+            : error.message,
+      };
+    }
+
+    revalidatePath("/");
+    revalidatePath("/products");
+    revalidatePath("/categories");
     revalidatePath("/admin");
     revalidatePath("/admin/stock");
     return { ok: true };

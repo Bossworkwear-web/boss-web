@@ -58,6 +58,7 @@ alter table public.products add column if not exists slug text;
 alter table public.products add column if not exists category text;
 alter table public.products add column if not exists description text;
 alter table public.products add column if not exists base_price numeric(10,2);
+alter table public.products add column if not exists sale_price numeric(10,2);
 alter table public.products add column if not exists weight_kg numeric(8,3);
 alter table public.products add column if not exists image_urls text[];
 alter table public.products add column if not exists available_colors text[];

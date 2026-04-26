@@ -9,7 +9,7 @@ import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CartIcon, MenuIcon, SearchIcon, UserIcon } from "@/app/components/icons";
 import { LOGO_SRC } from "@/app/generated/logo";
 import { clearCartItems, subscribeCartUpdates, useCartCount } from "@/lib/cart";
-import { getSubCategoriesForMain, MAIN_CATEGORIES, type StorefrontNavSub } from "@/lib/catalog";
+import { MAIN_CATEGORIES, type StorefrontNavSub } from "@/lib/catalog";
 import { readSidebarNavClient } from "@/lib/sidebar-nav";
 import { SITE_PAGE_INSET_X_CLASS } from "@/lib/site-layout";
 
@@ -125,7 +125,7 @@ function CategoryInlineNav({
   return (
     <nav aria-label="Store navigation" className="flex max-w-full flex-wrap items-center justify-center gap-1 sm:gap-1.5">
       {MAIN_CATEGORIES.map((main) => {
-        const subCategories = navSubsByMain[main.slug] ?? getSubCategoriesForMain(main.slug);
+        const subCategories = navSubsByMain[main.slug] ?? [];
         const hasSubs = subCategories.length > 0;
         const isProductContext = pathname.startsWith("/products/");
         const mainHref = `/categories/${main.slug}`;

@@ -189,6 +189,7 @@ export type Database = {
           category: string | null;
           description: string | null;
           base_price: number | null;
+          sale_price: number | null;
           weight_kg: number | null;
           stock_quantity: number;
           image_urls: string[] | null;
@@ -208,6 +209,7 @@ export type Database = {
           category?: string | null;
           description?: string | null;
           base_price?: number | null;
+          sale_price?: number | null;
           weight_kg?: number | null;
           stock_quantity?: number;
           image_urls?: string[] | null;
@@ -227,6 +229,7 @@ export type Database = {
           category?: string | null;
           description?: string | null;
           base_price?: number | null;
+          sale_price?: number | null;
           weight_kg?: number | null;
           stock_quantity?: number;
           image_urls?: string[] | null;

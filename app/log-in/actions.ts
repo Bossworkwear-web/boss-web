@@ -1,8 +1,10 @@
 "use server";
 
+import crypto from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { sendCustomerTemporaryPasswordEmail } from "@/lib/customer-password-reset-email";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 function isNextRedirectError(error: unknown) {
@@ -23,8 +25,6 @@ function signupErrorRedirect(
   const qs = new URLSearchParams({
     mode: "signup",
     status,
-    full_name: fullName,
-    email,
   });
   redirect(`/log-in?${qs.toString()}`);
 }
@@ -35,7 +35,7 @@ export async function submitLogIn(formData: FormData) {
   const password = String(formData.get("password") ?? "").trim();
 
   if (!email || !password) {
-    redirect(`/log-in?status=invalid&email=${encodeURIComponent(email)}`);
+    redirect(`/log-in?status=invalid`);
   }
 
   const emailNorm = email.trim().toLowerCase();
@@ -49,16 +49,16 @@ export async function submitLogIn(formData: FormData) {
       .maybeSingle();
 
     if (error || !data) {
-      redirect(`/log-in?status=mismatch&email=${encodeURIComponent(email)}`);
+      redirect(`/log-in?status=mismatch`);
     }
 
     const stored = data.login_password;
     if (stored === null || stored === "") {
-      redirect(`/log-in?status=oauth_only&email=${encodeURIComponent(email)}`);
+      redirect(`/log-in?status=mismatch`);
     }
 
     if (stored !== password) {
-      redirect(`/log-in?status=mismatch&email=${encodeURIComponent(email)}`);
+      redirect(`/log-in?status=mismatch`);
     }
 
     const cookieStore = await cookies();
@@ -84,7 +84,7 @@ export async function submitLogIn(formData: FormData) {
     if (isNextRedirectError(error)) {
       throw error;
     }
-    redirect(`/log-in?status=error&email=${encodeURIComponent(email)}`);
+    redirect(`/log-in?status=error`);
   }
 
   redirect("/");
@@ -137,4 +137,68 @@ export async function submitSignUp(formData: FormData) {
   redirect(
     `/customer-details?full_name=${encodeURIComponent(fullName)}&email=${encodeURIComponent(email)}`
   );
+}
+
+export async function requestTemporaryPassword(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (!email) {
+    redirect("/log-in?status=reset_invalid");
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { data } = await supabase
+      .from("customer_profiles")
+      .select("id, customer_name, email_address, login_password")
+      .eq("email_address", email)
+      .maybeSingle();
+
+    if (!data?.id) {
+      redirect(`/log-in?status=reset_not_found`);
+    }
+
+    if (!process.env.RESEND_API_KEY?.trim()) {
+      console.error("[requestTemporaryPassword] RESEND_API_KEY is not set");
+      redirect(`/log-in?status=reset_email_config`);
+    }
+
+    const tempPassword = `BOSS-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+    const previousPassword = data.login_password;
+
+    const { error: updateError } = await supabase
+      .from("customer_profiles")
+      .update({ login_password: tempPassword })
+      .eq("id", data.id);
+
+    if (updateError) {
+      redirect(`/log-in?status=reset_error`);
+    }
+
+    const sent = await sendCustomerTemporaryPasswordEmail({
+      to: data.email_address,
+      customerName: data.customer_name,
+      tempPassword,
+    });
+    if (!sent.ok) {
+      console.error("[requestTemporaryPassword] Email send failed:", sent.error);
+      const { error: restoreError } = await supabase
+        .from("customer_profiles")
+        .update({ login_password: previousPassword })
+        .eq("id", data.id);
+      if (restoreError) {
+        console.error(
+          "[requestTemporaryPassword] Could not restore previous password:",
+          restoreError
+        );
+      }
+      redirect(`/log-in?status=reset_email_error`);
+    }
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+    redirect(`/log-in?status=reset_error`);
+  }
+
+  redirect(`/log-in?status=reset_sent`);
 }

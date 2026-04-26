@@ -51,6 +51,7 @@ export type CategoryBrowseProductRow = {
   id: string;
   name: string;
   base_price: number | null;
+  sale_price?: number | null;
   image_urls?: string[] | null;
   category?: string | null;
   slug?: string | null;

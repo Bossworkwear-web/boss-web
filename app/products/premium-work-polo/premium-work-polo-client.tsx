@@ -182,41 +182,59 @@ const servicePricing: Record<ServiceType, number> = {
 const defaultEmbroideryPlacementPricing: Record<string, number> = {
   "left chest": 9.95,
   "left-hand chest": 9.95,
-  "right chest": 7.7,
-  "center chest": 22,
+  "right chest": 7.95,
+  "center chest": 24.95,
   "full back": 18,
   "front full": 18,
   "front bottom": 18,
   "full chest": 18,
   "front collar": 18,
-  "back upper": 7.7,
-  "back middle": 22,
-  "left sleeve": 8.8,
-  "right sleeve": 8.8,
+  "back upper": 7.95,
+  "back middle": 24.95,
+  "left sleeve": 8.95,
+  "right sleeve": 8.95,
 };
 
 /** Per-placement add-on when Printing is chosen (LC, RC, CC, BU, BM, FB, FC, LS, RS). */
 const defaultPrintingPlacementPricing: Record<string, number> = {
-  "left chest": 8.8,
-  "left-hand chest": 8.8,
-  "right chest": 6.6,
-  "center chest": 13.2,
-  "full back": 18,
-  "front full": 18,
+  "left chest": 8.95,
+  "left-hand chest": 8.95,
+  "right chest": 6.95,
+  "center chest": 14.95,
+  "full back": 17.95,
+  "front full": 17.95,
   "front bottom": 18,
-  "full chest": 18,
+  "full chest": 17.95,
   "front collar": 18,
-  "back upper": 6.6,
-  "back middle": 13.2,
-  "left sleeve": 7.7,
-  "right sleeve": 7.7,
+  "back upper": 7.95,
+  "back middle": 14.95,
+  "left sleeve": 7.95,
+  "right sleeve": 7.95,
 };
 
 const PLACEMENT_FALLBACK_EMBROIDERY = 2.0;
 const PLACEMENT_FALLBACK_PRINTING = 1.5;
 
 function toCurrency(amount: number) {
-  return amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  return amount.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}
+
+function toCurrencyExact(amount: number) {
+  return amount.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function cents(n: number) {
+  return Math.round((Number.isFinite(n) ? n : 0) * 100);
 }
 
 /** Matches supplier filenames like `…_Product_MidBlue_01.jpg` (see sync-supplier-catalog). */
@@ -291,14 +309,30 @@ function scoreGalleryUrlForColor(color: string, url: string): number {
 /**
  * Pick the hero image for a colour from gallery URLs (`_Product_` / `_Talent_` tokens).
  * Prefers flat `_Product_` shots so the colour swatch matches the garment, not on-model `_Talent_` marketing.
+ * JB's Wear: when `import-jbswear-xlsx` tagged the gallery with `#jbpc=N`, use index order (see `parseJbGalleryUrls`).
  */
-function pickPrimaryImageForColor(color: string, urls: string[]): string {
+function pickPrimaryImageForColor(color: string, urls: string[], opts?: GalleryColorPickOpts): string {
   if (!urls.length) {
     return "";
   }
   const trimmed = color.trim();
   if (!trimmed) {
     return urls[0];
+  }
+
+  const pc = opts?.jbPrefixCount ?? 0;
+  const colOpts = opts?.colorOptions;
+  if (
+    opts?.isJbWear &&
+    pc > 0 &&
+    colOpts &&
+    pc === colOpts.length &&
+    urls.length >= pc
+  ) {
+    const i = colOpts.indexOf(color);
+    if (i >= 0 && i < pc) {
+      return urls[i] ?? urls[0];
+    }
   }
 
   const scored = urls.map((url) => ({
@@ -313,8 +347,90 @@ function pickPrimaryImageForColor(color: string, urls: string[]): string {
   return urls[0];
 }
 
-/** Which catalogue colour best matches this gallery URL (thumbnail click → 1. Colour). */
-function inferBestColorForGalleryImage(imageUrl: string, colors: readonly string[]): string | null {
+function extractColorTokenFromGalleryFilename(fileNoQuery: string): string | null {
+  const shot = fileNoQuery.match(/_(?:Product|Talent)_([A-Za-z0-9_-]+)_/i);
+  if (shot?.[1]) {
+    return shot[1];
+  }
+  const generic = fileNoQuery.match(/^[A-Za-z0-9]+_([A-Za-z0-9_-]+)_(?:\d{1,3})\.[A-Za-z0-9]+$/i);
+  if (generic?.[1]) {
+    return generic[1];
+  }
+  const tail = fileNoQuery.match(/_([A-Za-z0-9_-]+)_(?:\d{1,3})\.[A-Za-z0-9]+$/i);
+  if (tail?.[1]) {
+    return tail[1];
+  }
+  return null;
+}
+
+/** Score how well a storefront colour label matches a supplier filename colour token. */
+function scoreColorLabelAgainstFileToken(colorLabel: string, tokenRaw: string): number {
+  const fromFile = humanizeColorInFilename(tokenRaw);
+  const fileCompact = compactColorKey(fromFile);
+  const labelCompact = compactColorKey(colorLabel);
+  if (!fileCompact || !labelCompact) {
+    return 0;
+  }
+  if (labelCompact === fileCompact) {
+    return 100;
+  }
+  if (fileCompact.includes(labelCompact) || labelCompact.includes(fileCompact)) {
+    return 80;
+  }
+  let s = 0;
+  const labelWords = colorLabel
+    .toLowerCase()
+    .split(/[\s/]+/)
+    .map((w) => w.replace(/[^a-z0-9]+/g, ""))
+    .filter((w) => w.length > 1);
+  for (const w of labelWords) {
+    if (fileCompact.includes(w)) {
+      s += 35;
+    }
+  }
+  const fileWords = fromFile
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => w.replace(/[^a-z0-9]+/g, ""))
+    .filter((w) => w.length > 1);
+  for (const w of fileWords) {
+    if (labelCompact.includes(w)) {
+      s += 30;
+    }
+  }
+  return s;
+}
+
+/**
+ * Which catalogue colour best matches this gallery URL (thumbnail / hero → 1. Colour).
+ * Uses URL scoring, then canonical primary URL per colour, then raw filename token vs labels.
+ */
+function inferBestColorForGalleryImage(
+  imageUrl: string,
+  colors: readonly string[],
+  galleryUrls: readonly string[],
+  pickOpts?: GalleryColorPickOpts,
+): string | null {
+  if (colors.length === 0) {
+    return null;
+  }
+  if (colors.length === 1) {
+    return colors[0];
+  }
+
+  const pc = pickOpts?.jbPrefixCount ?? 0;
+  if (
+    pickOpts?.isJbWear &&
+    pc > 0 &&
+    pc === colors.length &&
+    galleryUrls.length >= pc
+  ) {
+    const idx = galleryUrls.indexOf(imageUrl);
+    if (idx >= 0 && idx < pc) {
+      return colors[idx] ?? null;
+    }
+  }
+
   let best: { color: string; score: number } | null = null;
   for (const c of colors) {
     const s = scoreGalleryUrlForColor(c, imageUrl);
@@ -325,7 +441,31 @@ function inferBestColorForGalleryImage(imageUrl: string, colors: readonly string
   if (best && best.score > 0) {
     return best.color;
   }
-  return colors.length === 1 ? colors[0] : null;
+
+  const urls = [...galleryUrls];
+  for (const c of colors) {
+    if (pickPrimaryImageForColor(c, urls, pickOpts) === imageUrl) {
+      return c;
+    }
+  }
+
+  const file = decodeURIComponent(imageUrl.split("/").pop() ?? imageUrl);
+  const fileNoQuery = (file.split("?")[0] ?? file).trim();
+  const token = extractColorTokenFromGalleryFilename(fileNoQuery);
+  if (token) {
+    let tokenBest: { color: string; score: number } | null = null;
+    for (const c of colors) {
+      const s = scoreColorLabelAgainstFileToken(c, token);
+      if (tokenBest == null || s > tokenBest.score) {
+        tokenBest = { color: c, score: s };
+      }
+    }
+    if (tokenBest && tokenBest.score >= 30) {
+      return tokenBest.color;
+    }
+  }
+
+  return null;
 }
 
 function toShortCode(label: string) {
@@ -344,6 +484,49 @@ function toShortCode(label: string) {
 
 const PLACEHOLDER_GALLERY_IMAGE =
   "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1600&q=80";
+
+/** Fragment on first gallery URL from `import-jbswear-xlsx.mjs` when every colour has an XLSX hero image. */
+const JB_GALLERY_PREFIX_HASH_RE = /#jbpc=(\d+)$/i;
+
+export type GalleryColorPickOpts = {
+  colorOptions?: readonly string[];
+  /** From `#jbpc=N` after stripping; N === colorOptions.length means first N images align with colour order. */
+  jbPrefixCount?: number;
+  isJbWear?: boolean;
+};
+
+function parseJbGalleryUrls(raw: readonly string[]): { urls: string[]; prefixCount: number } {
+  if (!raw.length) {
+    return { urls: [], prefixCount: 0 };
+  }
+  let prefixCount = 0;
+  const urls = raw.map((u) => {
+    const m = JB_GALLERY_PREFIX_HASH_RE.exec(u);
+    if (m) {
+      const n = parseInt(m[1] ?? "", 10);
+      if (Number.isFinite(n) && n > 0) {
+        prefixCount = n;
+      }
+      return u.slice(0, m.index);
+    }
+    return u;
+  });
+  return { urls, prefixCount };
+}
+
+function isJbWearStorefrontProduct(slug: string | null | undefined, supplierName: string | undefined): boolean {
+  const s = (slug ?? "").trim().toLowerCase();
+  if (s.startsWith("jb-")) {
+    return true;
+  }
+  const sup = (supplierName ?? "").trim().toLowerCase();
+  return (
+    sup === "jb's wear" ||
+    sup === "jbs wear" ||
+    sup === "jbswear" ||
+    /\bjbs\s*wear\b/i.test(supplierName ?? "")
+  );
+}
 
 function galleryForUrls(urls: string[]) {
   return urls.length > 0 ? urls : [PLACEHOLDER_GALLERY_IMAGE];
@@ -695,10 +878,21 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
   const cartLabel = productName ? `${productName} (${productCode})` : productCode;
   const heroAlt = cartLabel;
 
+  const galleryParsed = useMemo(() => parseJbGalleryUrls(product.imageUrls), [product.imageUrls]);
+
   const galleryImages = useMemo(
-    () => (product.imageUrls.length > 0 ? product.imageUrls : [PLACEHOLDER_GALLERY_IMAGE]),
-    [product.imageUrls]
+    () => galleryForUrls(galleryParsed.urls),
+    [galleryParsed.urls],
   );
+
+  const galleryPickOpts = useMemo((): GalleryColorPickOpts => {
+    const isJb = isJbWearStorefrontProduct(product.slug, product.supplierName);
+    return {
+      colorOptions: product.colorOptions,
+      jbPrefixCount: galleryParsed.prefixCount,
+      isJbWear: isJb,
+    };
+  }, [galleryParsed.prefixCount, product.colorOptions, product.slug, product.supplierName]);
 
   const ppePlainOnly = useMemo(
     () =>
@@ -774,9 +968,15 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
   const [colorSizeQuantities, setColorSizeQuantities] = useState<
     Record<string, Record<string, number>>
   >(() => emptyColorSizeQuantities(product.colorOptions, product.sizeOptions));
-  const [activeImage, setActiveImage] = useState<string>(() =>
-    pickPrimaryImageForColor(product.colorOptions[0] ?? "", galleryForUrls(product.imageUrls))
-  );
+  const [activeImage, setActiveImage] = useState<string>(() => {
+    const { urls, prefixCount } = parseJbGalleryUrls(product.imageUrls);
+    const g = galleryForUrls(urls);
+    return pickPrimaryImageForColor(product.colorOptions[0] ?? "", g, {
+      colorOptions: product.colorOptions,
+      jbPrefixCount: prefixCount,
+      isJbWear: isJbWearStorefrontProduct(product.slug, product.supplierName),
+    });
+  });
   const [cartMessage, setCartMessage] = useState<string>("");
   const [cartSubmitBusy, setCartSubmitBusy] = useState(false);
   const [orderNotes, setOrderNotes] = useState<string>("");
@@ -789,6 +989,10 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
   /** Set when opening this product via Cart → Edit; primary button updates that line instead of adding. */
   const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
   const prevProductIdRef = useRef(product.id);
+  const galleryImagesRef = useRef(galleryImages);
+  const galleryPickOptsRef = useRef(galleryPickOpts);
+  galleryImagesRef.current = galleryImages;
+  galleryPickOptsRef.current = galleryPickOpts;
 
   function appendLogoFiles(fileList: FileList | File[] | null) {
     if (!fileList || fileList.length === 0) {
@@ -839,9 +1043,9 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
 
   /** When the image set changes, re-pick hero for the current colour (colour chip / thumbnails set hero otherwise). */
   useEffect(() => {
-    setActiveImage(pickPrimaryImageForColor(selectedColor, galleryImages));
+    setActiveImage(pickPrimaryImageForColor(selectedColor, galleryImages, galleryPickOpts));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedColour updates hero in click handlers
-  }, [galleryImages]);
+  }, [galleryImages, galleryPickOpts]);
 
   useEffect(() => {
     if (prevProductIdRef.current !== product.id) {
@@ -855,6 +1059,7 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
     setLogoAttachments(logoAttachmentsFlushReducer);
   }, [product.id]);
 
+  /** Refs keep a fixed dependency list (avoids Fast Refresh errors if hook dep count changes across edits). */
   useEffect(() => {
     const cartEditId = searchParams.get("cartEdit")?.trim();
     if (!cartEditId) {
@@ -880,7 +1085,9 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
     const size = (line.size ?? "").trim();
     const nextColor = product.colorOptions.includes(color) ? color : (product.colorOptions[0] ?? "");
     setSelectedColor(nextColor);
-    setActiveImage(pickPrimaryImageForColor(nextColor, galleryForUrls(product.imageUrls)));
+    setActiveImage(
+      pickPrimaryImageForColor(nextColor, galleryImagesRef.current, galleryPickOptsRef.current),
+    );
 
     const q = Number(line.quantity);
     const next = emptyColorSizeQuantities(product.colorOptions, product.sizeOptions);
@@ -929,7 +1136,7 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
   const isPlainSelected = !isEmbroiderySelected && !isPrintingSelected;
 
   const perItemPrice = useMemo(() => {
-    let placementCost = 0;
+    let placementCostCents = 0;
     for (const [placementId, service] of Object.entries(placementAssignments)) {
       if (service !== "Embroidery" && service !== "Printing") {
         continue;
@@ -941,10 +1148,10 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
       if (service === "Embroidery" && !isEmbroideryOfferedForPlacement(opt.diagramAbbr)) {
         continue;
       }
-      placementCost += service === "Embroidery" ? opt.embroideryCost : opt.printingCost;
+      placementCostCents += cents(service === "Embroidery" ? opt.embroideryCost : opt.printingCost);
     }
-    const rawPrice = product.basePrice + placementCost;
-    return Math.round(rawPrice * 100) / 100;
+    const perItemCents = cents(product.basePrice) + placementCostCents;
+    return perItemCents / 100;
   }, [placementAssignments, placementOptions, product.basePrice]);
 
   const totalPieces = useMemo(() => {
@@ -962,8 +1169,8 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
   }, [product.colorOptions, product.sizeOptions, colorSizeQuantities]);
 
   const totalPrice = useMemo(() => {
-    const rawTotal = perItemPrice * totalPieces;
-    return Math.round(rawTotal * 100) / 100;
+    const totalCents = cents(perItemPrice) * totalPieces;
+    return totalCents / 100;
   }, [perItemPrice, totalPieces]);
 
   function assignPlacement(id: string, service: DecoratedServiceType) {
@@ -1065,7 +1272,7 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
         ? `\n\n[Logo files with this line: ${logoAttachments.map((a) => `${a.file.name} (${Math.round(a.file.size / 1024)} KB)`).join(", ")}]`
         : "";
     const notesForCart = (trimmedNotes + logoExtra).trim().slice(0, 2000);
-    const fallbackHero = product.imageUrls.find((u) => typeof u === "string" && u.trim().length > 0)?.trim();
+    const fallbackHero = galleryImages.find((u) => typeof u === "string" && u.trim().length > 0)?.trim();
 
     setCartSubmitBusy(true);
     try {
@@ -1089,7 +1296,7 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
       }
 
       function linePayload(lineColor: string, size: string, qty: number): Omit<CartItem, "id" | "addedAt"> {
-        const colorHero = pickPrimaryImageForColor(lineColor, galleryForUrls(product.imageUrls))?.trim();
+        const colorHero = pickPrimaryImageForColor(lineColor, galleryImages, galleryPickOpts)?.trim();
         const heroImage = colorHero || fallbackHero;
         const lineTotal = Math.round(perItemPrice * qty * 100) / 100;
         return {
@@ -1330,7 +1537,12 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
                   type="button"
                   onClick={() => {
                     setActiveImage(image);
-                    const inferred = inferBestColorForGalleryImage(image, product.colorOptions);
+                    const inferred = inferBestColorForGalleryImage(
+                      image,
+                      product.colorOptions,
+                      galleryImages,
+                      galleryPickOpts,
+                    );
                     if (inferred != null) {
                       setSelectedColor(inferred);
                     }
@@ -1482,7 +1694,7 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
                       type="button"
                       onClick={() => {
                         setSelectedColor(color);
-                        setActiveImage(pickPrimaryImageForColor(color, galleryImages));
+                        setActiveImage(pickPrimaryImageForColor(color, galleryImages, galleryPickOpts));
                       }}
                       title={color}
                       className={`min-h-[2.75rem] rounded-lg border px-2 py-2 text-left text-[1.02rem] font-semibold leading-snug transition sm:min-h-0 sm:px-2.5 sm:py-2 sm:text-[1.08rem] md:text-[1.05rem] ${
@@ -1674,7 +1886,7 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
                                     : "border-brand-navy/20 bg-white text-brand-navy hover:border-brand-orange"
                                 }`}
                               >
-                                Emb +{toCurrency(option.embroideryCost)}
+                                Emb +{toCurrencyExact(option.embroideryCost)}
                               </button>
                             ) : (
                               <span
@@ -1694,7 +1906,7 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
                                   : "border-brand-navy/20 bg-white text-brand-navy hover:border-blue-500 hover:text-blue-600"
                               }`}
                             >
-                              Print +{toCurrency(option.printingCost)}
+                              Print +{toCurrencyExact(option.printingCost)}
                             </button>
                           )}
                         </div>

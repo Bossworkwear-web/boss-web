@@ -8,6 +8,7 @@ import { inferSubSlugFromProductName, resolveProductSubSlug } from "@/lib/produc
 import {
   isBagKeywordProduct,
   isBisleyCatalogProduct,
+  isBizCollectionWomensChefPantsChefPantsExclusiveListing,
   isChefMiscellaneousExclusiveJbStyleListing,
   isHeadWearKeywordProduct,
   isJbWearSixSeriesListing,
@@ -70,6 +71,9 @@ export function inferMainSlugForProduct(
   }
   if (PPE_SUBS.has(subSlug)) {
     return "ppe";
+  }
+  if (isBizCollectionWomensChefPantsChefPantsExclusiveListing(name, meta)) {
+    return "chef";
   }
   if (isYesChefCatalogProduct(name, meta)) {
     return "chef";
@@ -167,6 +171,20 @@ export function syncSidebarNavFromProductIfNeeded(
       return;
     }
     persistSidebarNavClient("chef", "miscellaneous");
+    return;
+  }
+
+  const bizChefPantsMeta = {
+    slug: storeSlug ?? null,
+    category: category ?? null,
+    description: description ?? null,
+    supplier_name: supplierName ?? null,
+  };
+  if (isBizCollectionWomensChefPantsChefPantsExclusiveListing(productName, bizChefPantsMeta)) {
+    if (stored?.mainSlug === "chef" && stored?.subSlug === "pants") {
+      return;
+    }
+    persistSidebarNavClient("chef", "pants");
     return;
   }
 
