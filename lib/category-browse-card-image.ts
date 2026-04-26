@@ -1,4 +1,5 @@
 import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
+import { resolveStorefrontImageUrl } from "@/lib/storefront-image-url";
 
 /** Placeholder hero images when a product row has no `image_urls` — aligned with category browse grids. */
 export const DEFAULT_IMAGE_BY_SUB: Record<string, string> = {
@@ -37,15 +38,18 @@ export function heroOverrideCardImageUrl(item: BrowseCardImageRow): string | nul
   if (code?.toUpperCase() === "CL542UL") {
     const want = "CL542UL_TALENT_MIDNIGHTNAVY_07.JPG";
     const hit = (item.image_urls ?? []).find((u) => String(u).toUpperCase().includes(want));
-    return hit?.trim() ? hit.trim() : null;
+    const picked = hit?.trim() ? hit.trim() : null;
+    return picked ? resolveStorefrontImageUrl(picked) : null;
   }
   return null;
 }
 
 export function categoryBrowseCardImageUrl(item: BrowseCardImageRow, resolvedSubSlug: string): string {
+  const fromDb = item.image_urls?.[0];
+  const resolvedDb = fromDb ? resolveStorefrontImageUrl(fromDb) : null;
   return (
     heroOverrideCardImageUrl(item) ??
-    item.image_urls?.[0] ??
+    (resolvedDb && resolvedDb.length > 0 ? resolvedDb : null) ??
     DEFAULT_IMAGE_BY_SUB[resolvedSubSlug] ??
     DEFAULT_IMAGE_BY_SUB["t-shirts"]
   );

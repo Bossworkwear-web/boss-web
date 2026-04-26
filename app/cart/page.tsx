@@ -20,6 +20,7 @@ import {
 } from "@/lib/cart";
 import { productPathSegment } from "@/lib/product-path-slug";
 import { serviceTypeColoredContent } from "@/lib/service-type-colored";
+import { resolveStorefrontImageUrl } from "@/lib/storefront-image-url";
 import { STORE_MAIN_SHELL_CLASS } from "@/lib/store-main-shell";
 
 /** When a cart line has no stored image (legacy cart or missing DB image). */
@@ -188,7 +189,7 @@ export default function CartPage() {
               {items.map((item) => {
                 const heroSrc =
                   typeof item.imageUrl === "string" && item.imageUrl.trim().length > 0
-                    ? item.imageUrl.trim()
+                    ? resolveStorefrontImageUrl(item.imageUrl.trim()) || CART_LINE_FALLBACK_IMAGE
                     : CART_LINE_FALLBACK_IMAGE;
                 const thumbAlt =
                   item.productName.trim().length > 0 ? `${item.productName} — preview` : "Product preview";

@@ -12,6 +12,7 @@ import {
 import { isBizCareCatalogProduct, isBizCorporatesCatalogProduct } from "@/lib/product-visibility";
 import { slugifyProductNameForPath } from "@/lib/product-path-slug";
 import { storefrontDescriptionForDisplay } from "@/lib/product-display-name";
+import { resolveStorefrontImageUrlList } from "@/lib/storefront-image-url";
 import { createSupabaseClient } from "@/lib/supabase";
 
 import { normalizeProductSizeOptions } from "@/lib/product-sizes";
@@ -510,13 +511,15 @@ async function getDetailDataInternal(
           ? [BIZ_CARE_UNISEX_HERO_IMAGE, ...DEFAULT_PDP_FALLBACK_IMAGES]
           : DEFAULT_PDP_FALLBACK_IMAGES;
 
-    const normalizedImageUrls = (() => {
-      const code = fashionBizStyleCodeFromListing(product.name, product.slug ?? null);
-      if (code?.toUpperCase() === "CL542UL") {
-        return moveImageUrlToFront(normalizedImageUrlsRaw, "CL542UL_TALENT_MIDNIGHTNAVY_07.JPG");
-      }
-      return normalizedImageUrlsRaw;
-    })();
+    const normalizedImageUrls = resolveStorefrontImageUrlList(
+      (() => {
+        const code = fashionBizStyleCodeFromListing(product.name, product.slug ?? null);
+        if (code?.toUpperCase() === "CL542UL") {
+          return moveImageUrlToFront(normalizedImageUrlsRaw, "CL542UL_TALENT_MIDNIGHTNAVY_07.JPG");
+        }
+        return normalizedImageUrlsRaw;
+      })(),
+    );
 
     const normalizedColorOptions = normalizeColors(product.available_colors, fallbackColors);
     const derivedFromImages = deriveColorOptionsFromImageUrls(normalizedImageUrls);
