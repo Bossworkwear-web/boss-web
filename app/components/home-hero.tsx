@@ -8,7 +8,7 @@ const boldonse = Boldonse({
 });
 
 /**
- * Home hero: centered slideshow + copy overlaid on top (`public/hero_1.jpg` … `hero_3.jpg`).
+ * Home hero: centered slideshow + copy overlaid on top (`public/Hero_1.jpg` … `Hero_3.jpg`).
  */
 export function HomeHero() {
   return (

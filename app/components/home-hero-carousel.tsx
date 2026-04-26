@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 
 const SLIDE_INTERVAL_MS = 5500;
 
+/** Paths must match `public/` filenames exactly (Linux/Vercel is case-sensitive). */
 const HERO_SLIDES = [
-  { src: "/hero_1.jpg", alt: "Workwear and uniforms — slide 1" },
-  { src: "/hero_2.jpg", alt: "Workwear and uniforms — slide 2" },
-  { src: "/hero_3.jpg", alt: "Workwear and uniforms — slide 3" },
+  { src: "/Hero_1.jpg", alt: "Workwear and uniforms — slide 1" },
+  { src: "/Hero_2.jpg", alt: "Workwear and uniforms — slide 2" },
+  { src: "/Hero_3.jpg", alt: "Workwear and uniforms — slide 3" },
 ] as const;
 
 /**

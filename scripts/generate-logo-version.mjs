@@ -6,7 +6,6 @@ const publicDir = path.join(rootDir, "public");
 const generatedDir = path.join(rootDir, "app", "generated");
 const generatedFilePath = path.join(generatedDir, "logo.ts");
 
-const BOSSWW_LOGO = "Bossww_Logo.jpg";
 const BOSSWW_LOGO_PNG = "Bossww_Logo.png";
 const LEGACY_LOGO = "logo.png";
 
@@ -19,32 +18,41 @@ async function fileExists(p) {
   }
 }
 
+/** Match `Bossww_Logo.jpg` case-insensitively but emit the real filename (Linux URLs are case-sensitive). */
+function pickBosswwJpegName(files) {
+  return files.find((n) => {
+    const lower = n.toLowerCase();
+    return lower === "bossww_logo.jpg" || lower === "bossww_logo.jpeg";
+  });
+}
+
 async function main() {
-  const bosswwJpg = path.join(publicDir, BOSSWW_LOGO);
+  const publicFiles = await fs.readdir(publicDir);
+
+  const bosswwJpegName = pickBosswwJpegName(publicFiles);
   const bosswwPng = path.join(publicDir, BOSSWW_LOGO_PNG);
   const legacyPath = path.join(publicDir, LEGACY_LOGO);
 
   let urlPath;
-  if (await fileExists(bosswwJpg)) {
-    urlPath = `/${BOSSWW_LOGO}`;
+  if (bosswwJpegName) {
+    urlPath = `/${bosswwJpegName}`;
   } else if (await fileExists(bosswwPng)) {
     urlPath = `/${BOSSWW_LOGO_PNG}`;
     console.warn(
-      `public/${BOSSWW_LOGO} not found — using ${BOSSWW_LOGO_PNG}. Prefer public/${BOSSWW_LOGO}.`,
+      `Bossww_Logo jpg not found — using ${BOSSWW_LOGO_PNG}. Prefer public/Bossww_Logo.jpg (any letter case).`,
     );
   } else if (await fileExists(legacyPath)) {
     urlPath = `/${LEGACY_LOGO}`;
     console.warn(
-      `public/${BOSSWW_LOGO} not found — using ${LEGACY_LOGO}. Add public/${BOSSWW_LOGO} for the Boss WW logo.`,
+      `Bossww_Logo jpg not found — using ${LEGACY_LOGO}. Add public/Bossww_Logo.jpg for the Boss WW logo.`,
     );
   } else {
     console.error(
-      `Missing logo: add public/${BOSSWW_LOGO} (or ${BOSSWW_LOGO_PNG} / ${LEGACY_LOGO} as fallback).`,
+      `Missing logo: add public/Bossww_Logo.jpg (or ${BOSSWW_LOGO_PNG} / ${LEGACY_LOGO} as fallback).`,
     );
     process.exit(1);
   }
 
-  const publicFiles = await fs.readdir(publicDir);
   await Promise.all(
     publicFiles
       .filter((name) => /^logo-[a-f0-9]{8}\.png$/i.test(name))
