@@ -3,12 +3,21 @@ import { unstable_cache } from "next/cache";
 import type { CategoryBrowseProductRow } from "@/lib/main-category-browse";
 import { createSupabaseClient } from "@/lib/supabase";
 
+let devCache:
+  | {
+      fetchedAtMs: number;
+      promise: Promise<CategoryBrowseProductRow[]>;
+    }
+  | null = null;
+
 /**
  * Single Supabase round-trip for all storefront category grids + home showcase filtering.
  * Cached ~60s so concurrent navigations reuse one payload (still `force-dynamic` pages).
  */
 async function fetchActiveProductsBrowseRows(): Promise<CategoryBrowseProductRow[]> {
   const supabase = createSupabaseClient();
+  const pageSize = Math.max(100, Number(process.env.STOREFRONT_BROWSE_PAGE_SIZE ?? 500));
+  const maxScan = Math.max(pageSize, Number(process.env.STOREFRONT_BROWSE_MAX_SCAN ?? 6_000));
   const selectWithAudience =
     "id, name, base_price, sale_price, image_urls, category, slug, description, storefront_hidden, audience, supplier_name, available_colors, available_sizes";
   const selectWithoutAudience =
@@ -27,14 +36,14 @@ async function fetchActiveProductsBrowseRows(): Promise<CategoryBrowseProductRow
   }
 
   async function fetchAll(select: string): Promise<{ data: CategoryBrowseProductRow[]; error: unknown }> {
-    const pageSize = 1000;
-    const maxScan = 25_000;
     const out: CategoryBrowseProductRow[] = [];
     for (let offset = 0; offset < maxScan; offset += pageSize) {
       const res = await supabase
         .from("products")
         .select(select)
         .eq("is_active", true)
+        // Hidden products should never be in storefront browse payload.
+        .neq("storefront_hidden", true)
         .order("name")
         .range(offset, offset + pageSize - 1);
       if (res.error) {
@@ -101,9 +110,28 @@ async function fetchActiveProductsBrowseRows(): Promise<CategoryBrowseProductRow
   return rows as CategoryBrowseProductRow[];
 }
 
-export const getCachedActiveProductsBrowseRows =
-  process.env.NODE_ENV === "development"
-    ? fetchActiveProductsBrowseRows
-    : unstable_cache(fetchActiveProductsBrowseRows, ["storefront-active-products-browse-v13"], {
-        revalidate: 60,
-      });
+const cachedFetchActiveProductsBrowseRowsProd = unstable_cache(
+  fetchActiveProductsBrowseRows,
+  ["storefront-active-products-browse-v15"],
+  {
+    revalidate: 60,
+    tags: ["storefront-products-browse"],
+  },
+);
+
+export const getCachedActiveProductsBrowseRows = async (): Promise<CategoryBrowseProductRow[]> => {
+  if (process.env.NODE_ENV !== "development") {
+    return cachedFetchActiveProductsBrowseRowsProd();
+  }
+
+  // Dev: avoid Next.js data cache 2MB limit; use in-process cache.
+  const ttlMs = 10_000;
+  const now = Date.now();
+  if (devCache && now - devCache.fetchedAtMs < ttlMs) {
+    return devCache.promise;
+  }
+
+  const promise = fetchActiveProductsBrowseRows();
+  devCache = { fetchedAtMs: now, promise };
+  return promise;
+};

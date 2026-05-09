@@ -12,7 +12,7 @@ export async function sendCustomerTemporaryPasswordEmail(args: {
   tempPassword: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL ?? "Boss Web <onboarding@resend.dev>";
+  const from = process.env.RESEND_FROM_EMAIL ?? "Boss Workwear <account@bossworkwear.au>";
   if (!apiKey) {
     return { ok: false, error: "RESEND_API_KEY not set" };
   }
@@ -29,6 +29,52 @@ export async function sendCustomerTemporaryPasswordEmail(args: {
       <li>After signing in, open <strong>Customer</strong> and choose <strong>Change password</strong> to set a new password.</li>
     </ol>
     <p>If you did not request this, you can ignore this email.</p>
+  `
+    .replace(/\n\s+/g, " ")
+    .trim();
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: [args.to],
+        subject,
+        html,
+      }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { message?: string };
+    if (!res.ok) {
+      return { ok: false, error: json?.message ?? res.statusText };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Email failed" };
+  }
+}
+
+export async function sendCustomerPasswordResetEmail(args: {
+  to: string;
+  customerName?: string | null;
+  resetUrl: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM_EMAIL ?? "Boss Workwear <account@bossworkwear.au>";
+  if (!apiKey) {
+    return { ok: false, error: "RESEND_API_KEY not set" };
+  }
+
+  const subject = "Reset your password";
+  const greetingName = (args.customerName ?? "").trim() || "there";
+  const html = `
+    <p>Hi ${escapeHtml(greetingName)},</p>
+    <p>We received a request to reset your password.</p>
+    <p><a href="${escapeHtml(args.resetUrl)}">Reset your password</a></p>
+    <p>This link expires soon. If you did not request this, you can ignore this email.</p>
   `
     .replace(/\n\s+/g, " ")
     .trim();

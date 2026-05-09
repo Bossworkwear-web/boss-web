@@ -15,6 +15,19 @@ export function australiaPostTrackingUrl(trackingNumber: string): string {
   return `https://auspost.com.au/mypost/track/#/details/${q}`;
 }
 
+/** Carrier-provided public tracking URL when we recognise the carrier; otherwise `null`. */
+export function carrierTrackingUrl(carrier: string, trackingNumber: string | null | undefined): string | null {
+  const tn = trackingNumber?.trim();
+  if (!tn) {
+    return null;
+  }
+  const c = (carrier ?? "").toLowerCase();
+  if (c.includes("australia post") || c.includes("auspost")) {
+    return australiaPostTrackingUrl(tn);
+  }
+  return null;
+}
+
 export function formatMoneyFromCents(cents: number, currency: string): string {
   const amount = cents / 100;
   try {

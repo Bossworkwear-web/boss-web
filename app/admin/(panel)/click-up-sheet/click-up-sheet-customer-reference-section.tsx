@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import {
   listCustomerReferenceVisualsForStoreOrderNumber,
+  setCustomerMasterCompanyLogoFromOrderAsset,
   type CustomerReferenceVisualDto,
 } from "./actions";
 
@@ -19,6 +20,7 @@ type Props = {
 export function ClickUpSheetCustomerReferenceSection({ customerOrderId, initialItems }: Props) {
   const [items, setItems] = useState<CustomerReferenceVisualDto[]>(initialItems);
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     const id = customerOrderId.trim();
@@ -48,6 +50,43 @@ export function ClickUpSheetCustomerReferenceSection({ customerOrderId, initialI
       window.clearTimeout(debounce);
     };
   }, [customerOrderId]);
+
+  async function toggleMasterFromAsset(row: CustomerReferenceVisualDto, enabled: boolean) {
+    const orderNumber = customerOrderId.trim();
+    const storageBucket = String(row.storage_bucket ?? "").trim();
+    const storagePath = String(row.storage_path ?? "").trim();
+    if (!orderNumber || !storageBucket || !storagePath) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      const res = await setCustomerMasterCompanyLogoFromOrderAsset({
+        orderNumber,
+        storageBucket,
+        storagePath,
+        enabled,
+      });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      window.dispatchEvent(new Event("customer-master-logo-updated"));
+      setItems((prev) =>
+        prev.map((it) =>
+          it.storage_bucket && it.storage_path
+            ? {
+                ...it,
+                is_master_logo:
+                  enabled ? it.storage_bucket === storageBucket && it.storage_path === storagePath : false,
+              }
+            : it,
+        ),
+      );
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
@@ -93,6 +132,18 @@ export function ClickUpSheetCustomerReferenceSection({ customerOrderId, initialI
               )}
               <div className="border-t border-slate-100 bg-slate-50 px-2 py-1.5">
                 <p className="line-clamp-2 text-[0.65rem] text-slate-600">{row.caption}</p>
+                {!isPdfUrl(row.public_url) && row.storage_bucket && row.storage_path ? (
+                  <label className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-navy/80">
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5"
+                      checked={Boolean(row.is_master_logo)}
+                      disabled={pending}
+                      onChange={(e) => void toggleMasterFromAsset(row, e.target.checked)}
+                    />
+                    Master logo
+                  </label>
+                ) : null}
                 <a
                   href={row.public_url}
                   target="_blank"

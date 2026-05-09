@@ -141,10 +141,15 @@ export type DeliveryBand = {
   fee: number;
 };
 
+/**
+ * First band where both distance and weight fit wins. Note: a hard `maxDistanceKm` cliff means
+ * e.g. 50.1 km skips the previous tier — postcode centroids are coarse, so regional rings use
+ * generous caps vs “road km” intuition.
+ */
 export const DELIVERY_FEE_BANDS: DeliveryBand[] = [
   { maxDistanceKm: 10, maxWeightKg: 5, fee: 8.5 },
   { maxDistanceKm: 25, maxWeightKg: 10, fee: 14.0 },
-  { maxDistanceKm: 50, maxWeightKg: 20, fee: 24.0 },
+  { maxDistanceKm: 100, maxWeightKg: 20, fee: 24.0 },
   { maxDistanceKm: 200, maxWeightKg: 25, fee: 38.0 },
 ];
 

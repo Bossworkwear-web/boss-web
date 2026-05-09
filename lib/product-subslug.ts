@@ -13,6 +13,7 @@ import {
   isBagKeywordProduct,
   isBizCareCatalogProduct,
   isBizCareHatLikeProduct,
+  isChefCategoryDbBucketButGenericApparel,
   isHeadWearKeywordProduct,
   listingLooksLikeCoverallOverallGarment,
   isSocksKeywordProduct,
@@ -341,6 +342,57 @@ export function resolveProductSubSlug(
 ): string {
   const catMeta = { category };
 
+  /**
+   * Workwear/Jumper DB bucket sometimes contains outerwear rows whose title says "Jacket".
+   * Route those to Workwear/Jackets.
+   */
+  const categoryLower = String(category ?? "").toLowerCase();
+  if (/\bjumper\b/.test(categoryLower) && /\bjacket\b/i.test(name)) {
+    return "jackets";
+  }
+
+  /** JB's Wear 6HJNC / 6HJNL / 6HVQS: Workwear → Polos (storefront routing override). */
+  const jbPolosHay = `${name} ${storeSlug ?? ""}`.toUpperCase();
+  if (/\b6HJNC\b/.test(jbPolosHay) || /\b6HJNL\b/.test(jbPolosHay) || /\b6HVQS\b/.test(jbPolosHay)) {
+    return "polos";
+  }
+
+  /** JB's Wear 6DATJ: Workwear → Jackets (storefront routing override). */
+  const jb6datjHay = `${name} ${storeSlug ?? ""}`.toUpperCase();
+  if (/\b6DATJ\b/.test(jb6datjHay)) {
+    return "jackets";
+  }
+
+  /** Syzmik ZP521 / ZP521S: pants, not jackets (storefront routing override). */
+  const zp521Hay = `${name} ${storeSlug ?? ""}`.toUpperCase();
+  if (/\bZP521S?\b/.test(zp521Hay)) {
+    return "pants";
+  }
+
+  /** Syzmik ZP523: pants, not jackets (storefront routing override). */
+  const zp523Hay = `${name} ${storeSlug ?? ""}`.toUpperCase();
+  if (/\bZP523\b/.test(zp523Hay)) {
+    return "pants";
+  }
+
+  /** Syzmik ZMBEAN: Workwear → Head Wear (storefront routing override). */
+  const zmBeanHay = `${name} ${storeSlug ?? ""}`.toUpperCase();
+  if (/\bZMBEAN\b/.test(zmBeanHay)) {
+    return "head-wear";
+  }
+
+  /** Syzmik ZMSOCK3: Workwear → Miscellaneous (storefront routing override). */
+  const zmSock3Hay = `${name} ${storeSlug ?? ""}`.toUpperCase();
+  if (/\bZMSOCK3\b/.test(zmSock3Hay)) {
+    return "miscellaneous";
+  }
+
+  /** Syzmik ZV697 / ZV998 / ZV999: Workwear → Hi-vis Vest (storefront routing override). */
+  const zvVestHay = `${name} ${storeSlug ?? ""}`.toUpperCase();
+  if (/\bZV697\b/.test(zvVestHay) || /\bZV998\b/.test(zvVestHay) || /\bZV999\b/.test(zvVestHay)) {
+    return "hi-vis-vest";
+  }
+
   /** JB's Wear 5BSNP bib apron: requested to list under Chef → Apron. */
   const jbApronHay = `${name} ${storeSlug ?? ""}`.toUpperCase();
   if (/\b5BSNP\b/.test(jbApronHay)) {
@@ -505,6 +557,19 @@ export function resolveProductSubSlug(
   }
 
   const fromCategory = subSlugFromDbCategory(category);
+  if (fromCategory === "chef") {
+    const chefMeta = {
+      category,
+      description,
+      slug: storeSlug ?? null,
+    };
+    if (isChefCategoryDbBucketButGenericApparel(name, chefMeta)) {
+      const inferred = inferSubSlugFromNameHeuristics(name);
+      if (inferred && inferred !== "chef") {
+        return inferred;
+      }
+    }
+  }
   if (fromCategory === "t-shirts") {
     const csvSub = listingStyleCode ? FASHION_BIZ_LISTING_SUBSLUG[listingStyleCode] : undefined;
     if (csvSub !== undefined && csvSub !== "t-shirts") {

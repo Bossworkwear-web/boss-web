@@ -1,5 +1,7 @@
 /**
- * Import Blue Whale reseller Numbers workbook into Supabase `products`.
+ * [Legacy] Import Blue Whale reseller Numbers workbook into Supabase `products`.
+ *
+ * Prefer `import-blue-whale-csv.mjs` (npm run import:blue-whale) — CSV + flat `images/`.
  *
  * Source file: data/supplier/blue-whale/2026-bluewhale-sku-reseller.numbers
  * Images:      data/supplier/blue-whale/images/<STYLE_CODE>/*.jpg

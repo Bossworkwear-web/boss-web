@@ -20,14 +20,14 @@ export default async function AdminCompleteOrdersPage() {
     }
   } catch {
     loadError =
-      "Supabase is not configured or the Complete Orders queue table is missing. Run migrations.";
+      "Supabase is not configured or the Completed Order queue table is missing. Run migrations.";
   }
 
   return (
     <div className="space-y-8">
       <header>
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Admin</p>
-        <h1 className="mt-1 text-3xl font-medium text-brand-navy">Complete Orders</h1>
+        <h1 className="mt-1 text-3xl font-medium text-brand-navy">Completed Order</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
           <Link href="/admin/dispatch" className="font-semibold text-brand-orange hover:underline">
             Dispatch
@@ -41,7 +41,7 @@ export default async function AdminCompleteOrdersPage() {
         aria-labelledby="complete-orders-queue-heading"
       >
         <h2 id="complete-orders-queue-heading" className="text-lg font-semibold text-brand-navy">
-          Complete orders list
+          Completed orders list
         </h2>
         <p className="mt-2 text-sm text-slate-600">
           같은 주문을 Dispatch에서 다시 <strong>Complete</strong>하면 이 목록의 순서·시각만 갱신됩니다.

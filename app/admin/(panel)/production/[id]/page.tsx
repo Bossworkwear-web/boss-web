@@ -9,6 +9,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase";
 import { StoreOrderBarcode } from "@/app/components/store-order-barcode";
 import { storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
 
+import { listClickUpMockupsByStoreOrderNumber } from "@/app/admin/(panel)/click-up-sheet/actions";
 import { hasProductionPackForStoreOrder } from "../actions";
 import { ProductionPackNotStarted } from "./production-pack-not-started";
 import { ProductionWorkspace } from "./production-workspace";
@@ -112,13 +113,16 @@ export default async function AdminProductionOrderPage({
       <div className="production-pack-print-area space-y-4 py-8">
         {completeOrdersDocumentsView ? (
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 print:hidden">
-            Complete Orders 문서 보기 모드: 생산 팩이 시작되지 않은 주문입니다. 아래는 참고용입니다.
+            Completed Order 문서 보기 모드: 생산 팩이 시작되지 않은 주문입니다. 아래는 참고용입니다.
           </div>
         ) : null}
         <ProductionPackNotStarted orderNumber={order.order_number} />
       </div>
     );
   }
+
+  const mockupsRes = await listClickUpMockupsByStoreOrderNumber(order.order_number);
+  const initialMockupImages = mockupsRes.ok ? mockupsRes.images : [];
 
   const sp = spEarly;
   const qcMoveErrorRaw = (sp.qc_move_error ?? "").trim();
@@ -143,7 +147,7 @@ export default async function AdminProductionOrderPage({
         ) : null}
         {completeOrdersDocumentsView ? (
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 print:hidden">
-            Complete Orders 문서 보기 모드: 생산 파일 업로드·삭제 및 Move to QC는 비활성화됩니다.
+            Completed Order 문서 보기 모드: 생산 파일 업로드·삭제 및 Move to QC는 비활성화됩니다.
           </div>
         ) : null}
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -232,6 +236,7 @@ export default async function AdminProductionOrderPage({
       <ProductionWorkspace
         orderId={orderId}
         orderNumber={order.order_number}
+        initialMockupImages={initialMockupImages}
         completeOrdersDocumentsView={completeOrdersDocumentsView}
       />
     </div>

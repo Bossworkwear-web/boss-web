@@ -1,7 +1,10 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 
 import { DocketPrintBar } from "@/app/admin/(panel)/store-orders/[id]/docket/docket-print-bar";
 import { serviceTypeColoredContent } from "@/lib/service-type-colored";
+import { resolveStorefrontImageUrlList } from "@/lib/storefront-image-url";
+import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +38,7 @@ export default async function OrderedItemsListPage({ params }: Props) {
   const { data: order, error } = await supabase
     .from("store_orders")
     .select(
-      "order_number, delivery_address, customer_name, customer_email, tracking_number, created_at",
+      "order_number, delivery_address, customer_name, customer_email, tracking_number, created_at, subtotal_cents, total_cents, currency",
     )
     .eq("id", id)
     .maybeSingle();
@@ -47,10 +50,26 @@ export default async function OrderedItemsListPage({ params }: Props) {
   const { data: lines } = await supabase
     .from("store_order_items")
     .select(
-      "product_name, quantity, color, size, service_type, notes, placements, sort_order",
+      "product_id, product_name, quantity, color, size, service_type, notes, placements, sort_order",
     )
     .eq("order_id", id)
     .order("sort_order", { ascending: true });
+
+  const productIds = [...new Set((lines ?? []).map((l) => String((l as { product_id?: string | null }).product_id ?? "").trim()).filter(Boolean))];
+  const { data: products } =
+    productIds.length > 0
+      ? await supabase.from("products").select("id, image_urls").in("id", productIds)
+      : { data: [] as any[] };
+  const imageByProductId = new Map<string, string>();
+  for (const p of products ?? []) {
+    const pid = String((p as { id?: string }).id ?? "").trim();
+    if (!pid) continue;
+    const urls = resolveStorefrontImageUrlList((p as { image_urls?: string[] | null }).image_urls ?? null);
+    const first = urls[0] ?? "";
+    if (first) {
+      imageByProductId.set(pid, first);
+    }
+  }
 
   const itemsHint = (
     <>
@@ -121,11 +140,23 @@ export default async function OrderedItemsListPage({ params }: Props) {
           letter-spacing: 0.06em;
           color: #475569;
         }
+        .ordered-item-product { display: flex; flex-direction: column; gap: 6px; }
+        .ordered-item-product-img { width: 140px; height: 140px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; object-fit: contain; }
+        /* Reduce font size for Product/Qty/Color/Size/Service columns by ~30%. */
+        .ordered-items-table th:nth-child(-n+5),
+        .ordered-items-table td:nth-child(-n+5) {
+          font-size: 70%;
+        }
       `}</style>
-      <DocketPrintBar printButtonLabel="Print ordered items list" hint={itemsHint} />
+      <DocketPrintBar printButtonLabel="Print order info" hint={itemsHint} />
       <div className="docket-page p-4">
         <div className="docket-box">
-          <p className="docket-label">Ordered items list</p>
+          <div className="no-print mb-3 flex flex-wrap items-center justify-between gap-3">
+            <Link href="/admin/store-orders" className="text-sm font-semibold text-brand-orange hover:underline">
+              ← Back to Store orders
+            </Link>
+          </div>
+          <p className="docket-label">Order info</p>
           <p className="docket-h1 font-mono">{order.order_number}</p>
           <p className="mt-2 text-sm">
             <span className="font-medium">{order.customer_name}</span>
@@ -133,6 +164,15 @@ export default async function OrderedItemsListPage({ params }: Props) {
           </p>
           <p className="mt-1 text-xs text-slate-600">
             Order date: {new Date(order.created_at).toLocaleString("en-AU", { dateStyle: "medium" })}
+          </p>
+          <p className="mt-1 text-xs text-slate-600">
+            Amount:{" "}
+            <span className="font-semibold text-slate-800">
+              {formatMoneyFromCents(order.total_cents ?? 0, order.currency ?? "AUD")}
+            </span>{" "}
+            <span className="text-slate-500">
+              (subtotal {formatMoneyFromCents(order.subtotal_cents ?? 0, order.currency ?? "AUD")})
+            </span>
           </p>
           {order.tracking_number ? (
             <p className="mt-2 font-mono text-sm font-semibold">Tracking: {order.tracking_number}</p>
@@ -168,7 +208,21 @@ export default async function OrderedItemsListPage({ params }: Props) {
                 ) : (
                   (lines ?? []).map((line, i) => (
                     <tr key={`${line.product_name}-${i}`}>
-                      <td className="font-medium">{line.product_name}</td>
+                      <td className="font-medium">
+                        <div className="ordered-item-product">
+                          <span>{line.product_name}</span>
+                          {(() => {
+                            const pid = String((line as { product_id?: string | null }).product_id ?? "").trim();
+                            const src = pid ? imageByProductId.get(pid) ?? "" : "";
+                            return src ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={src} alt="" className="ordered-item-product-img" loading="lazy" />
+                            ) : (
+                              <div className="ordered-item-product-img" aria-hidden />
+                            );
+                          })()}
+                        </div>
+                      </td>
                       <td className="tabular-nums">{line.quantity}</td>
                       <td>{line.color?.trim() || "—"}</td>
                       <td>{line.size?.trim() || "—"}</td>

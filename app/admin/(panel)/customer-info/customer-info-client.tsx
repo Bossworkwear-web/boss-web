@@ -1,0 +1,513 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState, useTransition } from "react";
+
+import { ImageUrlLightbox } from "@/app/components/image-url-lightbox";
+
+import {
+  deleteCustomerMasterLogo,
+  deleteCustomerSpecialRequest,
+  deleteClickUpSheetImageForCustomerInfo,
+  getCustomerInfoPayload,
+  replaceCustomerMasterLogo,
+  searchCustomersForCustomerInfo,
+  updateCustomerProfile,
+  upsertCustomerSpecialRequest,
+  type CustomerInfoPayload,
+} from "./actions";
+
+function audFromCents(cents: number): string {
+  const n = Number(cents ?? 0) / 100;
+  return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(n);
+}
+
+export function CustomerInfoClient() {
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<Array<{ email: string; name: string | null; phone: string | null; organisation: string | null }>>([]);
+  const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
+  const [payload, setPayload] = useState<CustomerInfoPayload | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const [logoLightboxOpen, setLogoLightboxOpen] = useState(false);
+  const [masterLogoFile, setMasterLogoFile] = useState<File | null>(null);
+
+  const profileStats = useMemo(() => {
+    if (!payload) return null;
+    const ordersCount = payload.orderHistory.length;
+    const totalCents = payload.orderHistory.reduce((sum, o) => sum + (Number.isFinite(o.total_cents) ? o.total_cents : 0), 0);
+
+    let years: number | null = null;
+    const createdAt = payload.profile?.created_at;
+    if (createdAt) {
+      const t = new Date(createdAt).getTime();
+      if (Number.isFinite(t)) {
+        const ms = Date.now() - t;
+        years = ms > 0 ? ms / (365.25 * 24 * 60 * 60 * 1000) : 0;
+      }
+    }
+
+    return {
+      ordersCount,
+      totalLabel: audFromCents(totalCents),
+      yearsLabel: years == null ? "—" : `${years.toFixed(1)} yrs`,
+    };
+  }, [payload]);
+
+  const profileDraft = useMemo(() => {
+    const p = payload?.profile;
+    if (!p) return null;
+    return {
+      profileId: p.id,
+      customer_name: p.customer_name,
+      organisation: p.organisation,
+      contact_number: p.contact_number,
+      delivery_address: p.delivery_address,
+      billing_address: p.billing_address,
+    };
+  }, [payload?.profile]);
+  const [profileForm, setProfileForm] = useState<typeof profileDraft>(null);
+
+  const [specialRequestBody, setSpecialRequestBody] = useState("");
+
+  useEffect(() => {
+    if (profileDraft) {
+      setProfileForm(profileDraft);
+    } else {
+      setProfileForm(null);
+    }
+  }, [profileDraft]);
+
+  useEffect(() => {
+    setSpecialRequestBody(payload?.specialRequest?.body ?? "");
+  }, [payload?.specialRequest?.body]);
+
+  function runSearch() {
+    setError(null);
+    startTransition(() => {
+      void (async () => {
+        const res = await searchCustomersForCustomerInfo(q);
+        if (!res.ok) {
+          setError(res.error);
+          setHits([]);
+          return;
+        }
+        setHits(res.hits);
+      })();
+    });
+  }
+
+  function loadCustomer(email: string) {
+    setSelectedEmail(email);
+    setError(null);
+    setMasterLogoFile(null);
+    startTransition(() => {
+      void (async () => {
+        const res = await getCustomerInfoPayload(email);
+        if (!res.ok) {
+          setError(res.error);
+          setPayload(null);
+          return;
+        }
+        setPayload(res.payload);
+      })();
+    });
+  }
+
+  async function saveProfile() {
+    if (!profileForm) return;
+    setError(null);
+    startTransition(() => {
+      void (async () => {
+        const res = await updateCustomerProfile(profileForm);
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        if (selectedEmail) {
+          loadCustomer(selectedEmail);
+        }
+      })();
+    });
+  }
+
+  async function saveSpecialRequest() {
+    const email = selectedEmail ?? payload?.email ?? "";
+    if (!email) return;
+    setError(null);
+    startTransition(() => {
+      void (async () => {
+        const res = await upsertCustomerSpecialRequest({ customerEmail: email, body: specialRequestBody });
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        loadCustomer(email);
+      })();
+    });
+  }
+
+  async function clearSpecialRequest() {
+    const email = selectedEmail ?? payload?.email ?? "";
+    if (!email) return;
+    setError(null);
+    startTransition(() => {
+      void (async () => {
+        const res = await deleteCustomerSpecialRequest({ customerEmail: email });
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        loadCustomer(email);
+      })();
+    });
+  }
+
+  async function clearMasterLogo() {
+    const email = selectedEmail ?? payload?.email ?? "";
+    if (!email) return;
+    setError(null);
+    startTransition(() => {
+      void (async () => {
+        const res = await deleteCustomerMasterLogo({ customerEmail: email });
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        loadCustomer(email);
+      })();
+    });
+  }
+
+  async function uploadMasterLogo() {
+    const email = selectedEmail ?? payload?.email ?? "";
+    if (!email || !masterLogoFile) return;
+    setError(null);
+    startTransition(() => {
+      void (async () => {
+        const res = await replaceCustomerMasterLogo({ customerEmail: email, file: masterLogoFile });
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setMasterLogoFile(null);
+        loadCustomer(email);
+      })();
+    });
+  }
+
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+            <Link href="/admin" className="text-brand-orange hover:underline">
+              Dashboard
+            </Link>{" "}
+            / Customer info
+          </p>
+          <h1 className="mt-1 text-3xl font-medium text-brand-navy">Customer info</h1>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            Search by <strong>name</strong>, <strong>email</strong>, or <strong>phone</strong>. Then view/update profile, master logo,
+            order history, mock-up history, and special requests.
+          </p>
+        </div>
+      </header>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Search</h2>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="e.g. alice@company.com / Alice / 04xx"
+            className="min-w-[min(28rem,100%)] flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            onClick={runSearch}
+            disabled={pending || !q.trim()}
+            className="rounded-lg border border-brand-orange bg-brand-orange px-4 py-2 text-sm font-semibold text-brand-navy hover:brightness-95 disabled:opacity-50"
+          >
+            {pending ? "…" : "Search"}
+          </button>
+        </div>
+        {error ? (
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>
+        ) : null}
+        {hits.length ? (
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {hits.map((h) => (
+              <li key={h.email}>
+                <button
+                  type="button"
+                  onClick={() => loadCustomer(h.email)}
+                  className={`w-full rounded-xl border px-4 py-3 text-left shadow-sm transition ${
+                    selectedEmail === h.email ? "border-brand-orange bg-brand-orange/5" : "border-slate-200 bg-white hover:bg-slate-50"
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-brand-navy">{h.email}</p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    {(h.organisation ?? "").trim() || "—"} · {(h.name ?? "").trim() || "—"} · {(h.phone ?? "").trim() || "—"}
+                  </p>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+
+      {payload ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Master logo</h2>
+            {payload.masterLogo ? (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => setLogoLightboxOpen(true)}
+                  className="flex w-full cursor-zoom-in items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-6"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={payload.masterLogo.public_url}
+                    alt="Master logo"
+                    className="pointer-events-none h-60 w-full max-w-[54rem] object-contain"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={clearMasterLogo}
+                    disabled={pending}
+                    className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                  >
+                    Clear master logo
+                  </button>
+                  <p className="text-xs text-slate-500">
+                    Stored as {payload.masterLogo.storage_bucket}/{payload.masterLogo.storage_path}
+                  </p>
+                </div>
+                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Replace master logo</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={pending}
+                      onChange={(e) => setMasterLogoFile(e.target.files?.[0] ?? null)}
+                      className="text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={uploadMasterLogo}
+                      disabled={pending || !masterLogoFile || !payload.email}
+                      className="rounded-lg border border-brand-orange bg-brand-orange px-4 py-2 text-sm font-semibold text-brand-navy hover:brightness-95 disabled:opacity-50"
+                    >
+                      {pending ? "…" : "Upload & replace"}
+                    </button>
+                  </div>
+                  {masterLogoFile ? (
+                    <p className="mt-2 text-xs text-slate-600">Selected: {masterLogoFile.name}</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3">
+                <p className="text-sm text-slate-600">No master logo set.</p>
+                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Upload master logo</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={pending}
+                      onChange={(e) => setMasterLogoFile(e.target.files?.[0] ?? null)}
+                      className="text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={uploadMasterLogo}
+                      disabled={pending || !masterLogoFile || !payload.email}
+                      className="rounded-lg border border-brand-orange bg-brand-orange px-4 py-2 text-sm font-semibold text-brand-navy hover:brightness-95 disabled:opacity-50"
+                    >
+                      {pending ? "…" : "Upload"}
+                    </button>
+                  </div>
+                  {masterLogoFile ? (
+                    <p className="mt-2 text-xs text-slate-600">Selected: {masterLogoFile.name}</p>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
+            <ImageUrlLightbox
+              open={logoLightboxOpen}
+              onClose={() => setLogoLightboxOpen(false)}
+              src={payload.masterLogo?.public_url ?? ""}
+              ariaLabel="Enlarged master logo"
+              enlarged
+            />
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Customer profile</h2>
+            {profileStats ? (
+              <p className="mt-2 text-sm text-slate-700">
+                <span className="font-semibold text-brand-navy">{profileStats.ordersCount}</span> orders ·{" "}
+                <span className="font-semibold text-brand-navy">{profileStats.totalLabel}</span> total ·{" "}
+                <span className="font-semibold text-brand-navy">{profileStats.yearsLabel}</span> member
+              </p>
+            ) : null}
+            {!payload.profile ? (
+              <p className="mt-3 text-sm text-slate-600">No `customer_profiles` row for this email.</p>
+            ) : profileForm ? (
+              <div className="mt-3 space-y-3">
+                {(
+                  [
+                    ["Organisation", "organisation"],
+                    ["Customer name", "customer_name"],
+                    ["Phone", "contact_number"],
+                    ["Delivery address", "delivery_address"],
+                    ["Billing address", "billing_address"],
+                  ] as const
+                ).map(([label, key]) => (
+                  <label key={key} className="block">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</span>
+                    <textarea
+                      rows={key.includes("address") ? 3 : 1}
+                      value={profileForm[key]}
+                      onChange={(e) => setProfileForm((cur) => (cur ? { ...cur, [key]: e.target.value } : cur))}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    />
+                  </label>
+                ))}
+                <button
+                  type="button"
+                  onClick={saveProfile}
+                  disabled={pending}
+                  className="rounded-lg border border-brand-orange bg-brand-orange px-4 py-2 text-sm font-semibold text-brand-navy hover:brightness-95 disabled:opacity-50"
+                >
+                  Save profile
+                </button>
+              </div>
+            ) : null}
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Special request</h2>
+            <textarea
+              className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              rows={6}
+              value={specialRequestBody}
+              onChange={(e) => setSpecialRequestBody(e.target.value)}
+              placeholder="Internal notes / special request…"
+            />
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={saveSpecialRequest}
+                disabled={pending || !payload.email}
+                className="rounded-lg border border-brand-orange bg-brand-orange px-4 py-2 text-sm font-semibold text-brand-navy hover:brightness-95 disabled:opacity-50"
+              >
+                Save special request
+              </button>
+              <button
+                type="button"
+                onClick={clearSpecialRequest}
+                disabled={pending || !payload.email}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Clear
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Customer order history</h2>
+            {payload.orderHistory.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-600">No orders found for this email.</p>
+            ) : (
+              <ul className="mt-3 space-y-2 text-sm">
+                {payload.orderHistory.map((o) => (
+                  <li key={o.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <p className="font-semibold text-brand-navy">
+                      <Link href={`/admin/store-orders?q=${encodeURIComponent(o.order_number)}`} className="hover:underline">
+                        {o.order_number}
+                      </Link>{" "}
+                      <span className="font-normal text-slate-500">· {o.status}</span>
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      Subtotal {audFromCents(o.subtotal_cents)} · Total {audFromCents(o.total_cents)} · {o.created_at}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">All mock-up history</h2>
+            {payload.mockupHistory.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-600">No click-up sheet images found for this customer’s orders.</p>
+            ) : (
+              <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {payload.mockupHistory.map((m) => (
+                  <li key={m.id} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={m.public_url} alt="" className="h-44 w-full bg-white object-contain" loading="lazy" />
+                    <div className="border-t border-slate-100 bg-slate-50 px-3 py-2">
+                      <p className="text-xs font-semibold text-brand-navy">
+                        {m.is_mockup ? "Mock-up" : "Reference"} · {m.customer_order_id}
+                      </p>
+                      <p className="mt-1 text-[0.7rem] text-slate-600">
+                        {m.list_date} · {m.created_at}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => {
+                            if (!window.confirm("Delete this click-up sheet image?")) return;
+                            startTransition(() => {
+                              void (async () => {
+                                const res = await deleteClickUpSheetImageForCustomerInfo({ imageId: m.id });
+                                if (!res.ok) {
+                                  setError(res.error);
+                                  return;
+                                }
+                                const email = selectedEmail ?? payload?.email ?? "";
+                                if (email) {
+                                  loadCustomer(email);
+                                }
+                              })();
+                            });
+                          }}
+                          className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                        <a
+                          href={m.public_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Open
+                        </a>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+

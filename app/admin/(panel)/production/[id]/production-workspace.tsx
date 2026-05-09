@@ -121,17 +121,19 @@ async function downloadProductionFile(url: string, filename: string) {
 export function ProductionWorkspace({
   orderId,
   orderNumber,
+  initialMockupImages = [],
   completeOrdersDocumentsView = false,
 }: {
   orderId: string;
   orderNumber: string;
-  /** Complete Orders pre-process doc hub: no upload/delete. */
+  initialMockupImages?: ClickUpSheetImageDto[];
+  /** Completed Order pre-process doc hub: no upload/delete. */
   completeOrdersDocumentsView?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [assets, setAssets] = useState<ProductionAssetDto[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [mockupImages, setMockupImages] = useState<ClickUpSheetImageDto[]>([]);
+  const [mockupImages, setMockupImages] = useState<ClickUpSheetImageDto[]>(initialMockupImages);
   const [mockupsError, setMockupsError] = useState<string | null>(null);
   const [mockupLightboxSrc, setMockupLightboxSrc] = useState<string | null>(null);
   /** Which mock-up row shows file / sheet metadata (collapsed on screen to save space; always shown when printing). */
@@ -248,7 +250,7 @@ export function ProductionWorkspace({
 
       {completeOrdersDocumentsView ? (
         <p className="mt-5 text-sm text-slate-600 print:hidden">
-          Complete Orders 문서 보기 모드: 생산 파일을 추가·삭제할 수 없습니다.
+          Completed Order 문서 보기 모드: 생산 파일을 추가·삭제할 수 없습니다.
         </p>
       ) : (
         <div className="mt-5 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 print:hidden">

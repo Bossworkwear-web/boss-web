@@ -1,5 +1,5 @@
 /** Customer-facing quote enquiries (mailto from storefront CTAs). */
-export const STOREFRONT_QUOTE_EMAIL_RECIPIENT = "bossworkwear@hotmail.com";
+export const STOREFRONT_QUOTE_EMAIL_RECIPIENT = "info@bossworkwear.au";
 
 export function storefrontQuoteEnquiryMailtoHref(): string {
   const subject = encodeURIComponent("Quote enquiry");

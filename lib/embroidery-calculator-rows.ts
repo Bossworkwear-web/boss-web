@@ -25,16 +25,17 @@ export const EMBROIDERY_CALCULATOR_ROWS: readonly EmbroideryCalculatorRow[] = [
 
 /**
  * Line-level quantity discount (applies to unit × qty for that line). Highest tier only.
+ * Same tiers as storefront PDP volume discount (10 / 25 / 50 / 100+).
  */
 export function embroideryQtyDiscountRate(qty: number): number {
   if (qty >= 100) {
-    return 0.2;
-  }
-  if (qty >= 50) {
     return 0.15;
   }
-  if (qty >= 20) {
+  if (qty >= 50) {
     return 0.1;
+  }
+  if (qty >= 25) {
+    return 0.075;
   }
   if (qty >= 10) {
     return 0.05;

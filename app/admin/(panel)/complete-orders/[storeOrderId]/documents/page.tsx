@@ -83,17 +83,17 @@ export default async function CompleteOrderDocumentsPage({
       <header>
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
           <Link href="/admin/complete-orders" className="text-brand-orange hover:underline">
-            Complete Orders
+            Completed Order
           </Link>{" "}
           / Documents
         </p>
         <h1 className="mt-1 text-3xl font-medium text-brand-navy">Pre-process documents</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
           이 주문(<span className="font-mono font-semibold">{orderNumber}</span>)에 쓰인 Click up·생산·품질·창고·스토어
-          서류로 바로 갈 수 있습니다. Perth sheet 날짜·Order ID는 Complete Orders에서 넘어온 값입니다.
+          서류로 바로 갈 수 있습니다. Perth sheet 날짜·Order ID는 Completed Order에서 넘어온 값입니다.
         </p>
         <p className="mt-3 max-w-3xl rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          아래 링크는 <strong>참고·열람</strong>용입니다. Complete Orders에 올라온 주문은 연결된 화면에서도{" "}
+          아래 링크는 <strong>참고·열람</strong>용입니다. Completed Order에 올라온 주문은 연결된 화면에서도{" "}
           <strong>DB·대기열을 바꾸는 작업</strong>(시트 수정, 생산 자산 업로드, Click up 이미지, QC/Dispatch 이동 등)이
           서버에서 막힙니다.
         </p>
@@ -102,7 +102,7 @@ export default async function CompleteOrderDocumentsPage({
             <strong>Perth sheet date</strong>가 비어 있으면 Click up / Quality Check / Complete statement 링크가
             불완전할 수 있습니다.{" "}
             <Link href="/admin/complete-orders" className="font-semibold text-brand-orange hover:underline">
-              Complete Orders 목록
+              Completed Order 목록
             </Link>
             의 <strong>VIEW</strong>를 사용하세요.
           </p>
@@ -212,7 +212,7 @@ export default async function CompleteOrderDocumentsPage({
 
       <p className="text-sm text-slate-600">
         <Link href="/admin/complete-orders" className="font-semibold text-brand-orange hover:underline">
-          ← Complete Orders 목록
+          ← Completed Order 목록
         </Link>
       </p>
     </div>

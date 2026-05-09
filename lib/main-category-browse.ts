@@ -5,6 +5,7 @@ import {
   isBizCollectionWomensShirtsExclusiveListing,
   isFashionBizMensJacketsToWomensShirtsExclusiveListing,
   isFashionBizMensJumperToWomensJumperExclusiveListing,
+  isWomensBrowseJacketOrVestMisfiledAsShirts,
   isFashionBizPolosWomensExclusiveListing,
   isFashionBizShirtsWomensExclusiveListing,
   isBisleyMensPantsExclusiveListing,
@@ -404,6 +405,30 @@ function resolveWorkwearCategoryBrowseSubSlug(
   if (resolved == null || resolved === "") {
     return null;
   }
+
+  // Workwear/Jumper sometimes receives rows whose name clearly says "Jacket".
+  // Always show those under Workwear/Jackets (must be before JB jumper-forcing rules).
+  {
+    const blob = workwearCategoryBrowseTextBlob(item);
+    if (/\bjacket\b/i.test(blob)) {
+      return "jackets";
+    }
+  }
+
+  // Workwear/Pants sometimes receives work shirt rows (especially JB "W/shirt").
+  // If the row text says "shirt" (but not T-shirt/tee), force to Workwear/Shirts.
+  {
+    const blob = workwearCategoryBrowseTextBlob(item).toLowerCase();
+    const saysShirt =
+      blob.includes("shirt") &&
+      !blob.includes("t-shirt") &&
+      !blob.includes("t shirt") &&
+      !blob.includes("tee");
+    if (saysShirt) {
+      return "shirts";
+    }
+  }
+
   if (isWorkwearJb6962MiscExclusiveListing(item.name, workwearRowMeta)) {
     return "miscellaneous";
   }
@@ -441,8 +466,21 @@ function resolveWorkwearCategoryBrowseSubSlug(
     return "t-shirts";
   }
   // Workwear/Pants sometimes receives woven shirts via supplier folders; always list under Workwear/Shirts.
-  if (resolved === "pants" && looksLikeWorkwearWovenShirtRow(item)) {
-    return "shirts";
+  if (resolved === "pants") {
+    // Explicit: if the listing says "shirt", it must not stay under pants.
+    const nameLower = item.name.toLowerCase();
+    const saysShirt =
+      nameLower.includes("shirt") &&
+      !nameLower.includes("t-shirt") &&
+      !nameLower.includes("t shirt") &&
+      !nameLower.includes("tee shirt") &&
+      !nameLower.includes("tee");
+    if (saysShirt) {
+      return "shirts";
+    }
+    if (looksLikeWorkwearWovenShirtRow(item)) {
+      return "shirts";
+    }
   }
   if (
     (resolved === "shirts" || resolved === "work-shirts") &&
@@ -557,7 +595,7 @@ function resolveWomensCategoryBrowseSubSlug(resolved: string | null, item: Categ
     return "shirts";
   }
   if (isFashionBizMensJacketsToWomensShirtsExclusiveListing(item.name, womensExclusiveMeta)) {
-    return "shirts";
+    return "jackets";
   }
   if (isFashionBizMensJumperToWomensJumperExclusiveListing(item.name, womensExclusiveMeta)) {
     return "jumper";
@@ -586,6 +624,14 @@ function resolveWomensCategoryBrowseSubSlug(resolved: string | null, item: Categ
     })
   ) {
     return "jumper";
+  }
+  if (
+    resolved === "shirts" &&
+    !isBizCollectionWomensShirtsExclusiveListing(item.name, womensExclusiveMeta) &&
+    !isFashionBizShirtsWomensExclusiveListing(item.name, womensExclusiveMeta) &&
+    isWomensBrowseJacketOrVestMisfiledAsShirts(item.name, womensExclusiveMeta)
+  ) {
+    return "jackets";
   }
   return resolved;
 }

@@ -1,6 +1,6 @@
 export function appendClickUpCompleteOrdersQueueSetupHint(originalMessage: string): string {
   const m = originalMessage.toLowerCase();
-  /** Table or RPC for Complete Orders; avoid matching generic "schema cache" alone. */
+  /** Table or RPC for Completed Order; avoid matching generic "schema cache" alone. */
   if (
     m.includes("click_up_complete_orders_queue") ||
     m.includes("move_store_order_from_delivery_to_complete") ||

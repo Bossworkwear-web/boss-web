@@ -118,7 +118,7 @@ function CategoryInlineNav({
   navSubsByMain: Record<string, readonly StorefrontNavSub[]>;
 }) {
   const pillBase =
-    "inline-flex shrink-0 items-center rounded-full px-2.5 py-1.5 text-[1.17rem] font-semibold leading-snug transition sm:px-3 sm:py-2 sm:text-[1.365rem]";
+    "inline-flex shrink-0 items-center rounded-full px-2 py-1 text-[0.825rem] font-semibold leading-snug transition sm:px-2.5 sm:py-1.5 sm:text-[0.95rem]";
   const pillIdle = "text-brand-navy/90 hover:bg-brand-surface hover:text-brand-navy";
   const pillActive = "bg-brand-navy text-white";
 
@@ -158,7 +158,7 @@ function CategoryInlineNav({
                       <li key={sub.slug}>
                         <Link
                           href={subHref}
-                          className={`block px-4 py-2.5 text-left text-[1.365rem] font-normal leading-snug transition hover:bg-brand-surface ${
+                          className={`block px-4 py-2 text-left text-[0.95rem] font-normal leading-snug transition hover:bg-brand-surface ${
                             subActive ? "bg-brand-surface font-semibold text-brand-navy" : "text-brand-navy/85"
                           }`}
                           aria-current={subActive ? "page" : undefined}
@@ -224,8 +224,10 @@ function HeaderSearchFormInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const el = inputRef.current;
     if (!el) {
       return;
@@ -251,6 +253,7 @@ function HeaderSearchFormInner() {
         placeholder="Name or style code"
         suppressHydrationWarning
         className={HEADER_SEARCH_INPUT_CLASS}
+        autoFocus={mounted}
       />
       <button
         type="submit"
@@ -263,20 +266,52 @@ function HeaderSearchFormInner() {
   );
 }
 
-function HeaderSearchForm() {
-  return (
-    <Suspense fallback={<HeaderSearchFormView />}>
-      <HeaderSearchFormInner />
-    </Suspense>
+function HeaderSearchToggle({
+  open,
+  onOpen,
+  onClose,
+}: {
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+}) {
+  return open ? (
+    <div className="flex max-w-full items-center gap-1.5">
+      <Suspense fallback={<HeaderSearchFormView />}>
+        <HeaderSearchFormInner />
+      </Suspense>
+      <button
+        type="button"
+        onClick={onClose}
+        className="inline-flex shrink-0 items-center justify-center rounded-full p-2 text-brand-navy transition hover:bg-brand-surface sm:p-2.5"
+        aria-label="Close search"
+      >
+        <span className="text-xl leading-none sm:text-2xl" aria-hidden>
+          ×
+        </span>
+      </button>
+    </div>
+  ) : (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="inline-flex shrink-0 items-center justify-center rounded-full p-2 text-brand-navy transition hover:bg-brand-surface sm:p-2.5"
+      aria-label="Open search"
+    >
+      <SearchIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+    </button>
   );
 }
 
 export function TopNavClient({ navSubsByMain }: { navSubsByMain: Record<string, readonly StorefrontNavSub[]> }) {
   const pathname = usePathname();
+  const router = useRouter();
   const headerShellRef = useRef<HTMLElement | null>(null);
   const cartCount = useCartCount();
   const [customerName, setCustomerName] = useState("");
+  const [logoutNoticeVisible, setLogoutNoticeVisible] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [productSidebarNav, setProductSidebarNav] = useState<ProductSidebarNav | null>(null);
   const [headerElevated, setHeaderElevated] = useState(false);
 
@@ -374,6 +409,34 @@ export function TopNavClient({ navSubsByMain }: { navSubsByMain: Record<string, 
   }, [pathname]);
 
   useEffect(() => {
+    if (!searchOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSearchOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [searchOpen]);
+
+  useEffect(() => {
+    if (!logoutNoticeVisible) {
+      return;
+    }
+    const id = window.setTimeout(() => setLogoutNoticeVisible(false), 5000);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setLogoutNoticeVisible(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.clearTimeout(id);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [logoutNoticeVisible]);
+
+  useEffect(() => {
     if (!mobileNavOpen || typeof window === "undefined") {
       return;
     }
@@ -392,6 +455,15 @@ export function TopNavClient({ navSubsByMain }: { navSubsByMain: Record<string, 
     document.cookie = "customer_delivery_address=; Max-Age=0; path=/";
     clearCartItems();
     setCustomerName("");
+    setMobileNavOpen(false);
+    setLogoutNoticeVisible(true);
+    const leaveToHome =
+      pathname === "/customer" ||
+      pathname.startsWith("/customer/") ||
+      pathname === "/customer-details";
+    if (leaveToHome) {
+      router.push("/");
+    }
   }
 
   return (
@@ -423,7 +495,7 @@ export function TopNavClient({ navSubsByMain }: { navSubsByMain: Record<string, 
                 alt="Boss Workwear"
                 width={240}
                 height={72}
-                className="h-16 w-auto sm:h-[4.5rem]"
+                className="h-[3.2rem] w-auto sm:h-[3.6rem]"
                 priority
               />
             </Link>
@@ -438,7 +510,11 @@ export function TopNavClient({ navSubsByMain }: { navSubsByMain: Record<string, 
           </div>
 
           <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 md:gap-3">
-            <HeaderSearchForm />
+            <HeaderSearchToggle
+              open={searchOpen}
+              onOpen={() => setSearchOpen(true)}
+              onClose={() => setSearchOpen(false)}
+            />
             {customerName ? (
               <>
                 <Link
@@ -525,6 +601,29 @@ export function TopNavClient({ navSubsByMain }: { navSubsByMain: Record<string, 
                 onNavigate={() => setMobileNavOpen(false)}
               />
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {logoutNoticeVisible ? (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 p-5 sm:p-8"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="logout-notice-title"
+          aria-describedby="logout-notice-desc"
+          onClick={() => setLogoutNoticeVisible(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-3xl border border-brand-navy/10 bg-white px-8 py-8 text-center shadow-2xl sm:max-w-xl sm:px-12 sm:py-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p id="logout-notice-title" className="text-xl font-semibold text-brand-navy sm:text-2xl">
+              Signed out
+            </p>
+            <p id="logout-notice-desc" className="mt-4 text-lg leading-snug text-brand-navy/80 sm:mt-5 sm:text-xl">
+              You have been logged out.
+            </p>
           </div>
         </div>
       ) : null}

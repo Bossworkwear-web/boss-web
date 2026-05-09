@@ -63,9 +63,9 @@ export default async function AdminDispatchPage({ searchParams }: PageProps) {
           같은 주문에서 <strong>Move to Dispatch</strong>를 다시 누르면 목록 순서만 갱신됩니다. 출고가 끝나면{" "}
           <strong>Complete</strong>를 누르면 이 행은 Dispatch 목록에서 사라지고{" "}
           <Link href="/admin/complete-orders" className="font-semibold text-brand-orange hover:underline">
-            Complete Orders
+            Completed Order
           </Link>{" "}
-          로 이동하며, 화면은 Complete Orders로 열립니다.
+          로 이동하며, 화면은 Completed Order로 열립니다.
         </p>
         {completeError ? (
           <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-950">

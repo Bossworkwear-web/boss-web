@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+import { appendWarehouseStockHref } from "@/lib/admin-warehouse-stock-query";
+import { appendWarehouseManagerSupplierOrdersHref } from "@/lib/supplier-orders-warehouse-manager";
+
 export default function WarehouseManagerPage() {
   return (
     <div className="space-y-8">
@@ -32,7 +35,7 @@ export default function WarehouseManagerPage() {
 
       <section className="grid gap-4 sm:grid-cols-2">
         <Link
-          href="/admin/supplier-orders"
+          href={appendWarehouseManagerSupplierOrdersHref("/admin/supplier-orders")}
           className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-brand-orange/40"
         >
           <h3 className="font-semibold text-brand-navy">Supplier orders</h3>
@@ -46,7 +49,7 @@ export default function WarehouseManagerPage() {
           <p className="mt-1 text-sm text-slate-600">고객 주문 · 배송 도크</p>
         </Link>
         <Link
-          href="/admin/stock"
+          href={appendWarehouseStockHref("/admin/stock")}
           className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-brand-orange/40"
         >
           <h3 className="font-semibold text-brand-navy">Stock</h3>

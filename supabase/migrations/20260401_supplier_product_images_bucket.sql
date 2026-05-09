@@ -1,4 +1,4 @@
--- Public bucket for supplier catalog photos (upload via scripts/upload-supplier-images.mjs).
+/* Public bucket for supplier catalog photos (upload via scripts/upload-supplier-images.mjs). */
 insert into storage.buckets (id, name, public)
 values ('supplier-product-images', 'supplier-product-images', true)
 on conflict (id) do update

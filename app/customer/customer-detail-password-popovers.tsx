@@ -149,7 +149,7 @@ export function CustomerDetailPasswordPopovers({
                     </p>
                   )}
                   <Link
-                    href="/customer-details"
+                    href="/customer-details?from=my-account"
                     className="inline-flex rounded-xl bg-brand-orange px-5 py-2.5 text-[1.05rem] font-medium text-brand-navy transition hover:brightness-95"
                   >
                     Edit customer details
@@ -195,7 +195,10 @@ export function CustomerDetailPasswordPopovers({
                   {passwordStatus === "oauth" && (
                     <p className="rounded-lg border border-brand-navy/15 bg-brand-surface/60 px-4 py-3 text-[1.05rem] text-brand-navy/80">
                       This account does not currently have an email password set. Add one under{" "}
-                      <Link href="/customer-details" className="font-semibold text-brand-orange hover:underline">
+                      <Link
+                        href="/customer-details?from=my-account"
+                        className="font-semibold text-brand-orange hover:underline"
+                      >
                         customer details
                       </Link>
                       .
@@ -262,7 +265,10 @@ export function CustomerDetailPasswordPopovers({
                     <p className="text-[1.05rem] text-brand-navy/75">
                       Password change is only available when your account has an email password. Social sign-in
                       accounts can set an optional password on the{" "}
-                      <Link href="/customer-details" className="font-semibold text-brand-orange hover:underline">
+                      <Link
+                        href="/customer-details?from=my-account"
+                        className="font-semibold text-brand-orange hover:underline"
+                      >
                         customer details
                       </Link>{" "}
                       page.

@@ -7,6 +7,8 @@ import { parseMockupDecorateMethodsJson } from "@/lib/click-up-sheet-mockup-meth
 import {
   deleteClickUpSheetImage,
   listClickUpSheetImages,
+  listClickUpSheetMockupsIncludingReorderPrior,
+  setClickUpSheetMasterCompanyLogo,
   uploadClickUpSheetImage,
   type ClickUpSheetImageDto,
   type ClickUpSheetImageFilter,
@@ -73,7 +75,7 @@ type Props = {
   initialImages?: ClickUpSheetImageDto[];
   /** Mock-up: images + PDF (workers see these by order #). Reference: images only. */
   variant: "mockup" | "reference";
-  /** Complete Orders pre-process doc hub: no upload/delete/mock-up builder. */
+  /** Completed Order pre-process doc hub: no upload/delete/mock-up builder. */
   readOnly?: boolean;
 };
 
@@ -102,6 +104,26 @@ export function ClickUpSheetImagesSection({
 
   useEffect(() => {
     const ld = listDateYmd.trim();
+    const cid = customerOrderId.trim();
+
+    if (isMockup) {
+      if (!cid) {
+        return;
+      }
+      let cancelled = false;
+      const t = window.setTimeout(() => {
+        void listClickUpSheetMockupsIncludingReorderPrior(ld, cid).then((r) => {
+          if (!cancelled && r.ok) {
+            setImages(r.images);
+          }
+        });
+      }, 280);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(t);
+      };
+    }
+
     if (!ld) {
       return;
     }
@@ -109,7 +131,7 @@ export function ClickUpSheetImagesSection({
     let cancelled = false;
 
     const t = window.setTimeout(() => {
-      void listClickUpSheetImages(ld, customerOrderId.trim(), assetFilter).then((r) => {
+      void listClickUpSheetImages(ld, cid, assetFilter).then((r) => {
         if (!cancelled && r.ok) {
           setImages(r.images);
         }
@@ -120,11 +142,39 @@ export function ClickUpSheetImagesSection({
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [listDateYmd, customerOrderId, assetFilter]);
+  }, [listDateYmd, customerOrderId, assetFilter, isMockup]);
 
   function closeMockupBuilder() {
     setMockupBuilderOpen(false);
     setMockupEditTarget(null);
+  }
+
+  function toggleMasterLogo(imageId: string, next: boolean) {
+    if (readOnly) {
+      return;
+    }
+    setError(null);
+    startTransition(() => {
+      void (async () => {
+        const result = await setClickUpSheetMasterCompanyLogo(imageId, next);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        window.dispatchEvent(new Event("customer-master-logo-updated"));
+        setImages((prev) =>
+          prev.map((img) =>
+            img.is_mockup
+              ? img
+              : next
+                ? { ...img, is_master_logo: img.id === imageId }
+                : img.id === imageId
+                  ? { ...img, is_master_logo: false }
+                  : img,
+          ),
+        );
+      })();
+    });
   }
 
   async function uploadOneMockupFile(
@@ -263,6 +313,13 @@ export function ClickUpSheetImagesSection({
     if (readOnly) {
       return;
     }
+    const row = images.find((i) => i.id === id);
+    if (row?.inherited_from_order_number?.trim()) {
+      window.alert(
+        "이전 주문에서 이어 보이는 목업은 여기서 삭제할 수 없습니다. 새 주문 전용 목업은 Add mock-up으로 추가하세요.",
+      );
+      return;
+    }
     if (!window.confirm("Delete this file?")) {
       return;
     }
@@ -285,12 +342,26 @@ export function ClickUpSheetImagesSection({
   );
 
   if (!listDateYmd.trim()) {
-    return (
-      <section className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 p-6 shadow-sm print:bg-white print:shadow-none">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
-        <p className="mt-2 text-sm text-slate-600">워크시트 날짜가 있을 때만 파일을 저장할 수 있습니다.</p>
-      </section>
-    );
+    if (!isMockup) {
+      return (
+        <section className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 p-6 shadow-sm print:bg-white print:shadow-none">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
+          <p className="mt-2 text-sm text-slate-600">워크시트 날짜가 있을 때만 파일을 저장할 수 있습니다.</p>
+        </section>
+      );
+    }
+    if (!customerOrderId.trim()) {
+      return (
+        <section className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 p-6 shadow-sm print:bg-white print:shadow-none">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            재오더 등 이전 주문 목업을 보려면 <strong>Order ID</strong>를 입력하세요. 새 목업 파일은 Perth worksheet
+            날짜를 선택한 뒤 저장할 수 있습니다.
+          </p>
+        </section>
+      );
+    }
+    /* Mock-up + Order ID: 워크시트 날짜 없이도 재오더 전승 목업 표시(아래 본문 UI). */
   }
 
   return (
@@ -324,7 +395,7 @@ export function ClickUpSheetImagesSection({
       {readOnly ? (
         <div className="mt-4 space-y-3 print:hidden">
           <p className="text-sm text-slate-600">
-            Complete Orders 문서 보기 모드: 이미지를 추가·삭제할 수 없습니다.
+            Completed Order 문서 보기 모드: 이미지를 추가·삭제할 수 없습니다.
           </p>
           {!isMockup ? (
             <div
@@ -425,11 +496,25 @@ export function ClickUpSheetImagesSection({
         >
           {images.map((img) => {
             const decorateLabels = isMockup ? parseMockupDecorateMethodsJson(img.mockup_decorate_methods) : [];
+            const inheritedFrom = (img.inherited_from_order_number ?? "").trim();
+            const isInheritedMockup = isMockup && inheritedFrom.length > 0;
+            const isMasterLogo = !isMockup && Boolean(img.is_master_logo);
             return (
             <li
               key={img.id}
               className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50 shadow-sm"
             >
+              {isMasterLogo ? (
+                <div className="border-b border-emerald-200 bg-emerald-50 px-2 py-1.5 text-center text-[0.65rem] font-semibold uppercase tracking-wide text-emerald-950">
+                  Master logo
+                </div>
+              ) : null}
+              {isInheritedMockup ? (
+                <div className="border-b border-amber-200 bg-amber-50 px-2 py-1.5 text-center text-[0.65rem] font-semibold uppercase tracking-wide text-amber-950">
+                  재오더 참고 · 이전 주문{" "}
+                  <span className="font-mono normal-case tracking-normal">{inheritedFrom}</span>
+                </div>
+              ) : null}
               {isPdfUrl(img.public_url) ? (
                 <div
                   className={`flex flex-col items-center justify-center gap-2 bg-white px-3 text-center ${
@@ -501,7 +586,7 @@ export function ClickUpSheetImagesSection({
                       >
                         View larger
                       </button>
-                      {!readOnly ? (
+                      {!readOnly && !isInheritedMockup ? (
                         <button
                           type="button"
                           disabled={pending || !listDateYmd.trim() || !customerOrderId.trim()}
@@ -530,10 +615,27 @@ export function ClickUpSheetImagesSection({
                       Open full size
                     </a>
                   )}
+                  {!isMockup && !readOnly ? (
+                    <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-navy/80">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5"
+                        checked={Boolean(img.is_master_logo)}
+                        disabled={pending}
+                        onChange={(e) => toggleMasterLogo(img.id, e.target.checked)}
+                      />
+                      Master logo
+                    </label>
+                  ) : null}
                 </div>
                 <button
                   type="button"
-                  disabled={readOnly || pending}
+                  disabled={readOnly || pending || isInheritedMockup}
+                  title={
+                    isInheritedMockup
+                      ? "이전 주문 목업은 이 시트에서 삭제할 수 없습니다."
+                      : undefined
+                  }
                   onClick={() => removeImage(img.id)}
                   className="shrink-0 text-xs font-semibold text-red-600 hover:underline disabled:opacity-50"
                 >

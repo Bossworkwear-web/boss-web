@@ -7,8 +7,8 @@ import {
   parseMockupDecorateMethodsJson,
 } from "@/lib/click-up-sheet-mockup-methods";
 import { serviceTypeColoredContent } from "@/lib/service-type-colored";
-import { queryClickUpMockupImagesByCustomerOrderId } from "@/lib/fetch-click-up-mockups";
-import { australiaPostTrackingUrl, formatMoneyFromCents } from "@/lib/store-order-utils";
+import { queryClickUpMockupImagesByCustomerOrderIdIncludingReorder } from "@/lib/fetch-click-up-mockups";
+import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { STORE_MAIN_SHELL_CLASS } from "@/lib/store-main-shell";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
@@ -54,7 +54,7 @@ export default async function OrderTrackPage({ params }: Props) {
 
   const orderNumberTrim = order.order_number.trim();
   const mockupQuery = orderNumberTrim
-    ? await queryClickUpMockupImagesByCustomerOrderId(supabase, orderNumberTrim)
+    ? await queryClickUpMockupImagesByCustomerOrderIdIncludingReorder(supabase, orderNumberTrim)
     : { ok: true as const, rows: [] };
   const mockupRows = mockupQuery.ok ? mockupQuery.rows : [];
 
@@ -68,23 +68,19 @@ export default async function OrderTrackPage({ params }: Props) {
       const memoRaw = r.mockup_memo;
       const memo =
         memoRaw != null && String(memoRaw).trim().length > 0 ? String(memoRaw).trim() : null;
+      const rowOrderId = (r.customer_order_id ?? "").trim();
+      const priorOrderReference =
+        rowOrderId.length > 0 && rowOrderId !== orderNumberTrim ? rowOrderId : null;
       return {
         id: r.id,
         publicUrl,
         listDate: r.list_date,
         decorateSummary: mockupEmbroideryPrintingSummary(decorateLabels),
         memo,
+        priorOrderReference,
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
-
-  const apLink =
-    order.status === "shipped" &&
-    order.tracking_number &&
-    (order.carrier.toLowerCase().includes("australia post") ||
-      order.carrier.toLowerCase().includes("auspost"))
-      ? australiaPostTrackingUrl(order.tracking_number)
-      : null;
 
   return (
     <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
@@ -115,7 +111,6 @@ export default async function OrderTrackPage({ params }: Props) {
                   tracking_number: order.tracking_number ?? null,
                   carrier: order.carrier ?? "Australia Post",
                 }}
-                initialAusPostUrl={apLink}
               />
             </div>
 
@@ -184,7 +179,8 @@ export default async function OrderTrackPage({ params }: Props) {
               {trackMockups.length === 0 ? (
                 <p className="mt-3 text-[1.3125rem] text-brand-navy/70">
                   No mock-up files are linked to this order yet. If your order includes custom artwork, they may appear
-                  here after production uploads them.
+                  here after the team saves mock-ups on the Click up sheet. If you used <strong>Reorder</strong>, prior
+                  order mock-ups appear here once the new order is linked after checkout.
                 </p>
               ) : (
                 <OrderTrackMockupsGrid orderNumber={order.order_number} items={trackMockups} />

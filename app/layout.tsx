@@ -4,6 +4,7 @@ import { Encode_Sans_Condensed, Montserrat } from "next/font/google";
 import "./globals.css";
 import "./store-ui.css";
 import "./product-listing-cards.css";
+import { LOGO_SRC } from "@/app/generated/logo";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
 const encodeSansCondensed = Encode_Sans_Condensed({
@@ -34,11 +35,8 @@ export const metadata: Metadata = {
     "Professional workwear, uniforms, embroidery and printing for teams across Australia — corporate polos, medical scrubs, PPE and more.",
   applicationName: "Boss Workwear",
   icons: {
-    icon: [
-      // Prefer PNG if present; SVG fallback keeps tab icon working in dev.
-      { url: "/Boss_Workwear_gear.png" },
-      { url: "/Boss_Workwear_Logo.svg", type: "image/svg+xml" },
-    ],
+    // Keep in sync with `scripts/generate-logo-version.mjs` → `app/generated/logo.ts` (paths must exist under `public/`).
+    icon: [{ url: LOGO_SRC }],
   },
 };
 

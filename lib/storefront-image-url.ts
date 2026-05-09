@@ -1,8 +1,61 @@
 const MEDIA_PREFIX = "/api/supplier-media/";
 const MEDIA_PREFIX_LOOSE = "api/supplier-media/";
 
+/** Default bucket in `scripts/upload-supplier-images.mjs` / middleware (must match DB rows from `--images=storage`). */
+const DEFAULT_SUPPLIER_IMAGES_BUCKET = "supplier-product-images";
+
 function collapseSlashes(path: string): string {
   return path.replace(/\/+/g, "/");
+}
+
+/**
+ * When catalogue rows store full `…/storage/v1/object/public/<bucket>/…` URLs, load them via our
+ * same-origin proxy so Chrome does not apply ORB to cross-origin image responses.
+ */
+function rewriteProjectSupabaseStorageUrlToSupplierMediaProxy(raw: string): string | null {
+  const s0 = raw.trim();
+  if (!s0.startsWith("http://") && !s0.startsWith("https://")) {
+    return null;
+  }
+  let u: URL;
+  try {
+    u = new URL(s0);
+  } catch {
+    return null;
+  }
+  const base = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "");
+  if (!base) {
+    return null;
+  }
+  try {
+    if (u.origin !== new URL(base).origin) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+  const bucket =
+    (typeof process !== "undefined" && process.env.NEXT_PUBLIC_SUPPLIER_IMAGES_BUCKET?.trim()) ||
+    DEFAULT_SUPPLIER_IMAGES_BUCKET;
+  const prefix = `/storage/v1/object/public/${bucket}/`;
+  if (!u.pathname.startsWith(prefix)) {
+    return null;
+  }
+  const tail = u.pathname.slice(prefix.length);
+  const segments = tail
+    .split("/")
+    .filter(Boolean)
+    .map((seg) => {
+      try {
+        return decodeURIComponent(seg);
+      } catch {
+        return seg;
+      }
+    });
+  if (segments.length < 2) {
+    return null;
+  }
+  return collapseSlashes(`${MEDIA_PREFIX}${segments.join("/")}`);
 }
 
 /**
@@ -42,19 +95,22 @@ function normalizedSupplierMediaPath(raw: string): string | null {
 }
 
 /**
- * Catalogue `image_urls` often store `/api/supplier-media/<supplier>/…`. Keep them as **same-origin**
- * paths so the browser always loads `https://<your-site>/api/…` and Edge middleware issues 307 to
- * Supabase public storage. Avoids client/build-time `NEXT_PUBLIC_SUPABASE_URL` and encoding drift
- * when rewriting to absolute storage URLs in React.
+ * Catalogue `image_urls` usually store `/api/supplier-media/<supplier>/…` **or** full Supabase public
+ * object URLs. Prefer same-origin `/api/supplier-media/…` (served by `app/api/supplier-media`) so
+ * the browser does not load cross-origin storage URLs (Chrome ORB on some redirects/responses).
  *
- * Already-absolute URLs (Supabase, CDNs, data:, etc.) are left unchanged unless they wrap our
- * `/api/supplier-media/` path (then we normalize to the path only).
+ * Other absolute URLs (Unsplash, etc.) are left unchanged unless they embed `/api/supplier-media/`.
  */
 export function resolveStorefrontImageUrl(url: string | null | undefined): string {
   const raw = typeof url === "string" ? url.trim() : "";
   if (!raw) return "";
   if (raw.startsWith("data:")) {
     return raw;
+  }
+
+  const fromSupabasePublic = rewriteProjectSupabaseStorageUrlToSupplierMediaProxy(raw);
+  if (fromSupabasePublic) {
+    return fromSupabasePublic;
   }
 
   const norm = normalizedSupplierMediaPath(raw);

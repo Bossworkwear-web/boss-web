@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { ImageUrlLightbox } from "@/app/components/image-url-lightbox";
+
 import type { StoreOrderCustomerMemoLine } from "@/lib/store-order-customer-detail";
 import { supplierOrderProductIdHeadTail } from "@/lib/supplier-order-product-id-parts";
 import { normalizeSupplierOrderLineSupplierValue } from "@/lib/supplier-order-supplier-normalize";
@@ -12,6 +14,7 @@ import {
   loadSupplierOrderLinesForClickUpSheet,
   lookupCustomerByStoreOrderNumber,
   moveClickUpSheetOrderToProduction,
+  getCustomerMasterCompanyLogoForStoreOrderNumber,
   type ClickUpSheetImageDto,
   type ClickUpSupplierLineRow,
   type CustomerReferenceVisualDto,
@@ -93,7 +96,8 @@ type Props = {
   initialMockupImages: ClickUpSheetImageDto[];
   initialReferenceImages: ClickUpSheetImageDto[];
   initialCustomerReferenceItems: CustomerReferenceVisualDto[];
-  /** Opened from Complete Orders → Pre-process documents: view-only UI (mutations also blocked server-side). */
+  initialCustomerMasterLogoUrl: string | null;
+  /** Opened from Completed Order → Pre-process documents: view-only UI (mutations also blocked server-side). */
   completeOrdersDocumentsView?: boolean;
 };
 
@@ -107,6 +111,7 @@ export function ClickUpSheetWorkspace({
   initialMockupImages,
   initialReferenceImages,
   initialCustomerReferenceItems,
+  initialCustomerMasterLogoUrl,
   completeOrdersDocumentsView = false,
 }: Props) {
   const [orderId, setOrderId] = useState(initialCustomerOrderId);
@@ -116,6 +121,8 @@ export function ClickUpSheetWorkspace({
   const [printingLogoId, setPrintingLogoId] = useState("");
   const [logoLocations, setLogoLocations] = useState(initialLogoLocations);
   const [checkoutMemos, setCheckoutMemos] = useState<StoreOrderCustomerMemoLine[]>(initialCheckoutMemos);
+  const [customerMasterLogoUrl, setCustomerMasterLogoUrl] = useState<string | null>(initialCustomerMasterLogoUrl);
+  const [masterLogoLightboxOpen, setMasterLogoLightboxOpen] = useState(false);
   const [sheetActionMessage, setSheetActionMessage] = useState<string | null>(null);
   const [moveToProductionBusy, setMoveToProductionBusy] = useState(false);
   const router = useRouter();
@@ -155,6 +162,7 @@ export function ClickUpSheetWorkspace({
           setOrganisationName("");
           setLogoLocations("");
           setCheckoutMemos([]);
+          setCustomerMasterLogoUrl(null);
         }
       }, 0);
       return () => {
@@ -181,6 +189,38 @@ export function ClickUpSheetWorkspace({
       cancelled = true;
       window.clearTimeout(debounceTimer);
     };
+  }, [orderId]);
+
+  useEffect(() => {
+    const id = orderId.trim();
+    if (!id) {
+      return;
+    }
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      void getCustomerMasterCompanyLogoForStoreOrderNumber(id).then((r) => {
+        if (cancelled) return;
+        if (!r.ok) return;
+        setCustomerMasterLogoUrl(r.public_url);
+      });
+    }, 260);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [orderId]);
+
+  useEffect(() => {
+    const onUpdate = () => {
+      const id = orderId.trim();
+      if (!id) return;
+      void getCustomerMasterCompanyLogoForStoreOrderNumber(id).then((r) => {
+        if (!r.ok) return;
+        setCustomerMasterLogoUrl(r.public_url);
+      });
+    };
+    window.addEventListener("customer-master-logo-updated", onUpdate);
+    return () => window.removeEventListener("customer-master-logo-updated", onUpdate);
   }, [orderId]);
 
   useEffect(() => {
@@ -263,14 +303,17 @@ export function ClickUpSheetWorkspace({
     window.print();
   }
 
+  function alertMoveToProductionBlocked(body: string) {
+    window.alert(`Move to Production — 확인이 필요합니다\n\n${body}`);
+  }
+
   async function moveToProduction() {
     if (completeOrdersDocumentsView) {
       return;
     }
     const id = orderId.trim();
     if (!id) {
-      setSheetActionMessage("Order ID를 입력한 뒤 Production으로 이동할 수 있습니다.");
-      window.setTimeout(() => setSheetActionMessage(null), 5000);
+      alertMoveToProductionBlocked("Order ID를 입력한 뒤 Production으로 이동할 수 있습니다.");
       return;
     }
     setSheetActionMessage(null);
@@ -278,10 +321,10 @@ export function ClickUpSheetWorkspace({
     const result = await moveClickUpSheetOrderToProduction(id, initialListDate.trim());
     setMoveToProductionBusy(false);
     if (!result.ok) {
-      setSheetActionMessage(result.error);
-      window.setTimeout(() => setSheetActionMessage(null), 6000);
+      alertMoveToProductionBlocked(result.error);
       return;
     }
+    router.refresh();
     router.push(`/admin/production/${result.productionOrderId}`);
   }
 
@@ -306,7 +349,7 @@ export function ClickUpSheetWorkspace({
             <h1 className="mt-1 text-3xl font-medium text-brand-navy">Click up sheet</h1>
             {completeOrdersDocumentsView ? (
               <p className="mt-3 max-w-2xl rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                <strong>Complete Orders 문서 보기</strong> 모드입니다. 저장·Production 이동·이미지 업로드는 사용할 수
+                <strong>Completed Order 문서 보기</strong> 모드입니다. 저장·Production 이동·이미지 업로드는 사용할 수
                 없습니다.
               </p>
             ) : null}
@@ -365,8 +408,46 @@ export function ClickUpSheetWorkspace({
           </p>
         ) : null}
 
-        <div className="click-up-sheet-print-grid grid gap-6 lg:grid-cols-2">
-        <section className="click-up-sheet-print-span-2 rounded-xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2 print:shadow-none">
+        <div className="click-up-sheet-print-grid grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,4fr)]">
+        <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Master logo</h2>
+          {customerMasterLogoUrl ? (
+            <div className="mt-3 flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-5">
+              <button
+                type="button"
+                onClick={() => setMasterLogoLightboxOpen(true)}
+                className="cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2"
+                aria-label="View master logo larger"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={customerMasterLogoUrl}
+                  alt="Customer master logo"
+                  className="pointer-events-none h-20 w-full max-w-[14rem] object-contain"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 flex min-h-[6.5rem] items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+              —
+            </div>
+          )}
+          <p className="mt-2 text-xs text-slate-600">
+            고객 기준으로 저장됩니다. 재설정 전까지 다음 주문에도 그대로 표시됩니다.
+          </p>
+        </section>
+
+        <ImageUrlLightbox
+          open={masterLogoLightboxOpen}
+          onClose={() => setMasterLogoLightboxOpen(false)}
+          src={customerMasterLogoUrl ?? ""}
+          ariaLabel="Enlarged master logo"
+          enlarged
+        />
+
+        <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Order</h2>
           <div className="click-up-sheet-print-order-4 mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end lg:grid-cols-4">
             <div className="min-w-0">

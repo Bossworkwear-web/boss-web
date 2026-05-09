@@ -85,7 +85,7 @@ export function getSizeGuideBundle(kind: SizeGuideKind, productName: string): Si
     case "mens-alpha":
       return {
         title,
-        intro: `${nameLine}${DISCLAIMER}\n\nMen’s / unisex letter sizes — approximate body measurements.`,
+        intro: `${nameLine}${DISCLAIMER}\n\nMen’s / unisex letter sizes — approximate body measurements (AU-style tops & pants).`,
         tables: [
           {
             caption: "Men’s tops (approx. cm)",
@@ -102,12 +102,27 @@ export function getSizeGuideBundle(kind: SizeGuideKind, productName: string): Si
               ["5XL", "127–132", "113–118"],
             ],
           },
+          {
+            caption: "Men’s pants (AU standard, approx. cm)",
+            headers: ["Size", "Waist", "Hip (seat)"],
+            rows: [
+              ["XS", "73–78", "88–93"],
+              ["S", "78–83", "93–98"],
+              ["M", "83–88", "98–103"],
+              ["L", "88–93", "103–108"],
+              ["XL", "93–98", "108–113"],
+              ["2XL", "98–103", "113–118"],
+              ["3XL", "103–108", "118–123"],
+              ["4XL", "108–113", "123–128"],
+              ["5XL", "113–118", "128–133"],
+            ],
+          },
         ],
       };
     case "womens-numeric":
       return {
         title,
-        intro: `${nameLine}${DISCLAIMER}\n\nWomen’s numeric sizes — approximate body measurements (AU dress–style numbering).`,
+        intro: `${nameLine}${DISCLAIMER}\n\nWomen’s numeric sizes — approximate body measurements (AU dress / pants numbering).`,
         tables: [
           {
             caption: "Women’s tops & dresses (approx. cm)",
@@ -123,6 +138,22 @@ export function getSizeGuideBundle(kind: SizeGuideKind, productName: string): Si
               ["20", "115", "98", "123"],
               ["22", "120", "103", "128"],
               ["24", "125", "108", "133"],
+            ],
+          },
+          {
+            caption: "Women’s pants & skirts (AU standard, approx. cm)",
+            headers: ["Size", "Waist", "Hip"],
+            rows: [
+              ["6", "63", "88"],
+              ["8", "68", "93"],
+              ["10", "73", "98"],
+              ["12", "78", "103"],
+              ["14", "83", "108"],
+              ["16", "88", "113"],
+              ["18", "93", "118"],
+              ["20", "98", "123"],
+              ["22", "103", "128"],
+              ["24", "108", "133"],
             ],
           },
         ],
@@ -181,6 +212,18 @@ export function getSizeGuideBundle(kind: SizeGuideKind, productName: string): Si
             ],
           },
           {
+            caption: "Men’s pants (AU standard, approx. cm)",
+            headers: ["Size", "Waist", "Hip (seat)"],
+            rows: [
+              ["S", "78–83", "93–98"],
+              ["M", "83–88", "98–103"],
+              ["L", "88–93", "103–108"],
+              ["XL", "93–98", "108–113"],
+              ["2XL", "98–103", "113–118"],
+              ["3XL", "103–108", "118–123"],
+            ],
+          },
+          {
             caption: "Women’s numeric (approx. cm)",
             headers: ["Size", "Bust", "Waist"],
             rows: [
@@ -189,6 +232,17 @@ export function getSizeGuideBundle(kind: SizeGuideKind, productName: string): Si
               ["14", "100", "83"],
               ["16", "105", "88"],
               ["18", "110", "93"],
+            ],
+          },
+          {
+            caption: "Women’s pants & skirts (AU standard, approx. cm)",
+            headers: ["Size", "Waist", "Hip"],
+            rows: [
+              ["10", "73", "98"],
+              ["12", "78", "103"],
+              ["14", "83", "108"],
+              ["16", "88", "113"],
+              ["18", "93", "118"],
             ],
           },
         ],

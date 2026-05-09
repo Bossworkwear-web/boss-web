@@ -23,15 +23,21 @@
     "import:products": "node scripts/import-products.mjs",
     "import:bisley": "node scripts/import-bisley-csv.mjs --file=data/supplier/bisley/myPIP_Product_Listing.20260420.csv",
     "import:jbswear": "node scripts/import-jbswear-xlsx.mjs",
-    "import:blue-whale": "node scripts/import-blue-whale-numbers.mjs",
+    "import:blue-whale": "node scripts/import-blue-whale-csv.mjs",
+    "import:blue-whale:legacy-numbers": "node scripts/import-blue-whale-numbers.mjs",
     "set:bj6976": "node scripts/set-bisley-bj6976-retail.mjs --target=101.4",
     "update:jb-names": "node scripts/import-jbswear-xlsx.mjs --names-only",
     "fix:jb-products": "node scripts/fix-jb-product-name-description.mjs",
     "move:jb-six-workwear": "node scripts/move-jb-six-series-workwear.mjs",
+    "fix:workwear-misfiled-apparel": "node scripts/move-workwear-misfiled-apparel.mjs",
     "sync:supplier": "node scripts/sync-supplier-catalog.mjs",
     "sync:fashion-biz": "node scripts/sync-supplier-catalog.mjs --supplier=fashion-biz",
     "sync:syzmik": "node scripts/sync-supplier-catalog.mjs --supplier=fashion-biz --only-brand=Syzmik",
+    "sync:aussie-pacific": "node scripts/sync-aussie-pacific-api.mjs",
+    "update:biz-collection-descriptions": "node scripts/update-biz-collection-descriptions-from-sum-csv.mjs",
+    "hide:no-images": "node scripts/hide-products-without-images.mjs",
     "upload:supplier-images": "node scripts/upload-supplier-images.mjs",
+    "upload:fashion-biz-images-failed": "node scripts/upload-supplier-images.mjs --supplier=fashion-biz --only-failed",
     "clear:sample-products": "node scripts/clear-sample-products.mjs",
     "check:product-images": "node scripts/check-product-images.mjs",
     "generate:biz-care-misc-skus": "node scripts/generate-biz-care-misc-skus.mjs",
@@ -47,10 +53,11 @@
     "pdfkit": "^0.18.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "stripe": "^22.1.0",
     "xlsx": "^0.18.5"
   },
   "optionalDependencies": {
-    "lightningcss-darwin-arm64": "1.32.0"
+    "lightningcss-darwin-arm64": "^1.32.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

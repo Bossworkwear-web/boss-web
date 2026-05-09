@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { appendWarehouseStockHref } from "@/lib/admin-warehouse-stock-query";
+
 export default function WarehouseWorkerPage() {
   return (
     <div className="space-y-8">
@@ -24,12 +26,14 @@ export default function WarehouseWorkerPage() {
         <h2 className="text-base font-semibold text-brand-navy">작업 흐름 (예시)</h2>
         <ol className="mt-3 list-inside list-decimal space-y-1 text-sm text-slate-700">
           <li>
-            <strong>Store orders</strong>에서 결제 완료 주문 확인 → 라인별 수량·주소 확인
+            <strong>Print delivered items</strong>에서 일별 Supplier 시트를 인쇄해 입고·출고 라인 확인
+          </li>
+          <li>
+            <strong>Completed store orders</strong>에서 고객 주문 도크·피킹 리스트 인쇄
           </li>
           <li>
             <strong>Stock</strong>에서 수량 확인 후 피킹
           </li>
-          <li>배송 도크(Docket) 출력이 필요하면 해당 주문 상세에서 진행</li>
         </ol>
       </section>
 
@@ -44,16 +48,16 @@ export default function WarehouseWorkerPage() {
           </span>
         </Link>
         <Link
-          href="/admin/warehouse/worker/store-orders"
+          href="/admin/warehouse/worker/print-delivered-items"
           className="flex-1 rounded-xl bg-brand-orange px-6 py-4 text-center text-sm font-semibold text-brand-navy shadow-sm transition hover:brightness-95"
         >
-          <span className="block text-base">Open Store order</span>
+          <span className="block text-base">Print delivered items</span>
           <span className="mt-1 block text-xs font-normal opacity-90">
-            완료 주문 목록 · Print delivery docket
+            일별 Supplier orders 시트 · 인쇄
           </span>
         </Link>
         <Link
-          href="/admin/stock"
+          href={appendWarehouseStockHref("/admin/stock")}
           className="flex-1 rounded-xl border-2 border-brand-orange bg-white px-6 py-4 text-center text-sm font-semibold text-brand-navy transition hover:bg-brand-orange/10"
         >
           재고 확인 (Stock)
@@ -61,12 +65,15 @@ export default function WarehouseWorkerPage() {
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-slate-50 p-6">
-        <h2 className="text-sm font-semibold text-brand-navy">공급처 시트가 필요할 때</h2>
+        <h2 className="text-sm font-semibold text-brand-navy">스토어 출고·도크</h2>
         <p className="mt-2 text-sm text-slate-600">
-          일일 발주 입력·출력은 Supplier orders에서 진행합니다.
+          배송 완료 주문의 도크·피킹 리스트는 Completed store orders에서 인쇄할 수 있습니다.
         </p>
-        <Link href="/admin/supplier-orders" className="mt-3 inline-block text-sm font-semibold text-brand-orange hover:underline">
-          Supplier orders →
+        <Link
+          href="/admin/warehouse/worker/store-orders"
+          className="mt-3 inline-block text-sm font-semibold text-brand-orange hover:underline"
+        >
+          Completed store orders →
         </Link>
       </section>
     </div>

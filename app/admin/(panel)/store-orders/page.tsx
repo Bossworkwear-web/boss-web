@@ -338,7 +338,12 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
                   {orders.map((r) => (
                     <tr key={r.id} className="border-b border-slate-100 align-top last:border-b-0">
                       <td className="px-4 py-3">
-                        <p className="font-mono font-semibold text-brand-navy">{r.order_number}</p>
+                        <Link
+                          href={`/admin/store-orders/${r.id}/ordered-items-list`}
+                          className="font-mono font-semibold text-brand-navy hover:underline"
+                        >
+                          {r.order_number}
+                        </Link>
                         <p className="text-xs text-slate-500">{formatOrderRowDateTime(r.created_at)}</p>
                         <StoreOrderInvoiceReferenceForm
                           orderId={r.id}

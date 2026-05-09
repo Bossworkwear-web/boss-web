@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { sendCustomerTemporaryPasswordEmail } from "@/lib/customer-password-reset-email";
+import { sendCustomerPasswordResetEmail } from "@/lib/customer-password-reset-email";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 function isNextRedirectError(error: unknown) {
@@ -17,11 +17,7 @@ function isNextRedirectError(error: unknown) {
   );
 }
 
-function signupErrorRedirect(
-  status: string,
-  fullName: string,
-  email: string
-) {
+function signupErrorRedirect(status: string) {
   const qs = new URLSearchParams({
     mode: "signup",
     status,
@@ -97,11 +93,11 @@ export async function submitSignUp(formData: FormData) {
   const confirmPassword = String(formData.get("confirm_password") ?? "").trim();
 
   if (!fullName || !email || !password || !confirmPassword) {
-    signupErrorRedirect("invalid", fullName, email);
+    signupErrorRedirect("invalid");
   }
 
   if (password !== confirmPassword) {
-    signupErrorRedirect("password_mismatch", fullName, email);
+    signupErrorRedirect("password_mismatch");
   }
 
   try {
@@ -113,11 +109,11 @@ export async function submitSignUp(formData: FormData) {
       .maybeSingle();
 
     if (error) {
-      signupErrorRedirect("error", fullName, email);
+      signupErrorRedirect("error");
     }
 
     if (existingProfile) {
-      signupErrorRedirect("email_exists", fullName, email);
+      signupErrorRedirect("email_exists");
     }
 
     const cookieStore = await cookies();
@@ -131,7 +127,7 @@ export async function submitSignUp(formData: FormData) {
     if (isNextRedirectError(error)) {
       throw error;
     }
-    signupErrorRedirect("error", fullName, email);
+    signupErrorRedirect("error");
   }
 
   redirect(
@@ -162,35 +158,33 @@ export async function requestTemporaryPassword(formData: FormData) {
       redirect(`/log-in?status=reset_email_config`);
     }
 
-    const tempPassword = `BOSS-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
-    const previousPassword = data.login_password;
+    const token = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(token, "utf8").digest("hex");
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 30); // 30 minutes
 
-    const { error: updateError } = await supabase
-      .from("customer_profiles")
-      .update({ login_password: tempPassword })
-      .eq("id", data.id);
-
-    if (updateError) {
+    // NOTE: `customer_password_resets` exists via migration, but generated Supabase types may lag behind.
+    const { error: insErr } = await supabase.from("customer_password_resets" as never).insert({
+      customer_profile_id: data.id,
+      token_hash: tokenHash,
+      expires_at: expiresAt.toISOString(),
+    } as never);
+    if (insErr) {
+      console.error("[requestTemporaryPassword] Could not insert reset token:", insErr.message);
       redirect(`/log-in?status=reset_error`);
     }
 
-    const sent = await sendCustomerTemporaryPasswordEmail({
+    const site =
+      process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "") ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}` : "http://localhost:3000");
+    const resetUrl = `${site}/reset-password?email=${encodeURIComponent(data.email_address)}&token=${encodeURIComponent(token)}`;
+
+    const sent = await sendCustomerPasswordResetEmail({
       to: data.email_address,
       customerName: data.customer_name,
-      tempPassword,
+      resetUrl,
     });
     if (!sent.ok) {
       console.error("[requestTemporaryPassword] Email send failed:", sent.error);
-      const { error: restoreError } = await supabase
-        .from("customer_profiles")
-        .update({ login_password: previousPassword })
-        .eq("id", data.id);
-      if (restoreError) {
-        console.error(
-          "[requestTemporaryPassword] Could not restore previous password:",
-          restoreError
-        );
-      }
       redirect(`/log-in?status=reset_email_error`);
     }
   } catch (error) {

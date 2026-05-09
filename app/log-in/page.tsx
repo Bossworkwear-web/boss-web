@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { AlertTriangleIcon, ArrowLeftIcon, XCircleIcon } from "@/app/components/icons";
 
-import { requestTemporaryPassword, submitLogIn, submitSignUp } from "./actions";
+import { LogInFormsClient } from "./log-in-forms-client";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
 type LogInPageProps = {
@@ -19,8 +19,6 @@ export default async function LogInPage({ searchParams }: LogInPageProps) {
   const isSignup = params.mode === "signup";
   const status = params.status;
   // Always render clean forms when switching tabs.
-  const prefilledEmail = "";
-  const prefilledFullName = "";
 
   return (
     <main className="min-h-screen bg-white py-10 text-brand-navy">
@@ -95,7 +93,7 @@ export default async function LogInPage({ searchParams }: LogInPageProps) {
         )}
         {!isSignup && status === "reset_sent" && (
           <p className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-            Temporary password sent. Please check your email.
+            Password reset email sent. Please check your inbox.
           </p>
         )}
         {!isSignup && status === "reset_email_config" && (
@@ -147,109 +145,7 @@ export default async function LogInPage({ searchParams }: LogInPageProps) {
           </p>
         )}
 
-        {isSignup ? (
-          <form action={submitSignUp} className="grid gap-4 rounded-2xl p-6">
-            <div className="grid gap-2">
-              <label htmlFor="name" className="text-sm font-semibold">
-                Full Name
-              </label>
-              <input
-                id="name"
-                name="full_name"
-                type="text"
-                defaultValue=""
-                className="rounded-md border border-brand-navy/20 px-3 py-2"
-              />
-            </div>
-            <div className="grid gap-2">
-              <label htmlFor="email-signup" className="text-sm font-semibold">
-                Email
-              </label>
-              <input
-                id="email-signup"
-                name="email"
-                type="email"
-                defaultValue=""
-                className="rounded-md border border-brand-navy/20 px-3 py-2"
-              />
-            </div>
-            <div className="grid gap-2">
-              <label htmlFor="password-signup" className="text-sm font-semibold">
-                Password
-              </label>
-              <input
-                id="password-signup"
-                name="password"
-                type="password"
-                className="rounded-md border border-brand-navy/20 px-3 py-2"
-              />
-            </div>
-            <div className="grid gap-2">
-              <label htmlFor="confirm_password" className="text-sm font-semibold">
-                Confirm Password
-              </label>
-              <input
-                id="confirm_password"
-                name="confirm_password"
-                type="password"
-                className="rounded-md border border-brand-navy/20 px-3 py-2"
-              />
-            </div>
-            <button
-              type="submit"
-              className="mt-2 rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-medium text-brand-navy transition hover:brightness-95"
-            >
-              Sign up
-            </button>
-          </form>
-        ) : (
-          <form action={submitLogIn} className="grid gap-4 rounded-2xl p-6">
-            <div className="grid gap-2">
-              <label htmlFor="email" className="text-sm font-semibold">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                defaultValue=""
-                className="rounded-md border border-brand-navy/20 px-3 py-2"
-              />
-            </div>
-            <div className="grid gap-2">
-              <label htmlFor="password" className="text-sm font-semibold">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                className="rounded-md border border-brand-navy/20 px-3 py-2"
-              />
-            </div>
-            <button
-              type="submit"
-              className="mt-2 rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-medium text-brand-navy transition hover:brightness-95"
-            >
-              Log in
-            </button>
-            <div className="mt-6 space-y-2 pt-5">
-              <h2 className="text-sm font-semibold text-brand-navy">Lost password?</h2>
-              <p className="text-sm leading-relaxed text-brand-navy/70">
-                Enter your email and we&apos;ll send a temporary password. After logging in, go to{" "}
-                <span className="font-semibold">Customer</span> → <span className="font-semibold">Change password</span>{" "}
-                to set a new password.
-              </p>
-              <button
-                type="submit"
-                formAction={requestTemporaryPassword}
-                className="rounded-xl bg-brand-navy px-5 py-2.5 text-sm font-medium text-white transition hover:bg-brand-navy/90"
-              >
-                Send temporary password
-              </button>
-            </div>
-          </form>
-        )}
+        <LogInFormsClient isSignup={isSignup} />
         </div>
       </div>
     </main>

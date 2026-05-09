@@ -18,6 +18,8 @@
 
   /* —— Role: category-browse-grid —— */
   --store-ui-browse-card-title-size: 20.59px;
+  /* Product name only (keep code/price larger for scanability). */
+  --store-ui-browse-card-name-size: 14.41px;
   --store-ui-browse-card-price-was-size: 18.22px;
   --store-ui-browse-card-media-height: 331px;
   --store-ui-browse-card-body-padding: 24px;
@@ -92,7 +94,7 @@
 
 .subcategory-browse-grid .product-card-grid-title {
   font-family: var(--font-title) !important;
-  font-size: var(--store-ui-browse-card-title-size) !important;
+  font-size: var(--store-ui-browse-card-name-size) !important;
   line-height: 1.3 !important;
 }
 
@@ -102,6 +104,13 @@
   font-family: var(--font-app) !important;
   font-size: var(--store-ui-browse-card-title-size) !important;
   line-height: 1.3 !important;
+}
+
+.subcategory-browse-grid .product-card-grid-separator {
+  /* Match code/price size exactly (see .product-card-grid-code/.product-card-grid-price). */
+  font-size: var(--store-ui-browse-card-title-size) !important;
+  line-height: 1.3 !important;
+  font-weight: 400 !important;
 }
 
 .subcategory-browse-grid .product-card-grid-price-was {

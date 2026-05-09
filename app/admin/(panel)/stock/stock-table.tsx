@@ -34,9 +34,11 @@ export type StockRow = {
 type StockTableProps = {
   products: StockRow[];
   lowStockThreshold: number;
+  /** From Dashboard → Warehouse links: hide Supplier / Retail / Sale price columns. */
+  warehouseStockView?: boolean;
 };
 
-export function StockTable({ products, lowStockThreshold }: StockTableProps) {
+export function StockTable({ products, lowStockThreshold, warehouseStockView = false }: StockTableProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ id: string; text: string; ok: boolean } | null>(null);
@@ -270,14 +272,16 @@ export function StockTable({ products, lowStockThreshold }: StockTableProps) {
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-brand-navy/60">Selected: {selectedCount}</span>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={bulkApplyDefaultPriceToMissing}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-navy transition hover:border-brand-orange/40 disabled:opacity-50"
-          >
-            Apply default price to missing
-          </button>
+          {warehouseStockView ? null : (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={bulkApplyDefaultPriceToMissing}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-navy transition hover:border-brand-orange/40 disabled:opacity-50"
+            >
+              Apply default price to missing
+            </button>
+          )}
           <button
             type="button"
             disabled={pending || selectedCount === 0}
@@ -297,7 +301,7 @@ export function StockTable({ products, lowStockThreshold }: StockTableProps) {
         </div>
       </div>
 
-      <table className="w-full min-w-[960px] text-left text-sm">
+      <table className={`w-full text-left text-sm ${warehouseStockView ? "min-w-[720px]" : "min-w-[960px]"}`}>
         <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-600">
           <tr>
             <th className="px-4 py-3 w-10">
@@ -312,9 +316,13 @@ export function StockTable({ products, lowStockThreshold }: StockTableProps) {
             <th className="px-4 py-3 w-40"></th>
             <th className="px-4 py-3">PRODUCT</th>
             <th className="px-4 py-3">Category</th>
-            <th className="px-4 py-3 w-36">Supplier</th>
-            <th className="px-4 py-3 w-36">Retail</th>
-            <th className="px-4 py-3 w-36">Sale</th>
+            {warehouseStockView ? null : (
+              <>
+                <th className="px-4 py-3 w-36">Supplier</th>
+                <th className="px-4 py-3 w-36">Retail</th>
+                <th className="px-4 py-3 w-36">Sale</th>
+              </>
+            )}
             <th className="px-4 py-3 w-28">Hidden at</th>
             <th className="px-4 py-3 w-32">Stock</th>
             <th className="px-4 py-3 w-28">Status</th>
@@ -324,7 +332,7 @@ export function StockTable({ products, lowStockThreshold }: StockTableProps) {
         <tbody>
           {filteredByQuery.length === 0 ? (
             <tr>
-              <td colSpan={12} className="px-4 py-8 text-center text-slate-500">
+              <td colSpan={warehouseStockView ? 9 : 12} className="px-4 py-8 text-center text-slate-500">
                 No products found for this filter.
               </td>
             </tr>
@@ -337,6 +345,7 @@ export function StockTable({ products, lowStockThreshold }: StockTableProps) {
                   product={p}
                   low={low}
                   lowStockThreshold={lowStockThreshold}
+                  warehouseStockView={warehouseStockView}
                   pending={pending}
                   message={message?.id === p.id ? message : null}
                   hiddenMessage={hiddenMessage?.id === p.id ? hiddenMessage : null}
@@ -384,6 +393,7 @@ function StockRowEditor({
   product,
   low,
   lowStockThreshold,
+  warehouseStockView,
   pending,
   message,
   hiddenMessage,
@@ -399,6 +409,7 @@ function StockRowEditor({
   product: StockRow;
   low: boolean;
   lowStockThreshold: number;
+  warehouseStockView: boolean;
   pending: boolean;
   message: { text: string; ok: boolean } | null;
   hiddenMessage: { text: string; ok: boolean } | null;
@@ -489,118 +500,122 @@ function StockRowEditor({
       </td>
       <td className="px-4 py-3 font-semibold text-brand-navy">{product.name}</td>
       <td className="px-4 py-3 text-slate-600">{product.category ?? "—"}</td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
-          <input
-            value={supplierValue}
-            onChange={(e) => {
-              const next = e.target.value;
-              setSupplierValue(next);
-              const n = Number.parseFloat(next);
-              const retail = Number.isFinite(n) ? storefrontRetailFromSupplierBase(n) : null;
-              setRetailValue(retail == null ? "" : String(retail.toFixed(1)));
-            }}
-            inputMode="decimal"
-            className="w-full rounded-md border border-slate-200 px-2 py-1.5 font-mono text-sm"
-            placeholder="25.00"
-            disabled={pending}
-          />
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => {
-              const n = Number.parseFloat(supplierValue);
-              const base = Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 25.0;
-              onSavePrice(product.id, base);
-            }}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-navy hover:border-brand-orange/40 disabled:opacity-50"
-          >
-            Save
-          </button>
-        </div>
-        {priceMessage ? (
-          <span className={`mt-1 block text-xs ${priceMessage.ok ? "text-green-700" : "text-red-600"}`}>
-            {priceMessage.text}
-          </span>
-        ) : null}
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
-          <input
-            value={retailValue}
-            onChange={(e) => {
-              const next = e.target.value;
-              setRetailValue(next);
-              const n = Number.parseFloat(next);
-              const base = Number.isFinite(n) ? supplierBaseFromTargetRetail(n) : null;
-              setSupplierValue(base == null ? "" : String(base.toFixed(2)));
-            }}
-            inputMode="decimal"
-            className="w-full rounded-md border border-slate-200 px-2 py-1.5 font-mono text-sm"
-            placeholder="0.0"
-            disabled={pending}
-          />
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => {
-              const n = Number.parseFloat(retailValue);
-              const base = Number.isFinite(n) && n > 0 ? supplierBaseFromTargetRetail(n) : 25.0;
-              onSavePrice(product.id, base);
-            }}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-navy hover:border-brand-orange/40 disabled:opacity-50"
-          >
-            Save
-          </button>
-        </div>
-      </td>
-      <td className="px-4 py-3">
-        <p className="mb-1 text-[0.65rem] font-medium uppercase tracking-wide text-slate-500">GST incl.</p>
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            value={saleValue}
-            onChange={(e) => setSaleValue(e.target.value)}
-            inputMode="decimal"
-            className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1.5 font-mono text-sm"
-            placeholder="Clear = no sale"
-            disabled={pending}
-            aria-label="Sale price"
-          />
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => {
-              const t = saleValue.trim();
-              if (!t) {
-                onSaveSale(product.id, null);
-                return;
-              }
-              const n = Number.parseFloat(t);
-              if (!Number.isFinite(n) || n <= 0) {
-                window.alert("Enter a positive sale price (GST incl.), or use Clear to remove the sale.");
-                return;
-              }
-              onSaveSale(product.id, Math.round(n * 100) / 100);
-            }}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-navy hover:border-brand-orange/40 disabled:opacity-50"
-          >
-            Save
-          </button>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => onSaveSale(product.id, null)}
-            className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:border-brand-orange/40 disabled:opacity-50"
-          >
-            Clear
-          </button>
-        </div>
-        {saleMessage ? (
-          <span className={`mt-1 block text-xs ${saleMessage.ok ? "text-green-700" : "text-red-600"}`}>
-            {saleMessage.text}
-          </span>
-        ) : null}
-      </td>
+      {warehouseStockView ? null : (
+        <>
+          <td className="px-4 py-3">
+            <div className="flex items-center gap-2">
+              <input
+                value={supplierValue}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setSupplierValue(next);
+                  const n = Number.parseFloat(next);
+                  const retail = Number.isFinite(n) ? storefrontRetailFromSupplierBase(n) : null;
+                  setRetailValue(retail == null ? "" : String(retail.toFixed(1)));
+                }}
+                inputMode="decimal"
+                className="w-full rounded-md border border-slate-200 px-2 py-1.5 font-mono text-sm"
+                placeholder="25.00"
+                disabled={pending}
+              />
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  const n = Number.parseFloat(supplierValue);
+                  const base = Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 25.0;
+                  onSavePrice(product.id, base);
+                }}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-navy hover:border-brand-orange/40 disabled:opacity-50"
+              >
+                Save
+              </button>
+            </div>
+            {priceMessage ? (
+              <span className={`mt-1 block text-xs ${priceMessage.ok ? "text-green-700" : "text-red-600"}`}>
+                {priceMessage.text}
+              </span>
+            ) : null}
+          </td>
+          <td className="px-4 py-3">
+            <div className="flex items-center gap-2">
+              <input
+                value={retailValue}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setRetailValue(next);
+                  const n = Number.parseFloat(next);
+                  const base = Number.isFinite(n) ? supplierBaseFromTargetRetail(n) : null;
+                  setSupplierValue(base == null ? "" : String(base.toFixed(2)));
+                }}
+                inputMode="decimal"
+                className="w-full rounded-md border border-slate-200 px-2 py-1.5 font-mono text-sm"
+                placeholder="0.0"
+                disabled={pending}
+              />
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  const n = Number.parseFloat(retailValue);
+                  const base = Number.isFinite(n) && n > 0 ? supplierBaseFromTargetRetail(n) : 25.0;
+                  onSavePrice(product.id, base);
+                }}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-navy hover:border-brand-orange/40 disabled:opacity-50"
+              >
+                Save
+              </button>
+            </div>
+          </td>
+          <td className="px-4 py-3">
+            <p className="mb-1 text-[0.65rem] font-medium uppercase tracking-wide text-slate-500">GST incl.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={saleValue}
+                onChange={(e) => setSaleValue(e.target.value)}
+                inputMode="decimal"
+                className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1.5 font-mono text-sm"
+                placeholder="Clear = no sale"
+                disabled={pending}
+                aria-label="Sale price"
+              />
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  const t = saleValue.trim();
+                  if (!t) {
+                    onSaveSale(product.id, null);
+                    return;
+                  }
+                  const n = Number.parseFloat(t);
+                  if (!Number.isFinite(n) || n <= 0) {
+                    window.alert("Enter a positive sale price (GST incl.), or use Clear to remove the sale.");
+                    return;
+                  }
+                  onSaveSale(product.id, Math.round(n * 100) / 100);
+                }}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-navy hover:border-brand-orange/40 disabled:opacity-50"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => onSaveSale(product.id, null)}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:border-brand-orange/40 disabled:opacity-50"
+              >
+                Clear
+              </button>
+            </div>
+            {saleMessage ? (
+              <span className={`mt-1 block text-xs ${saleMessage.ok ? "text-green-700" : "text-red-600"}`}>
+                {saleMessage.text}
+              </span>
+            ) : null}
+          </td>
+        </>
+      )}
       <td className="px-4 py-3 text-xs text-slate-500">
         {product.storefront_hidden ? (product.storefront_hidden_at ? product.storefront_hidden_at.slice(0, 10) : "—") : "—"}
       </td>

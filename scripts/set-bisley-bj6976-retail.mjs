@@ -18,9 +18,35 @@ import { loadEnvLocal } from "./lib/load-env.mjs";
 loadEnvLocal();
 
 // Keep in sync with `lib/product-price.ts` for now (Node scripts don't load TS path aliases).
-const MARKUP_BEFORE_GST = 1.8;
+const MARKUP_TIER1_THRESHOLD_SUPPLIER = 35; // inclusive (<=)
+const MARKUP_TIER2_THRESHOLD_SUPPLIER = 80; // inclusive (>=)
+
+const MARKUP_BEFORE_GST_TIER1 = 1.8;
+const MARKUP_BEFORE_GST_TIER2 = 1.7;
+const MARKUP_BEFORE_GST_TIER3 = 1.6;
 const GST_RATE = 0.1;
-const STOREFRONT_RETAIL_MULTIPLIER_FROM_SUPPLIER = MARKUP_BEFORE_GST * (1 + GST_RATE); // 1.98
+const GST_MULT = 1 + GST_RATE;
+
+function markupBeforeGstFromSupplierBase(base) {
+  if (base <= MARKUP_TIER1_THRESHOLD_SUPPLIER) return MARKUP_BEFORE_GST_TIER1;
+  if (base >= MARKUP_TIER2_THRESHOLD_SUPPLIER) return MARKUP_BEFORE_GST_TIER3;
+  return MARKUP_BEFORE_GST_TIER2;
+}
+
+function retailFromBasePrice(base) {
+  const retail = base * markupBeforeGstFromSupplierBase(base) * GST_MULT;
+  const rounded = roundToStorePrice(retail);
+  // Monotonic floors at tier boundaries where multiplier decreases.
+  if (base > MARKUP_TIER1_THRESHOLD_SUPPLIER) {
+    const floor35 = roundToStorePrice(MARKUP_TIER1_THRESHOLD_SUPPLIER * MARKUP_BEFORE_GST_TIER1 * GST_MULT);
+    if (rounded < floor35) return floor35;
+  }
+  if (base >= MARKUP_TIER2_THRESHOLD_SUPPLIER) {
+    const floor80 = roundToStorePrice(MARKUP_TIER2_THRESHOLD_SUPPLIER * MARKUP_BEFORE_GST_TIER2 * GST_MULT);
+    return Math.max(rounded, floor80);
+  }
+  return rounded;
+}
 
 function roundToStorePrice(n) {
   return Math.round((n + Number.EPSILON) * 10) / 10;
@@ -43,18 +69,24 @@ function parseArgs(argv) {
 
 function candidateBasePrices(target) {
   // We round retail to 1 dp, so pick a base that lands exactly on target after rounding.
-  const ideal = target / STOREFRONT_RETAIL_MULTIPLIER_FROM_SUPPLIER;
   const out = [];
-  // Search around the ideal in 0.01 steps (base_price is typically stored at cents).
-  for (let i = -200; i <= 200; i += 1) {
-    const base = Math.round((ideal + i * 0.01) * 100) / 100;
-    if (base <= 0) continue;
-    const retail = roundToStorePrice(base * STOREFRONT_RETAIL_MULTIPLIER_FROM_SUPPLIER);
-    if (retail === roundToStorePrice(target)) {
-      out.push(base);
+  const t = roundToStorePrice(target);
+  const idealLow = target / (MARKUP_BEFORE_GST_LOW * GST_MULT);
+  const idealHigh = target / (MARKUP_BEFORE_GST_HIGH * GST_MULT);
+
+  const scan = (ideal) => {
+    for (let i = -200; i <= 200; i += 1) {
+      const base = Math.round((ideal + i * 0.01) * 100) / 100;
+      if (base <= 0) continue;
+      if (retailFromBasePrice(base) === t) {
+        out.push(base);
+      }
+      if (out.length >= 10) break;
     }
-    if (out.length >= 10) break;
-  }
+  };
+
+  scan(idealLow);
+  if (out.length < 10) scan(idealHigh);
   return out;
 }
 
@@ -97,8 +129,9 @@ async function main() {
 
   const row = rows[0];
   const candidates = candidateBasePrices(args.target);
-  const chosen = candidates[0] ?? Math.round((args.target / STOREFRONT_RETAIL_MULTIPLIER_FROM_SUPPLIER) * 100) / 100;
-  const retail = roundToStorePrice(chosen * STOREFRONT_RETAIL_MULTIPLIER_FROM_SUPPLIER);
+  const fallbackIdeal = args.target / (MARKUP_BEFORE_GST_LOW * GST_MULT);
+  const chosen = candidates[0] ?? Math.round(fallbackIdeal * 100) / 100;
+  const retail = retailFromBasePrice(chosen);
 
   console.log("Target retail:", args.target);
   console.log("Chosen base_price:", chosen);

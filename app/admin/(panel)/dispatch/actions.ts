@@ -90,28 +90,55 @@ function looksLikeMissingMoveToCompleteRpc(err: { message?: string }): boolean {
 }
 
 /**
- * Move one row from Dispatch queue to Complete Orders (RPC when available; else upsert + delete).
+ * Customer delivery timeline: `Dispatch` step is `complete` only when `status === "shipped"` (`lib/order-track-delivery`).
+ */
+async function markStoreOrderDispatchedForCustomerTimeline(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  storeOrderId: string,
+): Promise<{ ok: true; trackingToken: string | null } | { ok: false; error: string }> {
+  const nowIso = new Date().toISOString();
+  const { data: row, error: selErr } = await supabase
+    .from("store_orders")
+    .select("status, shipped_at, tracking_token")
+    .eq("id", storeOrderId)
+    .maybeSingle();
+
+  if (selErr) {
+    return { ok: false, error: selErr.message };
+  }
+  if (!row) {
+    return { ok: false, error: "store_order_not_found" };
+  }
+  if ((row.status ?? "").toLowerCase() === "cancelled") {
+    return { ok: true, trackingToken: row.tracking_token?.trim() ?? null };
+  }
+
+  const { error: upErr } = await supabase
+    .from("store_orders")
+    .update({
+      status: "shipped",
+      ...(row.shipped_at ? {} : { shipped_at: nowIso }),
+    })
+    .eq("id", storeOrderId);
+
+  if (upErr) {
+    return { ok: false, error: upErr.message };
+  }
+
+  return { ok: true, trackingToken: row.tracking_token?.trim() ?? null };
+}
+
+export type MoveDispatchQueueToCompleteResult =
+  | { ok: true; trackingToken: string | null }
+  | { ok: false; error: string; invalidQueue?: boolean };
+
+/**
+ * Move one row from Dispatch queue to Completed Order (RPC when available; else upsert + delete).
  */
 async function moveDispatchQueueRowToComplete(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
   queueId: string,
-): Promise<{ ok: true } | { ok: false; error: string; invalidQueue?: boolean }> {
-  const { error: rpcErr } = await supabase.rpc("move_store_order_from_delivery_to_complete", {
-    p_delivery_queue_id: queueId,
-  });
-
-  if (!rpcErr) {
-    return { ok: true };
-  }
-
-  if (rpcErr.message?.includes("delivery_queue_not_found")) {
-    return { ok: false, error: rpcErr.message, invalidQueue: true };
-  }
-
-  if (!looksLikeMissingMoveToCompleteRpc(rpcErr)) {
-    return { ok: false, error: rpcErr.message };
-  }
-
+): Promise<MoveDispatchQueueToCompleteResult> {
   const { data: drow, error: selErr } = await supabase
     .from("click_up_dispatch_queue")
     .select("store_order_id, list_date")
@@ -123,6 +150,22 @@ async function moveDispatchQueueRowToComplete(
   }
   if (!drow?.store_order_id) {
     return { ok: false, error: "delivery_queue_not_found", invalidQueue: true };
+  }
+
+  const { error: rpcErr } = await supabase.rpc("move_store_order_from_delivery_to_complete", {
+    p_delivery_queue_id: queueId,
+  });
+
+  if (!rpcErr) {
+    return await markStoreOrderDispatchedForCustomerTimeline(supabase, drow.store_order_id);
+  }
+
+  if (rpcErr.message?.includes("delivery_queue_not_found")) {
+    return { ok: false, error: rpcErr.message, invalidQueue: true };
+  }
+
+  if (!looksLikeMissingMoveToCompleteRpc(rpcErr)) {
+    return { ok: false, error: rpcErr.message };
   }
 
   const { error: upErr } = await supabase.from("click_up_complete_orders_queue").upsert(
@@ -144,7 +187,7 @@ async function moveDispatchQueueRowToComplete(
     return { ok: false, error: delErr.message };
   }
 
-  return { ok: true };
+  return await markStoreOrderDispatchedForCustomerTimeline(supabase, drow.store_order_id);
 }
 
 export async function completeDispatchQueueRow(formData: FormData): Promise<void> {
@@ -175,5 +218,10 @@ export async function completeDispatchQueueRow(formData: FormData): Promise<void
 
   revalidatePath("/admin/dispatch");
   revalidatePath("/admin/complete-orders");
+  revalidatePath("/customer");
+  if (result.trackingToken) {
+    revalidatePath(`/orders/track/${result.trackingToken}`);
+  }
+  revalidatePath("/admin/store-orders");
   redirect("/admin/complete-orders");
 }

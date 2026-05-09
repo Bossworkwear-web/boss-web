@@ -3,6 +3,7 @@ import {
   storefrontDescriptionForDisplay,
   storefrontStripSupplierBranding,
 } from "@/lib/product-display-name";
+import { BIZ_CARE_COLLECTION_STYLE_DETAIL_BODY } from "@/lib/biz-care-collection-style-details.generated";
 import { BIZ_CARE_COLLECTION_STYLE_MARKETING_TITLE } from "@/lib/biz-care-collection-style-titles.generated";
 import { SYZMIK_STYLE_MARKETING_TITLE } from "@/lib/syzmik-style-titles.generated";
 
@@ -89,6 +90,49 @@ function isBisleyListingContext(
   return /^\s*bisley\s+/i.test(String(listingName ?? "").trim());
 }
 
+/** Bisley PDP: show `APEX` before the marketing title for these style codes. */
+export const BISLEY_STYLE_CODES_APEX_TITLE_PREFIX = new Set(
+  [
+    "BS6156T",
+    "BL8339T",
+    "BC8479T",
+    "BC8475T",
+    "BCL8479T",
+    "BCL8475T",
+    "BC8478T",
+    "BS8439T",
+    "BL8439T",
+    "BL8439XT",
+  ].map((c) => c.toUpperCase()),
+);
+
+/**
+ * PDP headline only — keep base `productName` for description dedupe / cart copy unless callers switch.
+ */
+export function bisleyPdpDisplayProductNameWithApexPrefix(
+  productName: string | null,
+  productCode: string,
+  supplierName?: string | null,
+  storeSlug?: string | null,
+  listingName?: string | null,
+): string | null {
+  const base = productName?.trim() ?? "";
+  if (!base) {
+    return productName;
+  }
+  if (!isBisleyListingContext(storeSlug, supplierName, listingName)) {
+    return productName;
+  }
+  const key = productCode.toUpperCase().replace(/-CLEARANCE$/i, "");
+  if (!BISLEY_STYLE_CODES_APEX_TITLE_PREFIX.has(key)) {
+    return productName;
+  }
+  if (/^apex\s+/i.test(base)) {
+    return productName;
+  }
+  return `APEX ${base}`;
+}
+
 function isJbWearListingContext(
   storeSlug?: string | null,
   supplierName?: string | null,
@@ -108,6 +152,45 @@ function isJbWearListingContext(
     return true;
   }
   return false;
+}
+
+/**
+ * JB's Wear XLSX copy uses `|` between spec phrases. Turn those into line breaks with `- ` bullets.
+ * Preserves `More info:` lines and paragraphs that do not contain `|`.
+ */
+function jbWearFormatDescriptionPipesToBullets(body: string): string {
+  if (!body.includes("|")) {
+    return body;
+  }
+  return body
+    .split(/\n\s*\n/)
+    .map((para) => {
+      const p = para.trim();
+      if (!p) {
+        return p;
+      }
+      const lines = p.split(/\r?\n/);
+      const rebuilt: string[] = [];
+      for (const line of lines) {
+        const t = line.trim();
+        if (!t) {
+          continue;
+        }
+        if (/^more\s+info:/i.test(t)) {
+          rebuilt.push(t);
+          continue;
+        }
+        if (!t.includes("|")) {
+          rebuilt.push(t);
+          continue;
+        }
+        for (const part of t.split("|").map((s) => s.trim()).filter(Boolean)) {
+          rebuilt.push(`- ${part}`);
+        }
+      }
+      return rebuilt.join("\n");
+    })
+    .join("\n\n");
 }
 
 /** Supplier copy that is fabric / pack bullets — not a storefront marketing title. */
@@ -432,6 +515,176 @@ function isCatalogBoilerplate(s: string): boolean {
   return withoutLedger.length === 0;
 }
 
+/** Hyphen-like chars in slugs (copy/paste / DB) so `ap–x` still matches `ap-` catalog prefix. */
+function normalizeStoreSlugForCatalogPrefix(storeSlug?: string | null): string {
+  return String(storeSlug ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\u2013\u2014\u2212]/g, "-");
+}
+
+function isAussiePacificStorefrontContext(supplierName?: string | null, storeSlug?: string | null): boolean {
+  const sup = String(supplierName ?? "").trim().toLowerCase();
+  const sl = normalizeStoreSlugForCatalogPrefix(storeSlug);
+  return sup === "aussie pacific" || sl.startsWith("ap-");
+}
+
+/** When `supplier_name` is missing in the payload, slug checks can still fail — sync copy always includes this line. */
+function descriptionHasAussiePacificSyncBrandLine(text: string): boolean {
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) {
+      continue;
+    }
+    if (i > 60) {
+      break;
+    }
+    if (/^brand\s*:\s*aussie\s*pacific\b/i.test(line)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Aussie Pacific API/sync often prepends `Brand:`, `Style code:`, categories, `Size(s):`, `Product Description:` — remove for PDP body only.
+ */
+function stripAussiePacificStructuredMetaLines(text: string): string {
+  const lines = text.split(/\r?\n/);
+  const kept: string[] = [];
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) {
+      kept.push(raw);
+      continue;
+    }
+    const productDesc = line.match(/^product\s*description\s*:\s*(.*)$/i);
+    if (productDesc) {
+      const rest = productDesc[1].trim();
+      if (rest) {
+        kept.push(rest);
+      }
+      continue;
+    }
+    if (/^brand\s*:/i.test(line)) {
+      continue;
+    }
+    if (/^style\s*code\s*:/i.test(line)) {
+      continue;
+    }
+    if (/^main\s*category\s*:/i.test(line)) {
+      continue;
+    }
+    if (/^sub\s*category\s*:/i.test(line)) {
+      continue;
+    }
+    if (/^style\s*:/i.test(line)) {
+      continue;
+    }
+    if (/^size\s*:/i.test(line)) {
+      continue;
+    }
+    if (/^sizes\s*:/i.test(line)) {
+      continue;
+    }
+    if (/^sizes\s*$/i.test(line)) {
+      continue;
+    }
+    if (/^product\s*description\s*$/i.test(line)) {
+      continue;
+    }
+    kept.push(raw);
+  }
+  return kept
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** Next section after a `Fabric:` block (do not tab-bullet these lines). */
+const AUSSIE_PACIFIC_FABRIC_FOLLOWING_STOP = new RegExp(
+  "^(?:(?:product\\s+|key\\s+)?features|care(?:\\s*instructions)?|washing|machine\\s*wash|instructions?|specification|specifications|" +
+    "size|sizes|product\\s*description|dimensions|weight|details|composition|material|measurements|delivery|" +
+    "included|packaging|note|notes|origin|colou?rs?|colou?r\\s*range)\\s*:",
+  "i",
+);
+
+/**
+ * After a `Fabric:` line, prefix each following line with a tab + `- ` until a new labelled section.
+ */
+function formatAussiePacificFabricContinuationLines(text: string): string {
+  const lines = text.split(/\r?\n/);
+  const out: string[] = [];
+  let underFabric = false;
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    if (/^fabric\s*:/i.test(trimmed)) {
+      underFabric = true;
+      out.push(raw);
+      continue;
+    }
+    if (underFabric) {
+      if (!trimmed) {
+        out.push(raw);
+        continue;
+      }
+      if (AUSSIE_PACIFIC_FABRIC_FOLLOWING_STOP.test(trimmed)) {
+        underFabric = false;
+        out.push(raw);
+        continue;
+      }
+      const body = trimmed.replace(/^\t*\s*-\s+/, "");
+      out.push(`\t- ${body}`);
+      continue;
+    }
+    out.push(raw);
+  }
+  return out.join("\n");
+}
+
+/** Next section after a `Features:` block (catalog often lists plain lines under the label). */
+const AUSSIE_PACIFIC_FEATURES_FOLLOWING_STOP = new RegExp(
+  "^(fabric|(?:(?:product\\s+|key\\s+)?features)|care(?:\\s*instructions)?|washing|machine\\s*wash|instructions?|specification|specifications|" +
+    "size|sizes|product\\s*description|dimensions|weight|details|composition|material|measurements|delivery|" +
+    "included|packaging|note|notes|origin|colou?rs?|colou?r\\s*range|benefits|selling\\s*points)\\s*:",
+  "i",
+);
+
+/**
+ * After a `Features:` line, prefix each following line with a tab + `- ` until a new labelled section.
+ */
+function formatAussiePacificFeaturesContinuationLines(text: string): string {
+  const lines = text.split(/\r?\n/);
+  const out: string[] = [];
+  let underFeatures = false;
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    /** `Features:`, `Product Features:`, `Key Features:` (Aussie Pacific / HTML → plain text). */
+    if (/^(?:product\s+|key\s+)?features\s*:/i.test(trimmed)) {
+      underFeatures = true;
+      out.push(raw);
+      continue;
+    }
+    if (underFeatures) {
+      if (!trimmed) {
+        out.push(raw);
+        continue;
+      }
+      if (AUSSIE_PACIFIC_FEATURES_FOLLOWING_STOP.test(trimmed)) {
+        underFeatures = false;
+        out.push(raw);
+        continue;
+      }
+      const body = trimmed.replace(/^\t*\s*-\s+/, "");
+      out.push(`\t- ${body}`);
+      continue;
+    }
+    out.push(raw);
+  }
+  return out.join("\n");
+}
+
 /** Remove catalog metadata lines / paragraphs from description body (PDP). */
 function stripCatalogMetadataFromBody(text: string): string {
   const trimmed = text.trim();
@@ -464,6 +717,10 @@ function cardProductCode(
   storeSlug?: string | null,
   supplierName?: string | null,
 ): string {
+  const sup = String(supplierName ?? "").trim().toLowerCase();
+  const slugLower = String(storeSlug ?? "").trim().toLowerCase();
+  const isBlueWhale = sup === "blue whale" || /^\s*blue\s*whale\b/i.test(name.trim());
+  const isAussiePacific = sup === "aussie pacific" || slugLower.startsWith("ap-");
   const fromListing = fashionBizStyleCodeFromListing(name, storeSlug ?? null);
   if (fromListing) {
     return fromListing;
@@ -491,6 +748,26 @@ function cardProductCode(
     const m = name.trim().match(TRAILING_STYLE_PAREN_RE);
     if (m) {
       return m[1].toUpperCase();
+    }
+  }
+  if (isBlueWhale) {
+    const m = name.trim().match(TRAILING_STYLE_PAREN_RE);
+    if (m) {
+      return m[1].toUpperCase();
+    }
+  }
+  if (isAussiePacific) {
+    // API names end with ` - W3307` / ` - W1907L` / etc.
+    const m = name.trim().match(/\s-\s*([A-Za-z0-9]{2,14})\s*$/);
+    const code = m?.[1]?.trim() ?? "";
+    // Style codes are usually `W####` / `W####L` but can be alphanumeric without digits.
+    if (code && (/^W[A-Z0-9]{1,12}$/i.test(code) || /\d/.test(code))) {
+      const upper = code.toUpperCase();
+      // Storefront display: drop the leading `W` prefix on style codes (e.g. `W3305` → `3305`).
+      if (/^W[A-Z0-9]{1,12}$/.test(upper)) {
+        return upper.slice(1);
+      }
+      return upper;
     }
   }
   const stripped = storefrontStripSupplierBranding(name).trim();
@@ -523,20 +800,35 @@ function cardMarketingTitleFromDescription(
 
   const nameStripped = storefrontStripSupplierBranding(name);
   for (const line of lines) {
-    if (line === name.trim() || isCatalogBoilerplate(line) || isSupplierCatalogTemplateLine(line)) {
+    const normalizedLine = line
+      .replace(/^\uFEFF/g, "")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .trim();
+    // Aussie Pacific API sync prepends structured metadata lines (Brand / Style code / categories).
+    // These must never become the PDP headline.
+    if (/^brand\s*:/i.test(normalizedLine) || /^style\s*code\s*:/i.test(normalizedLine)) {
       continue;
     }
-    if (looksLikeJbFabricOrSpecMarketingLine(line)) {
+    if (/^main\s*category\s*:/i.test(normalizedLine) || /^sub\s*category\s*:/i.test(normalizedLine)) {
       continue;
     }
-    const cleanedTitle = storefrontStripSupplierBranding(line);
+    if (/^style\s*:/i.test(normalizedLine)) {
+      continue;
+    }
+    if (normalizedLine === name.trim() || isCatalogBoilerplate(normalizedLine) || isSupplierCatalogTemplateLine(normalizedLine)) {
+      continue;
+    }
+    if (looksLikeJbFabricOrSpecMarketingLine(normalizedLine)) {
+      continue;
+    }
+    const cleanedTitle = storefrontStripSupplierBranding(normalizedLine);
     if (!cleanedTitle) {
       continue;
     }
     if (cleanedTitle.toUpperCase() === codeKey) {
       continue;
     }
-    if (storefrontStripSupplierBranding(line) === nameStripped) {
+    if (storefrontStripSupplierBranding(normalizedLine) === nameStripped) {
       continue;
     }
     if (isCatalogBoilerplate(cleanedTitle)) {
@@ -623,9 +915,44 @@ export function productCardDisplayLines(
 ): ProductCardDisplay {
   const productCode = cardProductCode(name, storeSlug, supplierName);
   const codeKey = productCode.toUpperCase();
+  const sup = String(supplierName ?? "").trim().toLowerCase();
+  const slugLower = String(storeSlug ?? "").trim().toLowerCase();
+  const isBlueWhale = sup === "blue whale" || /^\s*blue\s*whale\b/i.test(name.trim());
+  const isAussiePacific = sup === "aussie pacific" || slugLower.startsWith("ap-");
 
   const raw = (description ?? "").trim();
   let productName: string | null = null;
+  if (isAussiePacific) {
+    // Storefront: show human name in title, keep style code as productCode.
+    const line = String(name ?? "").trim().split(/\r?\n/)[0]?.trim() ?? "";
+    const m = line.match(/\s-\s*([A-Za-z0-9]{2,14})\s*$/);
+    const code = m?.[1]?.trim() ?? "";
+    const head = m && m.index != null ? line.slice(0, m.index).trim() : line;
+    const cleanedHead = head
+      .replace(/^\s*Aussie\s+Pacific\s+/i, "")
+      .replace(/^\s*AUSSIE\s+PACIFIC\s+/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    productName = cleanedHead.length > 0 ? cleanedHead : null;
+    // If the stored name is only the code, fallback to the codeKey cleanup.
+    if (productName && code && productName.toUpperCase() === code.toUpperCase()) {
+      productName = null;
+    }
+    // Do not return early: allow safe fallbacks if the listing name is malformed.
+  }
+  // Blue Whale rows include rich descriptions; never use description as the headline.
+  if (isBlueWhale) {
+    productName = browseListingTitleFromName(name, productCode);
+    if (!productName) {
+      // Hard fallback: strip supplier branding + trailing style parens from the stored name.
+      const rawLine = String(name ?? "").trim().split(/\r?\n/)[0]?.trim() ?? "";
+      const m = rawLine.match(TRAILING_STYLE_PAREN_RE);
+      const withoutParens = m ? rawLine.slice(0, m.index).trim() : rawLine;
+      const stripped = storefrontStripSupplierBranding(withoutParens).trim();
+      productName = stripped.length > 0 ? stripped : null;
+    }
+    return { productName, productCode };
+  }
   if (isJbWearListingContext(storeSlug, supplierName, name)) {
     productName = jbWearCardTitleFromName(name, codeKey);
   }
@@ -634,6 +961,11 @@ export function productCardDisplayLines(
   }
   if (!productName) {
     productName = bizCareCollectionMarketingTitleFallback(name, codeKey, storeSlug, supplierName);
+  }
+  // Bisley PDP/cards: always prefer the stored listing name as the headline.
+  // Bisley descriptions are rich body copy, not a marketing-title line.
+  if (!productName && isBisleyListingContext(storeSlug, supplierName, name)) {
+    productName = bisleyCardTitleFromName(name, codeKey);
   }
   /**
    * Category grids normally avoid `description` (stable card titles from `products.name`).
@@ -647,9 +979,6 @@ export function productCardDisplayLines(
   );
   if (!productName && raw.length > 0 && (!forStorefrontBrowseGrid || useDescriptionTitleOnBrowseGrid)) {
     productName = cardMarketingTitleFromDescription(raw, name, codeKey);
-  }
-  if (!productName && isBisleyListingContext(storeSlug, supplierName, name)) {
-    productName = bisleyCardTitleFromName(name, codeKey);
   }
   if (!productName && forStorefrontBrowseGrid) {
     productName = browseListingTitleFromName(name, productCode);
@@ -666,47 +995,210 @@ export function productCardDisplayLines(
   return { productName, productCode };
 }
 
+function isBizCollectionStorefrontListing(supplierName?: string | null, listingName?: string | null): boolean {
+  const sup = String(supplierName ?? "").trim().toLowerCase();
+  if (sup === "biz collection") {
+    return true;
+  }
+  return /\bbiz collection\b/i.test(String(listingName ?? "").trim());
+}
+
+/** Sum CSV `stringified_description` is often one line with `;` between clauses — split into rows for the PDP. */
+function bizCollectionBreakSemicolonsToLines(s: string): string {
+  if (!s.includes(";")) {
+    return s;
+  }
+  return s
+    .split(/;\s*/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** After `Features:`, split comma-separated phrases onto new lines with tab + hyphen for PDP nesting. */
+function bizCollectionFormatFeaturesCommaBullets(s: string): string {
+  return s
+    .split(/\r?\n/)
+    .map((line) => {
+      const m = /^(\s*)(Features:\s*)(.+)$/i.exec(line);
+      if (!m) return line;
+      const rest = m[3].trim();
+      if (!rest.includes(",")) return line;
+      const items = rest
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean);
+      if (items.length <= 1) return line;
+      const prefix = m[1] ?? "";
+      const bullets = items.map((item) => `${prefix}\t- ${item}`).join("\n");
+      return `${prefix}Features:\n${bullets}`;
+    })
+    .join("\n");
+}
+
+function mergeBizCollectionCsvDetailIntoPdpBody(opts: {
+  out: string;
+  listingName: string;
+  productName: string | null;
+  rawDescriptionBody: string;
+  supplierName?: string | null;
+  storeSlug?: string | null;
+  finish: (s: string) => string;
+}): string {
+  const { out, listingName, productName, rawDescriptionBody, supplierName, storeSlug, finish } = opts;
+  if (!isBizCollectionStorefrontListing(supplierName, listingName)) {
+    return finish(out);
+  }
+  const pack = (s: string) =>
+    bizCollectionFormatFeaturesCommaBullets(bizCollectionBreakSemicolonsToLines(finish(s)));
+  const code = fashionBizStyleCodeFromListing(listingName, storeSlug);
+  if (!code) {
+    return pack(out);
+  }
+  const key = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+  const csvRaw = (BIZ_CARE_COLLECTION_STYLE_DETAIL_BODY[key] ?? "").trim();
+  if (!csvRaw) {
+    return pack(out);
+  }
+  const csvCleaned = stripCatalogMetadataFromBody(storefrontDescriptionForDisplay(csvRaw));
+  if (!csvCleaned) {
+    return pack(out);
+  }
+
+  const listingHead = listingName.trim().split(/\r?\n/)[0]?.trim() ?? "";
+  const stripLo = (s: string) => storefrontStripSupplierBranding(s).toLowerCase().trim();
+  const rawLo = stripLo(rawDescriptionBody);
+  const outTrim = out.trim();
+  const outLo = stripLo(outTrim);
+  const pnLo = stripLo(String(productName ?? ""));
+  const listingHeadLo = stripLo(listingHead);
+
+  const weak =
+    outTrim.length === 0 ||
+    rawLo === listingHeadLo ||
+    outLo === pnLo ||
+    (rawLo.length > 0 && rawLo === outLo && rawLo === listingHeadLo) ||
+    (outTrim.length > 0 && outTrim.length < 56 && !outTrim.includes("\n\n"));
+
+  if (weak) {
+    return pack(csvCleaned);
+  }
+  return pack(out);
+}
+
+/** Same inputs as PDP `displayProductName` / title stripping — keeps RSC + client description text aligned. */
+export type PdpDescriptionComputeFields = {
+  name: string;
+  description: string;
+  slug?: string | null;
+  supplierName?: string;
+  displayProductName?: string | null;
+  displayProductCode?: string | null;
+  colorOptions: string[];
+  sizeOptions: string[];
+};
+
+/**
+ * Single source for `mappedProduct.pdpDescriptionBody` and `serverPdpDescriptionBody` on the product page
+ * (avoids hydration mismatch when nested cached fields omit `pdpDescriptionBody`).
+ */
+export function computePdpDescriptionBodyFromDetailFields(p: PdpDescriptionComputeFields): string {
+  const { displayProductName, displayProductCode } = p;
+  const pdpTitleNameForDescription =
+    displayProductName != null || displayProductCode != null
+      ? displayProductName ?? null
+      : productCardDisplayLines(
+          p.name,
+          p.description,
+          p.slug,
+          p.supplierName ?? null,
+          p.colorOptions,
+          false,
+          p.sizeOptions,
+        ).productName;
+
+  return productDetailDescriptionBody(
+    p.description,
+    pdpTitleNameForDescription,
+    p.supplierName ?? null,
+    p.slug,
+    p.name,
+  );
+}
+
 /**
  * Product detail: description copy without repeating the marketing title block (first paragraph).
+ * For Biz Collection, when the DB text is empty or only echoes the listing name / short title,
+ * fills from sum-CSV `stringified_description` (see `lib/biz-care-collection-style-details.generated.ts`).
  */
 export function productDetailDescriptionBody(
   description: string | null | undefined,
   productName: string | null,
+  supplierName?: string | null,
+  /** When `supplier_name` is missing on the row, JB slugs still need pipe→bullet formatting. */
+  storeSlug?: string | null,
+  /** Raw `products.name` — needed to resolve Fashion Biz style codes for Biz Collection CSV bodies. */
+  listingName?: string | null,
 ): string {
-  const body = description == null || !String(description).trim() ? "" : String(description).trim();
-  if (!body) {
-    return "";
-  }
-  const cleaned = storefrontDescriptionForDisplay(body);
-  if (!productName?.trim()) {
-    return stripCatalogMetadataFromBody(cleaned);
-  }
-  const paras = cleaned.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-  if (paras.length === 0) {
-    return stripCatalogMetadataFromBody(cleaned);
-  }
-  const firstParaLines = paras[0].split(/\r?\n/);
-  const firstLine = firstParaLines[0]?.trim() ?? "";
+  const listing = String(listingName ?? "").trim();
+  const rawBody = description == null ? "" : String(description).trim();
+  let cleaned = rawBody ? storefrontDescriptionForDisplay(rawBody) : "";
   if (
-    firstLine &&
-    storefrontStripSupplierBranding(firstLine).toLowerCase() === productName.trim().toLowerCase()
+    cleaned &&
+    (isAussiePacificStorefrontContext(supplierName, storeSlug) ||
+      descriptionHasAussiePacificSyncBrandLine(cleaned))
   ) {
-    const firstParaAfterTitle = firstParaLines.slice(1).join("\n").trim();
-    const rest = [firstParaAfterTitle, ...paras.slice(1)].filter((s) => s.length > 0).join("\n\n");
-    let out = stripCatalogMetadataFromBody(rest);
-    if (out.trim().length > 0) {
-      return out;
-    }
-    // First block only repeated the PDP headline (or stripping removed catalog junk) — use later paragraphs.
-    if (paras.length > 1) {
-      out = stripCatalogMetadataFromBody(paras.slice(1).join("\n\n"));
-      if (out.trim().length > 0) {
-        return out;
+    cleaned = stripAussiePacificStructuredMetaLines(cleaned);
+    cleaned = formatAussiePacificFabricContinuationLines(cleaned);
+    cleaned = formatAussiePacificFeaturesContinuationLines(cleaned);
+  }
+  const sl = normalizeStoreSlugForCatalogPrefix(storeSlug);
+  const isJbContext =
+    jbSupplierNameMatch(supplierName) || sl.startsWith("jb-") || sl.includes("jbswear");
+  const finish = (s: string) => (isJbContext ? jbWearFormatDescriptionPipesToBullets(s) : s);
+
+  let out = "";
+  if (!rawBody) {
+    out = "";
+  } else if (!productName?.trim()) {
+    out = stripCatalogMetadataFromBody(cleaned);
+  } else {
+    const paras = cleaned.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+    if (paras.length === 0) {
+      out = stripCatalogMetadataFromBody(cleaned);
+    } else {
+      const firstParaLines = paras[0].split(/\r?\n/);
+      const firstLine = firstParaLines[0]?.trim() ?? "";
+      if (
+        firstLine &&
+        storefrontStripSupplierBranding(firstLine).toLowerCase() === productName.trim().toLowerCase()
+      ) {
+        const firstParaAfterTitle = firstParaLines.slice(1).join("\n").trim();
+        const rest = [firstParaAfterTitle, ...paras.slice(1)].filter((s) => s.length > 0).join("\n\n");
+        let stripped = stripCatalogMetadataFromBody(rest);
+        if (stripped.trim().length > 0) {
+          out = stripped;
+        } else if (paras.length > 1) {
+          stripped = stripCatalogMetadataFromBody(paras.slice(1).join("\n\n"));
+          out = stripped.trim().length > 0 ? stripped : "";
+        }
+        if (!out.trim()) {
+          const fullBody = stripCatalogMetadataFromBody(cleaned);
+          out = fullBody.trim().length > 0 ? fullBody : "";
+        }
+      } else {
+        out = stripCatalogMetadataFromBody(cleaned);
       }
     }
-    // Avoid an empty PDP when the DB only had the title line or metadata left nothing after dedupe.
-    const fullBody = stripCatalogMetadataFromBody(cleaned);
-    return fullBody.trim().length > 0 ? fullBody : "";
   }
-  return stripCatalogMetadataFromBody(cleaned);
+
+  return mergeBizCollectionCsvDetailIntoPdpBody({
+    out,
+    listingName: listing,
+    productName,
+    rawDescriptionBody: rawBody,
+    supplierName,
+    storeSlug,
+    finish,
+  });
 }

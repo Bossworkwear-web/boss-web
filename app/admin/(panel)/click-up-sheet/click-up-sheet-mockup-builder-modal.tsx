@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { createPortal } from "react-dom";
 
 import { MOCKUP_DECORATE_METHOD_OPTIONS } from "@/lib/click-up-sheet-mockup-methods";
@@ -32,6 +39,54 @@ function templateFileLabel(url: string): string {
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
+}
+
+/** Word-wrap for canvas export; respects newlines. */
+function wrapCaptionForCanvas(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const paragraphs = text.replace(/\r\n/g, "\n").split("\n");
+  const all: string[] = [];
+  for (const para of paragraphs) {
+    if (!para.trim()) {
+      all.push("");
+      continue;
+    }
+    const words = para.split(/\s+/);
+    let line = "";
+    const flush = () => {
+      if (line) {
+        all.push(line);
+        line = "";
+      }
+    };
+    for (const word of words) {
+      if (ctx.measureText(word).width > maxWidth) {
+        flush();
+        let chunk = "";
+        for (const ch of word) {
+          const t = chunk + ch;
+          if (ctx.measureText(t).width <= maxWidth) {
+            chunk = t;
+          } else {
+            if (chunk) {
+              all.push(chunk);
+            }
+            chunk = ch;
+          }
+        }
+        line = chunk;
+        continue;
+      }
+      const trial = line ? `${line} ${word}` : word;
+      if (ctx.measureText(trial).width <= maxWidth) {
+        line = trial;
+      } else {
+        flush();
+        line = word;
+      }
+    }
+    flush();
+  }
+  return all;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -117,6 +172,58 @@ function decoratePickFromLabels(labels: string[]): DecoratePick {
   return emptyDecoratePick();
 }
 
+/** Web-safe stacks for canvas `font` + matching CSS preview. */
+const CAPTION_FONT_OPTIONS = [
+  { id: "arial", label: "Arial / Helvetica", stack: "Arial, Helvetica, sans-serif" },
+  { id: "system", label: "System UI", stack: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" },
+  { id: "georgia", label: "Georgia", stack: "Georgia, 'Times New Roman', serif" },
+  { id: "times", label: "Times New Roman", stack: "'Times New Roman', Times, serif" },
+  { id: "verdana", label: "Verdana", stack: "Verdana, Geneva, sans-serif" },
+  { id: "courier", label: "Courier New", stack: "'Courier New', Courier, monospace" },
+  { id: "tahoma", label: "Tahoma", stack: "Tahoma, Geneva, sans-serif" },
+] as const;
+
+type CaptionFontId = (typeof CAPTION_FONT_OPTIONS)[number]["id"];
+
+function captionStackById(id: string): string {
+  const found = CAPTION_FONT_OPTIONS.find((f) => f.id === id);
+  return found?.stack ?? CAPTION_FONT_OPTIONS[0].stack;
+}
+
+function newLayerId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `ly-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+type LogoLayerState = {
+  id: string;
+  kind: "logo";
+  /** `null` = Non-Logo (no raster on canvas for this slot). */
+  logoUrl: string | null;
+  u: number;
+  v: number;
+  widthFrac: number;
+};
+
+type TextLayerState = {
+  id: string;
+  kind: "text";
+  u: number;
+  v: number;
+  text: string;
+  fontId: CaptionFontId;
+  sizeFrac: number;
+};
+
+type LayerState = LogoLayerState | TextLayerState;
+
+const DEFAULT_LOGO_U = 0.5;
+const DEFAULT_LOGO_V = 0.38;
+const DEFAULT_TEXT_U = 0.5;
+const DEFAULT_TEXT_V = 0.62;
+
 export type MockupBuilderEditTarget = {
   imageId: string;
   publicUrl: string;
@@ -160,11 +267,9 @@ export function ClickUpSheetMockupBuilderModal({
 
   const [logos, setLogos] = useState<CustomerReferenceVisualDto[]>([]);
   const [logosLoading, setLogosLoading] = useState(false);
-  const [selectedLogoUrl, setSelectedLogoUrl] = useState<string | null>(null);
 
-  const [u, setU] = useState(0.5);
-  const [v, setV] = useState(0.38);
-  const [logoWidthFrac, setLogoWidthFrac] = useState(0.22);
+  const [layers, setLayers] = useState<LayerState[]>([]);
+  const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
   const [layout, setLayout] = useState<Layout | null>(null);
   const [baseImageError, setBaseImageError] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -174,7 +279,7 @@ export function ClickUpSheetMockupBuilderModal({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const bgImgRef = useRef<HTMLImageElement>(null);
-  const draggingRef = useRef(false);
+  const draggingRef = useRef<{ id: string } | null>(null);
   const layoutRef = useRef<Layout | null>(null);
   layoutRef.current = layout;
 
@@ -209,6 +314,13 @@ export function ClickUpSheetMockupBuilderModal({
     };
   }, [open, step, templateUrl, measure]);
 
+  const poolN = logos.length;
+  const maxLogoLayers = poolN;
+  const maxTextLayers = poolN === 0 ? 6 : poolN;
+  const logoLayerCount = layers.filter((l) => l.kind === "logo").length;
+  const textLayerCount = layers.filter((l) => l.kind === "text").length;
+  const activeLayer = layers.find((l) => l.id === activeLayerId) ?? null;
+
   const wasOpenRef = useRef(false);
   useEffect(() => {
     if (!open) {
@@ -224,7 +336,8 @@ export function ClickUpSheetMockupBuilderModal({
         setTemplatesByCategory(emptyTemplatesByCategory());
         setGalleryError(null);
         setTemplateUrl(editTarget.publicUrl);
-        setSelectedLogoUrl(null);
+        setLayers([]);
+        setActiveLayerId(null);
         setExportError(null);
         setLayout(null);
         setBaseImageError(false);
@@ -236,7 +349,8 @@ export function ClickUpSheetMockupBuilderModal({
         setTemplatesByCategory(emptyTemplatesByCategory());
         setGalleryError(null);
         setTemplateUrl(null);
-        setSelectedLogoUrl(null);
+        setLayers([]);
+        setActiveLayerId(null);
         setExportError(null);
         setLayout(null);
         setBaseImageError(false);
@@ -344,12 +458,6 @@ export function ClickUpSheetMockupBuilderModal({
       }
 
       setLogos(merged);
-      setSelectedLogoUrl((prev) => {
-        if (prev && merged.some((i) => i.public_url === prev)) {
-          return prev;
-        }
-        return merged[0]?.public_url ?? null;
-      });
       setLogosLoading(false);
     })();
 
@@ -374,15 +482,17 @@ export function ClickUpSheetMockupBuilderModal({
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
-      if (!draggingRef.current) {
+      const d = draggingRef.current;
+      if (!d) {
         return;
       }
       const { u: nu, v: nv } = clientToUV(e.clientX, e.clientY);
-      setU(nu);
-      setV(nv);
+      setLayers((prev) =>
+        prev.map((p) => (p.id === d.id ? { ...p, u: nu, v: nv } : p)),
+      );
     }
     function onUp() {
-      draggingRef.current = false;
+      draggingRef.current = null;
     }
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -392,29 +502,119 @@ export function ClickUpSheetMockupBuilderModal({
     };
   }, []);
 
+  function addLogoLayer() {
+    if (maxLogoLayers === 0 || logoLayerCount >= maxLogoLayers) {
+      return;
+    }
+    const id = newLayerId();
+    setLayers((prev) => [
+      ...prev,
+      {
+        id,
+        kind: "logo",
+        logoUrl: null,
+        u: DEFAULT_LOGO_U,
+        v: DEFAULT_LOGO_V,
+        widthFrac: 0.22,
+      },
+    ]);
+    setActiveLayerId(id);
+  }
+
+  function addTextLayer() {
+    if (textLayerCount >= maxTextLayers) {
+      return;
+    }
+    const id = newLayerId();
+    setLayers((prev) => [
+      ...prev,
+      {
+        id,
+        kind: "text",
+        u: DEFAULT_TEXT_U,
+        v: DEFAULT_TEXT_V,
+        text: "",
+        fontId: "arial",
+        sizeFrac: 0.028,
+      },
+    ]);
+    setActiveLayerId(id);
+  }
+
+  function removeLayer(id: string) {
+    setLayers((prev) => prev.filter((p) => p.id !== id));
+    setActiveLayerId((cur) => (cur === id ? null : cur));
+  }
+
+  function startDragLayer(id: string, e: ReactMouseEvent) {
+    e.preventDefault();
+    setActiveLayerId(id);
+    draggingRef.current = { id };
+  }
+
   async function exportPng() {
-    if (!templateUrl || !selectedLogoUrl) {
-      setExportError("Select a logo.");
+    if (!templateUrl) {
+      setExportError("No template.");
       return;
     }
     setExportError(null);
     setExporting(true);
     try {
       const bg = await loadImageViaFetch(templateUrl);
-      const logo = await loadImageViaFetch(selectedLogoUrl);
+      const W = bg.naturalWidth;
+      const H = bg.naturalHeight;
       const canvas = document.createElement("canvas");
-      canvas.width = bg.naturalWidth;
-      canvas.height = bg.naturalHeight;
+      canvas.width = W;
+      canvas.height = H;
       const ctx = canvas.getContext("2d");
       if (!ctx) {
         throw new Error("Canvas not supported");
       }
       ctx.drawImage(bg, 0, 0);
-      const lw = bg.naturalWidth * logoWidthFrac;
-      const lh = (logo.naturalHeight / logo.naturalWidth) * lw;
-      const cx = u * bg.naturalWidth;
-      const cy = v * bg.naturalHeight;
-      ctx.drawImage(logo, cx - lw / 2, cy - lh / 2, lw, lh);
+
+      for (const layer of layers) {
+        if (layer.kind === "logo") {
+          if (!layer.logoUrl) {
+            continue;
+          }
+          const logo = await loadImageViaFetch(layer.logoUrl);
+          const lw = W * layer.widthFrac;
+          const lh = (logo.naturalHeight / logo.naturalWidth) * lw;
+          const cx = layer.u * W;
+          const cy = layer.v * H;
+          ctx.drawImage(logo, cx - lw / 2, cy - lh / 2, lw, lh);
+        } else {
+          const raw = layer.text.trim();
+          if (!raw) {
+            continue;
+          }
+          const fontPx = Math.max(10, Math.round(layer.sizeFrac * W));
+          const stack = captionStackById(layer.fontId);
+          ctx.save();
+          ctx.font = `${fontPx}px ${stack}`;
+          ctx.fillStyle = "#0f172a";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "top";
+          const maxW = W * 0.92;
+          const lines = wrapCaptionForCanvas(ctx, raw, maxW);
+          const lineStep = Math.round(fontPx * 1.3);
+          let totalH = 0;
+          for (const ln of lines) {
+            totalH += ln === "" ? Math.round(fontPx * 0.55) : lineStep;
+          }
+          let y = layer.v * H - totalH / 2;
+          for (const ln of lines) {
+            if (ln === "") {
+              y += Math.round(fontPx * 0.55);
+              continue;
+            }
+            ctx.fillText(ln, layer.u * W, y);
+            y += lineStep;
+          }
+          ctx.restore();
+        }
+      }
+
       const blob = await new Promise<Blob | null>((res) => canvas.toBlob((b) => res(b), "image/png"));
       if (!blob) {
         throw new Error("Could not build PNG.");
@@ -573,90 +773,326 @@ export function ClickUpSheetMockupBuilderModal({
                       src={templateUrl}
                       alt=""
                       className="relative z-0 block h-auto max-h-[min(70vh,560px)] max-w-full object-contain"
-                    onLoad={() => {
-                      setBaseImageError(false);
-                      measure();
-                      requestAnimationFrame(() => measure());
-                    }}
+                      onLoad={() => {
+                        setBaseImageError(false);
+                        measure();
+                        requestAnimationFrame(() => measure());
+                      }}
                       onError={() => setBaseImageError(true)}
                       draggable={false}
                     />
-                    {selectedLogoUrl && layout ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={selectedLogoUrl}
-                        alt=""
-                        draggable={false}
-                        className="pointer-events-auto absolute z-10 cursor-move touch-none"
-                        style={{
-                          left: layout.ox + u * layout.dw,
-                          top: layout.oy + v * layout.dh,
-                          width: layout.dw * logoWidthFrac,
-                          height: "auto",
-                          transform: "translate(-50%, -50%)",
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          draggingRef.current = true;
-                          const uv = clientToUV(e.clientX, e.clientY);
-                          setU(uv.u);
-                          setV(uv.v);
-                        }}
-                      />
-                    ) : null}
+                    {layout
+                      ? layers.map((layer, i) => {
+                          const z = 10 + i;
+                          const left = layout.ox + layer.u * layout.dw;
+                          const top = layout.oy + layer.v * layout.dh;
+                          if (layer.kind === "logo") {
+                            if (!layer.logoUrl) {
+                              const w = layout.dw * layer.widthFrac;
+                              return (
+                                <button
+                                  key={layer.id}
+                                  type="button"
+                                  className={`pointer-events-auto absolute flex cursor-move touch-none items-center justify-center rounded border-2 border-dashed bg-white/50 ${
+                                    activeLayerId === layer.id
+                                      ? "border-brand-orange ring-2 ring-brand-orange/30"
+                                      : "border-slate-400/80"
+                                  }`}
+                                  style={{
+                                    left,
+                                    top,
+                                    width: w,
+                                    minHeight: Math.max(28, w * 0.32),
+                                    transform: "translate(-50%, -50%)",
+                                    zIndex: z,
+                                  }}
+                                  onMouseDown={(e) => startDragLayer(layer.id, e)}
+                                >
+                                  <span className="px-1 text-center text-[0.65rem] font-semibold text-slate-600">
+                                    Non-Logo
+                                  </span>
+                                </button>
+                              );
+                            }
+                            return (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img
+                                key={layer.id}
+                                src={layer.logoUrl}
+                                alt=""
+                                draggable={false}
+                                className={`pointer-events-auto absolute touch-none ${
+                                  activeLayerId === layer.id
+                                    ? "cursor-move ring-2 ring-brand-orange/40"
+                                    : "cursor-move"
+                                }`}
+                                style={{
+                                  left,
+                                  top,
+                                  width: layout.dw * layer.widthFrac,
+                                  height: "auto",
+                                  transform: "translate(-50%, -50%)",
+                                  zIndex: z,
+                                }}
+                                onMouseDown={(e) => startDragLayer(layer.id, e)}
+                              />
+                            );
+                          }
+                          const fs = Math.max(10, Math.round(layer.sizeFrac * layout.dw));
+                          return (
+                            <div
+                              key={layer.id}
+                              className={`pointer-events-auto absolute max-w-[min(92%,24rem)] cursor-move touch-none whitespace-pre-wrap break-words text-center ${
+                                activeLayerId === layer.id ? "ring-2 ring-brand-orange/40" : ""
+                              }`}
+                              style={{
+                                left,
+                                top,
+                                transform: "translate(-50%, -50%)",
+                                fontFamily: captionStackById(layer.fontId),
+                                fontSize: fs,
+                                lineHeight: 1.3,
+                                color: layer.text.trim() ? "#0f172a" : "#94a3b8",
+                                zIndex: z,
+                              }}
+                              onMouseDown={(e) => startDragLayer(layer.id, e)}
+                            >
+                              {layer.text.trim() ? layer.text : "(Text)"}
+                            </div>
+                          );
+                        })
+                      : null}
                   </div>
                 )}
               </div>
 
-              <div>
-                <label className="text-xs font-medium text-slate-600" htmlFor="logo-scale-range">
-                  Logo size (relative to garment width)
-                </label>
-                <input
-                  id="logo-scale-range"
-                  type="range"
-                  min={0.08}
-                  max={0.55}
-                  step={0.01}
-                  value={logoWidthFrac}
-                  onChange={(e) => setLogoWidthFrac(Number(e.target.value))}
-                  className="mt-1 block w-full"
-                />
-              </div>
-
-              <div>
-                <p className="text-xs font-medium text-slate-600">
-                  Logo (sheet Reference images · checkout / production assets)
+              <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-3">
+                <p className="text-xs font-semibold text-slate-800">Layers</p>
+                <p className="mt-1 text-[0.65rem] text-slate-500">
+                  로고와 글자는 각각 독립된 레이어로 추가·이동합니다. 로딩된 참고 로고가{" "}
+                  <span className="font-mono tabular-nums">{poolN}</span>개이면 로고 레이어 최대{" "}
+                  <span className="font-mono tabular-nums">{maxLogoLayers}</span>개, 텍스트 레이어 최대{" "}
+                  <span className="font-mono tabular-nums">{maxTextLayers}</span>개까지 추가할 수 있습니다. 새 로고 레이어는
+                  기본적으로 <strong>Non-Logo</strong>이며, 아래에서 이미지를 고르면 캔버스에 표시됩니다.
                 </p>
-                {logosLoading ? (
-                  <p className="mt-2 text-sm text-slate-500">Loading logos…</p>
-                ) : logos.length === 0 ? (
-                  <p className="mt-2 text-sm text-slate-500">
-                    사용할 이미지가 없습니다. 이 페이지의 <strong>Reference images</strong>에서 시트용 참고 사진을
-                    업로드하거나, 주문에 연결된 에셋이 있는지 확인하세요. 워크시트 날짜가 있어야 시트 참고 이미지가
-                    불러와집니다.
-                  </p>
-                ) : (
-                  <ul className="mt-2 flex flex-wrap gap-2">
-                    {logos.map((row) => (
-                      <li key={row.key}>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={maxLogoLayers === 0 || logoLayerCount >= maxLogoLayers}
+                    onClick={addLogoLayer}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    Add logo layer
+                  </button>
+                  <button
+                    type="button"
+                    disabled={textLayerCount >= maxTextLayers}
+                    onClick={addTextLayer}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    Add text layer
+                  </button>
+                </div>
+                {layers.length > 0 ? (
+                  <ul className="mt-3 space-y-1.5 border-t border-slate-200 pt-3">
+                    {layers.map((layer, idx) => (
+                      <li
+                        key={layer.id}
+                        className={`flex flex-wrap items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm ${
+                          activeLayerId === layer.id ? "bg-brand-orange/15 ring-1 ring-brand-orange/40" : "bg-white/80"
+                        }`}
+                      >
                         <button
                           type="button"
-                          onClick={() => setSelectedLogoUrl(row.public_url)}
-                          className={`overflow-hidden rounded-lg border-2 bg-white p-0.5 ${
-                            selectedLogoUrl === row.public_url
-                              ? "border-brand-orange"
-                              : "border-slate-200 hover:border-slate-300"
-                          }`}
+                          onClick={() => setActiveLayerId(layer.id)}
+                          className="min-w-0 flex-1 truncate text-left font-medium text-slate-800"
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={row.public_url} alt="" className="h-14 w-14 object-contain" />
+                          {idx + 1}.{" "}
+                          {layer.kind === "logo"
+                            ? layer.logoUrl
+                              ? `Logo · ${
+                                  logos.find((x) => x.public_url === layer.logoUrl)?.caption?.slice(0, 42) ??
+                                  "image"
+                                }`
+                              : "Logo · Non-Logo"
+                            : `Text · ${layer.text.trim() ? layer.text.trim().slice(0, 40) : "(empty)"}`}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeLayer(layer.id)}
+                          className="shrink-0 rounded px-2 py-0.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                        >
+                          Remove
                         </button>
                       </li>
                     ))}
                   </ul>
+                ) : (
+                  <p className="mt-2 text-xs text-slate-500">레이어가 없으면 베이스 옷 이미지만 저장됩니다.</p>
                 )}
               </div>
+
+              {activeLayer?.kind === "logo" ? (
+                <>
+                  <div>
+                    <label className="text-xs font-medium text-slate-600" htmlFor="logo-scale-range">
+                      Logo size (this layer, relative to garment width)
+                    </label>
+                    <input
+                      id="logo-scale-range"
+                      type="range"
+                      min={0.08}
+                      max={0.55}
+                      step={0.01}
+                      value={activeLayer.widthFrac}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        setLayers((prev) =>
+                          prev.map((p) =>
+                            p.id === activeLayer.id && p.kind === "logo" ? { ...p, widthFrac: v } : p,
+                          ),
+                        );
+                      }}
+                      className="mt-1 block w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium text-slate-600">
+                      Logo image (Reference / order assets) — <strong>Non-Logo</strong> = no image on this layer
+                    </p>
+                    {logosLoading ? (
+                      <p className="mt-2 text-sm text-slate-500">Loading logos…</p>
+                    ) : logos.length === 0 ? (
+                      <p className="mt-2 text-sm text-slate-500">
+                        참고 이미지가 없으면 로고 레이어는 Non-Logo만 가능합니다.{" "}
+                        <strong>Reference images</strong>를 업로드하거나 주문 에셋을 연결하세요.
+                      </p>
+                    ) : (
+                      <ul className="mt-2 flex flex-wrap gap-2">
+                        <li>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLayers((prev) =>
+                                prev.map((p) =>
+                                  p.id === activeLayer.id && p.kind === "logo" ? { ...p, logoUrl: null } : p,
+                                ),
+                              )
+                            }
+                            className={`flex h-16 min-w-[4.5rem] items-center justify-center rounded-lg border-2 px-2 text-center text-[0.65rem] font-semibold leading-tight ${
+                              activeLayer.logoUrl === null
+                                ? "border-brand-orange bg-white text-slate-800"
+                                : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"
+                            }`}
+                          >
+                            Non-Logo
+                          </button>
+                        </li>
+                        {logos.map((row) => (
+                          <li key={row.key}>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setLayers((prev) =>
+                                  prev.map((p) =>
+                                    p.id === activeLayer.id && p.kind === "logo"
+                                      ? { ...p, logoUrl: row.public_url }
+                                      : p,
+                                  ),
+                                )
+                              }
+                              className={`overflow-hidden rounded-lg border-2 bg-white p-0.5 ${
+                                activeLayer.logoUrl === row.public_url
+                                  ? "border-brand-orange"
+                                  : "border-slate-200 hover:border-slate-300"
+                              }`}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={row.public_url} alt="" className="h-14 w-14 object-contain" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </>
+              ) : null}
+
+              {activeLayer?.kind === "text" ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-3">
+                  <p className="text-xs font-semibold text-slate-800">Text layer (this layer)</p>
+                  <p className="mt-1 text-[0.65rem] text-slate-500">
+                    Slogan, phone, address. Enter for multiple lines. Drag the preview to position independently from logos.
+                  </p>
+                  <textarea
+                    value={activeLayer.text}
+                    onChange={(e) => {
+                      const t = e.target.value.slice(0, 600);
+                      const id = activeLayer.id;
+                      setLayers((prev) =>
+                        prev.map((p) => (p.id === id && p.kind === "text" ? { ...p, text: t } : p)),
+                      );
+                    }}
+                    rows={3}
+                    placeholder={"e.g. Built to last\n08 1234 5678"}
+                    className="mt-2 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm placeholder:text-slate-400 focus:border-brand-orange/50 focus:outline-none focus:ring-2 focus:ring-brand-orange/25"
+                  />
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor="mockup-caption-font" className="text-xs font-medium text-slate-600">
+                        Font
+                      </label>
+                      <select
+                        id="mockup-caption-font"
+                        value={activeLayer.fontId}
+                        onChange={(e) => {
+                          const v = e.target.value as CaptionFontId;
+                          const id = activeLayer.id;
+                          setLayers((prev) =>
+                            prev.map((p) => (p.id === id && p.kind === "text" ? { ...p, fontId: v } : p)),
+                          );
+                        }}
+                        className="mt-1 block w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-orange/50 focus:outline-none focus:ring-2 focus:ring-brand-orange/25"
+                      >
+                        {CAPTION_FONT_OPTIONS.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600" htmlFor="mockup-caption-size">
+                        Size (share of garment width)
+                      </label>
+                      <input
+                        id="mockup-caption-size"
+                        type="range"
+                        min={0.012}
+                        max={0.065}
+                        step={0.001}
+                        value={activeLayer.sizeFrac}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          const id = activeLayer.id;
+                          setLayers((prev) =>
+                            prev.map((p) => (p.id === id && p.kind === "text" ? { ...p, sizeFrac: v } : p)),
+                          );
+                        }}
+                        className="mt-2 block w-full"
+                      />
+                      <p className="mt-0.5 text-[0.65rem] tabular-nums text-slate-500">
+                        ≈ {(activeLayer.sizeFrac * 100).toFixed(1)}% of garment width
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {!activeLayer && layers.length > 0 ? (
+                <p className="text-xs text-slate-500">레이어를 목록에서 선택하면 편집할 수 있습니다.</p>
+              ) : null}
 
               {exportError ? (
                 <p className="text-sm text-red-700" role="alert">

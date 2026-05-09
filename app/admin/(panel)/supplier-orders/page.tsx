@@ -1,21 +1,11 @@
 import Link from "next/link";
 
 import { completeOrdersDocFromSearchParam } from "@/lib/complete-orders-doc-query";
-import type { Database } from "@/lib/database.types";
-import { getPerthDateSheetRangeDescending } from "@/lib/perth-calendar";
-import {
-  backfillEmptySupplierFromCatalog,
-  resolveProductImageUrlsByProductKeys,
-} from "@/lib/supplier-line-catalog-supplier";
-import { supplierOrderLinesLoadErrorMessage } from "@/lib/supplier-order-lines-db-error";
+import { warehouseManagerViewFromSearchParam } from "@/lib/supplier-orders-warehouse-manager";
+import { loadAdminSupplierOrderSheets } from "@/lib/load-admin-supplier-order-sheets";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 import { SupplierOrdersByDayClient } from "./supplier-orders-by-day-client";
-
-type SupplierOrderLine = Database["public"]["Tables"]["supplier_order_lines"]["Row"];
-
-/** Perth calendar days to show (newest first); each day always renders a table, even when empty. */
-const SHEET_DAY_WINDOW = 60;
 
 function formatGeneratedAt(date: Date) {
   return date.toLocaleString("en-AU", {
@@ -25,7 +15,7 @@ function formatGeneratedAt(date: Date) {
   });
 }
 
-type SupplierOrdersSearch = { complete_orders_doc?: string };
+type SupplierOrdersSearch = { complete_orders_doc?: string; warehouse_manager?: string };
 
 export default async function AdminSupplierOrdersPage({
   searchParams,
@@ -34,55 +24,13 @@ export default async function AdminSupplierOrdersPage({
 }) {
   const q = searchParams ? await searchParams : {};
   const completeOrdersDocumentsView = completeOrdersDocFromSearchParam(q.complete_orders_doc);
+  const warehouseManagerView = warehouseManagerViewFromSearchParam(q.warehouse_manager);
   const generatedAt = new Date();
   const listDateLabel = formatGeneratedAt(generatedAt);
   const listDateIso = generatedAt.toISOString();
 
-  const sheetDates = getPerthDateSheetRangeDescending(SHEET_DAY_WINDOW, generatedAt);
-  const oldestYmd = sheetDates[sheetDates.length - 1]!;
-  const newestYmd = sheetDates[0]!;
-
-  let loadError: string | null = null;
-  let lines: SupplierOrderLine[] = [];
-  let productImageByProductKey: Record<string, string | null> = {};
-
-  try {
-    const result = await fetchSupplierOrderLines(oldestYmd, newestYmd);
-    lines = result.lines;
-    loadError = result.error;
-    if (!loadError && lines.length > 0) {
-      const supabase = createSupabaseAdminClient();
-      lines = await backfillEmptySupplierFromCatalog(supabase, lines);
-      const keys = [...new Set(lines.map((l) => l.product_id.trim()).filter(Boolean))];
-      if (keys.length > 0) {
-        const imgMap = await resolveProductImageUrlsByProductKeys(supabase, keys);
-        productImageByProductKey = Object.fromEntries(keys.map((k) => [k, imgMap.get(k) ?? null]));
-      }
-    }
-  } catch (e) {
-    const detail = e instanceof Error ? e.message : String(e);
-    loadError =
-      `Could not load lines (${detail}). ` +
-      "Confirm NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set (non-empty) in .env.local, save, then restart the dev server.";
-  }
-
-  const linesByDate: Record<string, SupplierOrderLine[]> = {};
-  for (const d of sheetDates) {
-    linesByDate[d] = [];
-  }
-  for (const line of lines) {
-    const k = line.list_date;
-    if (linesByDate[k] !== undefined) {
-      linesByDate[k]!.push(line);
-    }
-  }
-  for (const d of sheetDates) {
-    linesByDate[d]!.sort((a, b) => {
-      const sup = a.supplier.localeCompare(b.supplier);
-      if (sup !== 0) return sup;
-      return a.created_at.localeCompare(b.created_at);
-    });
-  }
+  const { sheetDates, linesByDate, productImageByProductKey, loadError } =
+    await loadAdminSupplierOrderSheets({ at: generatedAt });
 
   const storeOrderNumberOptions = await fetchRecentStoreOrderNumbers();
   const productSupplierNameOptions = await fetchDistinctProductSupplierNames();
@@ -112,6 +60,7 @@ export default async function AdminSupplierOrdersPage({
         linesByDate={linesByDate}
         migrationHint={loadError}
         completeOrdersDocumentsView={completeOrdersDocumentsView}
+        warehouseManagerView={warehouseManagerView}
         readyByDate={readyByDate}
         storeOrderNumberOptions={storeOrderNumberOptions}
         productSupplierNameOptions={productSupplierNameOptions}
@@ -192,23 +141,3 @@ async function fetchRecentStoreOrderNumbers(): Promise<string[]> {
   }
 }
 
-async function fetchSupplierOrderLines(
-  oldestYmd: string,
-  newestYmd: string,
-): Promise<{ lines: SupplierOrderLine[]; error: string | null }> {
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("supplier_order_lines")
-    .select("*")
-    .gte("list_date", oldestYmd)
-    .lte("list_date", newestYmd)
-    .order("list_date", { ascending: false })
-    .order("supplier", { ascending: true })
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    return { lines: [], error: supplierOrderLinesLoadErrorMessage(error) };
-  }
-
-  return { lines: (data ?? []) as SupplierOrderLine[], error: null };
-}

@@ -1,12 +1,21 @@
 import Link from "next/link";
 
+import { warehouseStockViewFromSearchParam } from "@/lib/admin-warehouse-stock-query";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 import { StockTableClientShell } from "./stock-table-client-shell";
 
 const LOW_STOCK_THRESHOLD = 10;
 
-export default async function AdminStockPage() {
+type StockSearch = { warehouse?: string };
+
+export default async function AdminStockPage({
+  searchParams,
+}: {
+  searchParams?: Promise<StockSearch>;
+}) {
+  const q = searchParams ? await searchParams : {};
+  const warehouseStockView = warehouseStockViewFromSearchParam(q.warehouse);
   const supabase = createSupabaseAdminClient();
   const selectCandidates = [
     "id, name, category, supplier_name, base_price, sale_price, stock_quantity, storefront_hidden, storefront_hidden_at, image_urls",
@@ -102,7 +111,11 @@ export default async function AdminStockPage() {
         </p>
       )}
 
-      <StockTableClientShell products={rows} lowStockThreshold={LOW_STOCK_THRESHOLD} />
+      <StockTableClientShell
+        products={rows}
+        lowStockThreshold={LOW_STOCK_THRESHOLD}
+        warehouseStockView={warehouseStockView}
+      />
     </div>
   );
 }

@@ -3,14 +3,18 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { ImageUrlLightbox } from "@/app/components/image-url-lightbox";
 import { ArrowLeftIcon, CartIcon } from "@/app/components/icons";
 import { TopNav } from "@/app/components/top-nav";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
+import { extractAustralianPostcodeFromAddress } from "@/lib/customer-delivery-estimate";
 import {
-  calculateDeliveryFee,
-  distanceKmFromCompanyBase,
-  extractAustralianPostcodeFromAddress,
-} from "@/lib/customer-delivery-estimate";
+  STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD,
+  STOREFRONT_LOGO_SETUP_BEFORE_GST_AUD,
+  computeStorefrontCheckoutFees,
+  logoSetupFeeInclGstAud,
+} from "@/lib/storefront-cart-checkout-fees";
+import { totalEstimatedShippingWeightKg } from "@/lib/delivery-shipping-weight";
 import {
   getCartItems,
   getReorderMockupImageUrls,
@@ -22,17 +26,21 @@ import { productPathSegment } from "@/lib/product-path-slug";
 import { serviceTypeColoredContent } from "@/lib/service-type-colored";
 import { resolveStorefrontImageUrl } from "@/lib/storefront-image-url";
 import { STORE_MAIN_SHELL_CLASS } from "@/lib/store-main-shell";
+import {
+  storefrontCartNetProductSubtotalAfterVolumeAud,
+  storefrontVolumeAdjustedCartLines,
+} from "@/lib/storefront-volume-discount";
 
 /** When a cart line has no stored image (legacy cart or missing DB image). */
 const CART_LINE_FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=600&q=80";
 
 function toCurrency(amount: number) {
-  return amount.toLocaleString("en-US", {
+  return amount.toLocaleString("en-AU", {
     style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
+    currency: "AUD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   });
 }
 
@@ -93,21 +101,59 @@ function CartLineDetailBody({ item }: { item: CartItem }) {
 export default function CartPage() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [reorderMockupUrls, setReorderMockupUrls] = useState<string[]>([]);
+  const [reorderMockupLightboxSrc, setReorderMockupLightboxSrc] = useState<string | null>(null);
   const [deliveryPostcode, setDeliveryPostcode] = useState<string | null>(null);
+  const [isCustomerSignedIn, setIsCustomerSignedIn] = useState(false);
+  const [hasPriorEmbroideryOrder, setHasPriorEmbroideryOrder] = useState<boolean | null>(null);
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [detailItemId, setDetailItemId] = useState<string | null>(null);
 
   useEffect(() => {
+    const syncSessionCookies = () => {
+      setIsCustomerSignedIn(Boolean(getCookieValue("customer_email").trim()));
+      const deliveryAddress = getCookieValue("customer_delivery_address");
+      setDeliveryPostcode(extractAustralianPostcodeFromAddress(deliveryAddress));
+    };
     const sync = () => {
       setItems(getCartItems());
       setReorderMockupUrls(getReorderMockupImageUrls());
+      syncSessionCookies();
     };
     sync();
-    const deliveryAddress = getCookieValue("customer_delivery_address");
-    setDeliveryPostcode(extractAustralianPostcodeFromAddress(deliveryAddress));
     const unsubscribe = subscribeCartUpdates(sync);
-    return unsubscribe;
+    const onRefocus = () => syncSessionCookies();
+    window.addEventListener("focus", onRefocus);
+    document.addEventListener("visibilitychange", onRefocus);
+    return () => {
+      unsubscribe();
+      window.removeEventListener("focus", onRefocus);
+      document.removeEventListener("visibilitychange", onRefocus);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!isCustomerSignedIn) {
+      setHasPriorEmbroideryOrder(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/customer/has-prior-embroidery-order", { credentials: "include" });
+        if (!res.ok) {
+          if (!cancelled) setHasPriorEmbroideryOrder(null);
+          return;
+        }
+        const data = (await res.json()) as { hasPriorEmbroideryOrder?: boolean };
+        if (!cancelled) setHasPriorEmbroideryOrder(Boolean(data.hasPriorEmbroideryOrder));
+      } catch {
+        if (!cancelled) setHasPriorEmbroideryOrder(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isCustomerSignedIn]);
 
   useEffect(() => {
     if (detailItemId && !items.some((i) => i.id === detailItemId)) {
@@ -128,27 +174,48 @@ export default function CartPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [detailItemId]);
 
-  const grandTotal = useMemo(
-    () => items.reduce((sum, item) => sum + item.totalPrice, 0),
-    [items]
+  const { gross: productGrossSubtotal, net: productNetSubtotal } = useMemo(
+    () => storefrontCartNetProductSubtotalAfterVolumeAud(items),
+    [items],
   );
+  const volumeDiscountAud = useMemo(
+    () => Math.round((productGrossSubtotal - productNetSubtotal + Number.EPSILON) * 100) / 100,
+    [productGrossSubtotal, productNetSubtotal],
+  );
+  const volumeAdjustedByLineId = useMemo(() => {
+    const adjusted = storefrontVolumeAdjustedCartLines(items);
+    const map = new Map<string, { unitPrice: number; totalPrice: number }>();
+    for (let i = 0; i < items.length; i += 1) {
+      const row = adjusted[i];
+      if (row) {
+        map.set(items[i]!.id, { unitPrice: row.unitPrice, totalPrice: row.totalPrice });
+      }
+    }
+    return map;
+  }, [items]);
 
   const totalQuantity = useMemo(
     () => items.reduce((sum, item) => sum + item.quantity, 0),
     [items]
   );
 
-  const estimatedWeightKg = useMemo(() => {
-    const weight = items.reduce((sum, item) => sum + item.quantity * 0.35, 0);
-    return Number(weight.toFixed(2));
-  }, [items]);
+  const estimatedWeightKg = useMemo(() => totalEstimatedShippingWeightKg(items), [items]);
 
-  const distanceKm = useMemo(() => distanceKmFromCompanyBase(deliveryPostcode), [deliveryPostcode]);
-  const deliveryFee = useMemo(
-    () => calculateDeliveryFee(distanceKm, estimatedWeightKg),
-    [distanceKm, estimatedWeightKg],
+  const checkoutFees = useMemo(
+    () =>
+      computeStorefrontCheckoutFees({
+        subtotalAud: productNetSubtotal,
+        items,
+        deliveryPostcode,
+        estimatedWeightKg,
+        isCustomerSignedIn,
+        hasPriorEmbroideryOrder,
+      }),
+    [productNetSubtotal, items, deliveryPostcode, estimatedWeightKg, isCustomerSignedIn, hasPriorEmbroideryOrder],
   );
-  const payableTotal = useMemo(() => grandTotal + deliveryFee, [grandTotal, deliveryFee]);
+  const { deliveryFeeAud, logoSetupFeeAud, logoSetupApplies, perthMetroDeliveryFree, totalAud: payableTotal } =
+    checkoutFees;
+  const canCheckOut = termsAgreed && isCustomerSignedIn;
 
   const detailItem = detailItemId ? items.find((i) => i.id === detailItemId) : undefined;
 
@@ -187,6 +254,9 @@ export default function CartPage() {
           <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
             <div className="space-y-4">
               {items.map((item) => {
+                const priced = volumeAdjustedByLineId.get(item.id);
+                const showUnit = priced?.unitPrice ?? item.unitPrice;
+                const showLineTotal = priced?.totalPrice ?? item.totalPrice;
                 const heroSrc = (() => {
                   const raw = typeof item.imageUrl === "string" ? item.imageUrl.trim() : "";
                   if (!raw) return CART_LINE_FALLBACK_IMAGE;
@@ -239,9 +309,9 @@ export default function CartPage() {
                             </button>
                           </div>
                           <div className="text-right">
-                            <p className="text-[1.5309rem] text-brand-navy/65">Unit: {toCurrency(item.unitPrice)}</p>
+                            <p className="text-[1.5309rem] text-brand-navy/65">Unit: {toCurrency(showUnit)}</p>
                             <p className="text-[1.51875rem] font-medium leading-tight text-brand-orange">
-                              {toCurrency(item.totalPrice)}
+                              {toCurrency(showLineTotal)}
                             </p>
                           </div>
                         </div>
@@ -278,21 +348,22 @@ export default function CartPage() {
                   <div className="mt-4 flex flex-wrap gap-4">
                     {reorderMockupUrls.map((url) =>
                       isCartMockupRenderableImageUrl(url) ? (
-                        <a
+                        <button
                           key={url}
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block shrink-0 rounded-xl border border-brand-navy/10 bg-white p-2 shadow-sm transition hover:border-brand-orange/40"
+                          type="button"
+                          onClick={() => setReorderMockupLightboxSrc(url)}
+                          className="block shrink-0 cursor-zoom-in rounded-xl border border-brand-navy/10 bg-white p-2 text-left shadow-sm transition hover:border-brand-orange/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange"
+                          aria-label="View mock-up larger"
                         >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={url}
                             alt="Order mockup"
-                            className="max-h-64 max-w-[min(100%,20rem)] object-contain"
+                            className="pointer-events-none max-h-64 max-w-[min(100%,20rem)] object-contain"
                             loading="lazy"
                             decoding="async"
                           />
-                        </a>
+                        </button>
                       ) : (
                         <a
                           key={url}
@@ -306,6 +377,14 @@ export default function CartPage() {
                       ),
                     )}
                   </div>
+                  <ImageUrlLightbox
+                    open={Boolean(reorderMockupLightboxSrc)}
+                    onClose={() => setReorderMockupLightboxSrc(null)}
+                    src={reorderMockupLightboxSrc ?? ""}
+                    alt="Order mockup"
+                    ariaLabel="Enlarged order mock-up"
+                    enlarged
+                  />
                 </section>
               ) : null}
             </div>
@@ -314,18 +393,105 @@ export default function CartPage() {
               <h2 className="text-[1.3125rem] font-medium uppercase tracking-[0.1em] text-slate-200">
                 Cart Summary
               </h2>
+              <div className="mt-4 rounded-xl border border-white/15 bg-white/5 p-3 text-[0.95rem] leading-snug text-slate-200">
+                <p className="font-semibold text-slate-100">Pricing &amp; delivery notes</p>
+                <ul className="mt-2 list-inside list-disc space-y-1.5 text-slate-300">
+                  <li>
+                    Product subtotal under {toCurrency(STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD)}: your{" "}
+                    <strong className="font-medium text-slate-200">first</strong> embroidery order includes a one-off
+                    Logo setup fee ({toCurrency(STOREFRONT_LOGO_SETUP_BEFORE_GST_AUD)} + GST,{" "}
+                    {toCurrency(logoSetupFeeInclGstAud())} incl. GST).
+                  </li>
+                  <li>
+                    <strong className="font-medium text-slate-200">New logo files</strong> on an embroidery line (same
+                    fee) apply even if you have ordered embroidery before — upload artwork at add-to-cart.
+                  </li>
+                  <li>
+                    Product subtotal {toCurrency(STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD)} or more: Logo setup is{" "}
+                    <strong className="font-medium text-slate-200">waived</strong>, and{" "}
+                    <strong className="font-medium text-slate-200">Perth Metro delivery is free</strong> (WA postcodes
+                    6000–6199).
+                  </li>
+                </ul>
+              </div>
               <div className="mt-4 space-y-2 text-[1.3125rem]">
                 <p className="flex items-center justify-between">
                   <span>Total items</span>
                   <span className="font-semibold">{totalQuantity}</span>
                 </p>
                 <p className="flex items-center justify-between">
-                  <span>Products</span>
+                  <span>Cart lines</span>
                   <span className="font-semibold">{items.length}</span>
+                </p>
+                <p className="flex items-center justify-between border-t border-white/10 pt-2">
+                  <span>Product list subtotal</span>
+                  <span className="font-semibold">{toCurrency(productGrossSubtotal)}</span>
+                </p>
+                {volumeDiscountAud > 0 ? (
+                  <p className="flex items-center justify-between text-slate-300">
+                    <span>Volume discount</span>
+                    <span className="font-semibold">−{toCurrency(volumeDiscountAud)}</span>
+                  </p>
+                ) : null}
+                <p className="flex items-center justify-between">
+                  <span>Product subtotal</span>
+                  <span className="font-semibold">{toCurrency(productNetSubtotal)}</span>
+                </p>
+                <p className="flex items-center justify-between">
+                  <span>Logo setup fee</span>
+                  <span className="font-semibold text-right">
+                    {!isCustomerSignedIn ? (
+                      <span className="text-slate-300">Sign in to confirm</span>
+                    ) : !items.some((i) => (i.serviceType ?? "").toLowerCase().includes("embroidery")) ? (
+                      "—"
+                    ) : hasPriorEmbroideryOrder === null ? (
+                      <span className="text-slate-300">…</span>
+                    ) : logoSetupApplies ? (
+                      toCurrency(logoSetupFeeAud)
+                    ) : (
+                      "Waived"
+                    )}
+                  </span>
                 </p>
                 <p className="flex items-center justify-between">
                   <span>Delivery fee</span>
-                  <span className="font-semibold">{deliveryFee === 0 ? "Free" : toCurrency(deliveryFee)}</span>
+                  <span className="font-semibold">
+                    {!isCustomerSignedIn
+                      ? toCurrency(0)
+                      : deliveryFeeAud === 0
+                        ? "Free"
+                        : toCurrency(deliveryFeeAud)}
+                  </span>
+                </p>
+                <p className="text-[0.95rem] leading-snug text-slate-400">
+                  {!isCustomerSignedIn ? (
+                    <>
+                      <Link href="/log-in" className="font-semibold text-brand-orange underline hover:text-brand-orange/90">
+                        Sign in
+                      </Link>{" "}
+                      to estimate delivery, Logo setup, and Perth Metro free delivery from your saved address. Until
+                      then, delivery is shown as {toCurrency(0)}.
+                    </>
+                  ) : (
+                    <>
+                      {perthMetroDeliveryFree ? (
+                        <>
+                          Perth Metro free delivery applies (subtotal{" "}
+                          {toCurrency(STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD)}+). Otherwise estimated from your
+                          postcode and total{" "}
+                          <strong className="font-medium text-slate-300">chargeable</strong> weight.
+                        </>
+                      ) : (
+                        <>
+                          Estimated from your postcode and total{" "}
+                          <strong className="font-medium text-slate-300">chargeable</strong> weight (per item: the
+                          higher of packed weight or cubic weight, by product type). At{" "}
+                          {toCurrency(STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD)}+ subtotal, Perth Metro (6000–6199) is
+                          free.
+                        </>
+                      )}
+                    </>
+                  )}
                 </p>
               </div>
               <div className="mt-4 border-t border-white/15 pt-4">
@@ -360,7 +526,7 @@ export default function CartPage() {
                   </span>
                 </label>
               </div>
-              {termsAgreed ? (
+              {canCheckOut ? (
                 <Link
                   href="/payment"
                   className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-brand-orange px-4 py-3 text-[1.8rem] font-medium text-brand-navy transition hover:brightness-95"
@@ -376,6 +542,14 @@ export default function CartPage() {
                   Check out
                 </button>
               )}
+              {!isCustomerSignedIn && items.length > 0 ? (
+                <p className="mt-2 text-center text-[1.5rem] text-slate-300">
+                  <Link href="/log-in" className="font-semibold text-brand-orange underline hover:text-brand-orange/90">
+                    Sign in
+                  </Link>{" "}
+                  to enable checkout.
+                </p>
+              ) : null}
             </aside>
           </div>
         )}

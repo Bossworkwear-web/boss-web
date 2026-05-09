@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 
 import { assertAdminSession } from "@/lib/admin-auth";
 import {
@@ -15,6 +16,7 @@ import {
   supplierOrderLinesMutationErrorMessage,
 } from "@/lib/supplier-order-lines-db-error";
 import { createSupabaseAdminClient } from "@/lib/supabase";
+import { SUPPLIER_ORDERS_WAREHOUSE_MANAGER_COOKIE } from "@/lib/supplier-orders-warehouse-manager";
 
 export type SupplierOrderMutationResult = { ok: true } | { ok: false; error: string };
 
@@ -59,6 +61,19 @@ async function assertAdmin() {
   return { ok: true as const };
 }
 
+/** Set by middleware when opening Supplier orders with `warehouse_manager=1` (Warehouse Manager hub). */
+async function rejectIfSupplierOrdersWarehouseManagerCookie(): Promise<SupplierOrderMutationResult | null> {
+  const jar = await cookies();
+  if (jar.get(SUPPLIER_ORDERS_WAREHOUSE_MANAGER_COOKIE)?.value === "1") {
+    return {
+      ok: false,
+      error:
+        "This Supplier orders session is view/print-only. Open Supplier orders from the admin dashboard (without the Warehouse Manager link) to edit.",
+    };
+  }
+  return null;
+}
+
 export async function createSupplierOrderLine(
   listDateYmd: string,
   /** Optional initial `notes` (e.g. `"Manual Input"` from Admin → Add row). */
@@ -66,6 +81,9 @@ export async function createSupplierOrderLine(
 ): Promise<SupplierOrderMutationResult & { row?: SupplierOrderLineRow }> {
   const auth = await assertAdmin();
   if (!auth.ok) return auth;
+
+  const wm = await rejectIfSupplierOrdersWarehouseManagerCookie();
+  if (wm) return wm;
 
   const listDate = parseListDateYmd(listDateYmd);
   if (!listDate) {
@@ -134,6 +152,9 @@ export async function updateSupplierOrderLine(
 ): Promise<SupplierOrderMutationResult> {
   const auth = await assertAdmin();
   if (!auth.ok) return auth;
+
+  const wm = await rejectIfSupplierOrdersWarehouseManagerCookie();
+  if (wm) return wm;
 
   const uuid = id.trim();
   if (!uuid) return { ok: false, error: "Invalid id" };
@@ -207,6 +228,9 @@ export async function saveSupplierOrdersDaySheetSnapshot(
   const auth = await assertAdmin();
   if (!auth.ok) return auth;
 
+  const wm = await rejectIfSupplierOrdersWarehouseManagerCookie();
+  if (wm) return wm;
+
   const listDate = parseListDateYmd(listDateYmd);
   if (!listDate) {
     return { ok: false, error: "Invalid worksheet date" };
@@ -238,18 +262,6 @@ export async function saveSupplierOrdersDaySheetSnapshot(
     for (const id of ids) {
       if (byId.get(id) !== listDate) {
         return { ok: false, error: "Worksheet date does not match one or more lines." };
-      }
-    }
-
-    const seenOrder = new Set<string>();
-    for (const line of lines) {
-      const oid = clampStr(line.customer_order_id, MAX_LEN).trim();
-      if (oid && !seenOrder.has(oid)) {
-        seenOrder.add(oid);
-        const qg = await guardCustomerOrderNumberNotInCompleteOrdersQueue(oid);
-        if (!qg.ok) {
-          return qg;
-        }
       }
     }
 
@@ -293,6 +305,9 @@ export async function applyCatalogSupplierNameIfEmpty(
 ): Promise<ApplyCatalogSupplierResult> {
   const auth = await assertAdmin();
   if (!auth.ok) return auth;
+
+  const wm = await rejectIfSupplierOrdersWarehouseManagerCookie();
+  if (wm) return wm;
 
   const id = lineId.trim();
   const pid = productIdRaw.trim();
@@ -362,12 +377,78 @@ export async function applyCatalogSupplierNameIfEmpty(
   }
 }
 
+type SupplierAdminSupabase = ReturnType<typeof createSupabaseAdminClient>;
+
+/** When turning Ready on, bump supplier lines for orders already in Production/QC/Dispatch (not Completed). */
+async function touchSupplierOrderLinesForProcessingStoreOrders(
+  supabase: SupplierAdminSupabase,
+  listDate: string,
+): Promise<void> {
+  const { data: lineRows } = await supabase
+    .from("supplier_order_lines")
+    .select("customer_order_id")
+    .eq("list_date", listDate);
+
+  const distinctOrderNumbers: string[] = [];
+  const seen = new Set<string>();
+  for (const lr of lineRows ?? []) {
+    const o = (lr.customer_order_id ?? "").trim();
+    if (!o || seen.has(o)) continue;
+    seen.add(o);
+    distinctOrderNumbers.push(o);
+  }
+  if (distinctOrderNumbers.length === 0) return;
+
+  const { data: storeRows } = await supabase
+    .from("store_orders")
+    .select("id, order_number")
+    .in("order_number", distinctOrderNumbers);
+
+  const idByNumber = new Map<string, string>();
+  for (const r of storeRows ?? []) {
+    idByNumber.set(r.order_number, r.id);
+  }
+  const storeIds = [...new Set([...idByNumber.values()])];
+  if (storeIds.length === 0) return;
+
+  const { data: completeRows } = await supabase
+    .from("click_up_complete_orders_queue")
+    .select("store_order_id")
+    .in("store_order_id", storeIds);
+  const completeSet = new Set((completeRows ?? []).map((r) => r.store_order_id));
+
+  const processingIds = new Set<string>();
+  for (const table of ["click_up_production_queue", "click_up_qc_queue", "click_up_dispatch_queue"] as const) {
+    const { data: qRows } = await supabase.from(table).select("store_order_id").in("store_order_id", storeIds);
+    for (const r of qRows ?? []) {
+      if (!completeSet.has(r.store_order_id)) {
+        processingIds.add(r.store_order_id);
+      }
+    }
+  }
+  if (processingIds.size === 0) return;
+
+  const nowIso = new Date().toISOString();
+  for (const on of distinctOrderNumbers) {
+    const sid = idByNumber.get(on);
+    if (!sid || !processingIds.has(sid)) continue;
+    await supabase
+      .from("supplier_order_lines")
+      .update({ updated_at: nowIso })
+      .eq("list_date", listDate)
+      .eq("customer_order_id", on);
+  }
+}
+
 export async function setSupplierDailySheetReadyForProcessing(
   listDateYmd: string,
   ready: boolean,
 ): Promise<SupplierOrderMutationResult> {
   const auth = await assertAdmin();
   if (!auth.ok) return auth;
+
+  const wm = await rejectIfSupplierOrdersWarehouseManagerCookie();
+  if (wm) return wm;
 
   const listDate = parseListDateYmd(listDateYmd);
   if (!listDate) {
@@ -376,26 +457,6 @@ export async function setSupplierDailySheetReadyForProcessing(
 
   try {
     const supabase = createSupabaseAdminClient();
-
-    if (ready) {
-      const { data: lineRows, error: linesErr } = await supabase
-        .from("supplier_order_lines")
-        .select("customer_order_id")
-        .eq("list_date", listDate);
-      if (linesErr) {
-        return { ok: false, error: supplierOrderLinesMutationErrorMessage(linesErr) };
-      }
-      const seen = new Set<string>();
-      for (const lr of lineRows ?? []) {
-        const oid = (lr.customer_order_id ?? "").trim();
-        if (!oid || seen.has(oid)) continue;
-        seen.add(oid);
-        const qg = await guardCustomerOrderNumberNotInCompleteOrdersQueue(oid);
-        if (!qg.ok) {
-          return qg;
-        }
-      }
-    }
 
     const payload: Database["public"]["Tables"]["supplier_daily_sheets"]["Insert"] = {
       list_date: listDate,
@@ -427,6 +488,7 @@ export async function setSupplierDailySheetReadyForProcessing(
         }
         // Table missing or PostgREST cache stale: keep Ready=true; list sync is best-effort.
       }
+      await touchSupplierOrderLinesForProcessingStoreOrders(supabase, listDate);
     } else {
       const { error: delErr } = await supabase.from("click_up_sheet_list").delete().eq("list_date", listDate);
       if (delErr && classifySupplierOrderLinesError(delErr) !== "missing_click_up_sheet_list_table") {
@@ -444,9 +506,103 @@ export async function setSupplierDailySheetReadyForProcessing(
   }
 }
 
+export type ClickUpNavigateAfterSupplierReadyResult =
+  | { ok: true; navigateHref: string | null }
+  | { ok: false; error: string };
+
+/**
+ * After Ready for Processing, open Click Up only for the first order that is not Completed and not already
+ * in Production/QC/Dispatch. Completed / in‑pipeline orders are skipped for navigation.
+ */
+export async function getClickUpSheetHrefAfterSupplierReady(
+  listDateYmd: string,
+): Promise<ClickUpNavigateAfterSupplierReadyResult> {
+  const auth = await assertAdmin();
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  const wm = await rejectIfSupplierOrdersWarehouseManagerCookie();
+  if (wm && wm.ok === false) return { ok: false, error: wm.error };
+
+  const listDate = parseListDateYmd(listDateYmd);
+  if (!listDate) {
+    return { ok: false, error: "Invalid worksheet date" };
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { data: lineRows, error: linesErr } = await supabase
+      .from("supplier_order_lines")
+      .select("customer_order_id")
+      .eq("list_date", listDate);
+    if (linesErr) {
+      return { ok: false, error: supplierOrderLinesMutationErrorMessage(linesErr) };
+    }
+
+    const distinctOrderNumbers: string[] = [];
+    const seen = new Set<string>();
+    for (const lr of lineRows ?? []) {
+      const o = (lr.customer_order_id ?? "").trim();
+      if (!o || seen.has(o)) continue;
+      seen.add(o);
+      distinctOrderNumbers.push(o);
+    }
+    distinctOrderNumbers.sort((a, b) => a.localeCompare(b));
+
+    if (distinctOrderNumbers.length === 0) {
+      return { ok: true, navigateHref: null };
+    }
+
+    const { data: storeRows } = await supabase
+      .from("store_orders")
+      .select("id, order_number")
+      .in("order_number", distinctOrderNumbers);
+
+    const idByNumber = new Map<string, string>();
+    for (const r of storeRows ?? []) {
+      idByNumber.set(r.order_number, r.id);
+    }
+    const storeIds = [...new Set([...idByNumber.values()])];
+    if (storeIds.length === 0) {
+      return { ok: true, navigateHref: null };
+    }
+
+    const { data: completeRows } = await supabase
+      .from("click_up_complete_orders_queue")
+      .select("store_order_id")
+      .in("store_order_id", storeIds);
+    const completeSet = new Set((completeRows ?? []).map((r) => r.store_order_id));
+
+    const processingIds = new Set<string>();
+    for (const table of ["click_up_production_queue", "click_up_qc_queue", "click_up_dispatch_queue"] as const) {
+      const { data: qRows } = await supabase.from(table).select("store_order_id").in("store_order_id", storeIds);
+      for (const r of qRows ?? []) {
+        if (!completeSet.has(r.store_order_id)) {
+          processingIds.add(r.store_order_id);
+        }
+      }
+    }
+
+    for (const on of distinctOrderNumbers) {
+      const sid = idByNumber.get(on);
+      if (!sid) continue;
+      if (completeSet.has(sid)) continue;
+      if (processingIds.has(sid)) continue;
+      const params = new URLSearchParams({ list_date: listDate, customer_order_id: on });
+      return { ok: true, navigateHref: `/admin/click-up-sheet?${params.toString()}` };
+    }
+    return { ok: true, navigateHref: null };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Lookup failed";
+    return { ok: false, error: msg };
+  }
+}
+
 export async function deleteSupplierOrderLine(id: string): Promise<SupplierOrderMutationResult> {
   const auth = await assertAdmin();
   if (!auth.ok) return auth;
+
+  const wm = await rejectIfSupplierOrdersWarehouseManagerCookie();
+  if (wm) return wm;
 
   const uuid = id.trim();
   if (!uuid) return { ok: false, error: "Invalid id" };

@@ -8,7 +8,7 @@ import {
   type DeliveryTimelineStep,
   type OrderTrackDeliveryPayload,
 } from "@/lib/order-track-delivery";
-import { australiaPostTrackingUrl } from "@/lib/store-order-utils";
+import { carrierTrackingUrl } from "@/lib/store-order-utils";
 
 const POLL_MS = 20_000;
 
@@ -46,12 +46,17 @@ function lineClass(step: DeliveryTimelineStep, next: DeliveryTimelineStep | unde
 type Props = {
   trackingToken: string;
   initialPayload: OrderTrackDeliveryPayload;
-  initialAusPostUrl: string | null;
 };
 
-export function OrderDeliveryStatusTracker({ trackingToken, initialPayload, initialAusPostUrl }: Props) {
+function carrierTrackLinkUrl(payload: OrderTrackDeliveryPayload): string | null {
+  if (payload.status.trim().toLowerCase() !== "shipped") {
+    return null;
+  }
+  return carrierTrackingUrl(payload.carrier, payload.tracking_number);
+}
+
+export function OrderDeliveryStatusTracker({ trackingToken, initialPayload }: Props) {
   const [payload, setPayload] = useState<OrderTrackDeliveryPayload>(initialPayload);
-  const [ausPostUrl, setAusPostUrl] = useState<string | null>(initialAusPostUrl);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -66,15 +71,6 @@ export function OrderDeliveryStatusTracker({ trackingToken, initialPayload, init
       setFetchError(null);
       const next = (await res.json()) as OrderTrackDeliveryPayload;
       setPayload(next);
-      const tn = next.tracking_number?.trim();
-      const carrier = (next.carrier ?? "").toLowerCase();
-      const ap =
-        next.status === "shipped" &&
-        tn &&
-        (carrier.includes("australia post") || carrier.includes("auspost"))
-          ? australiaPostTrackingUrl(tn)
-          : null;
-      setAusPostUrl(ap);
     } catch {
       setFetchError("Could not refresh status.");
     }
@@ -89,6 +85,7 @@ export function OrderDeliveryStatusTracker({ trackingToken, initialPayload, init
 
   const steps = buildDeliveryTimeline(payload);
   const cancelled = payload.status.trim().toLowerCase() === "cancelled";
+  const trackUrl = carrierTrackLinkUrl(payload);
 
   return (
     <div className="mt-4">
@@ -135,11 +132,17 @@ export function OrderDeliveryStatusTracker({ trackingToken, initialPayload, init
                     <span className="font-mono font-semibold">{payload.tracking_number}</span>
                   </p>
                 ) : null}
-                {step.key === "dispatch" && ausPostUrl ? (
-                  <p className="mt-2">
-                    <Link href={ausPostUrl} className="text-[1.05rem] font-semibold text-brand-orange hover:underline">
-                      Track on Australia Post
+                {step.key === "expected" && trackUrl ? (
+                  <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <Link
+                      href={trackUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[1.05rem] font-semibold text-brand-orange hover:underline"
+                    >
+                      Track your parcel ({payload.carrier})
                     </Link>
+                    <span className="text-[0.95rem] text-brand-navy/55">Opens the carrier&apos;s tracking page.</span>
                   </p>
                 ) : null}
               </div>

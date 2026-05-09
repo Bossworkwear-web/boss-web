@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { revalidatePath } from "next/cache";
+import { refresh, revalidatePath } from "next/cache";
 
 import { assertAdminSession } from "@/lib/admin-auth";
 import { formatClickUpSheetStorageError } from "@/lib/click-up-sheet-storage-errors";
@@ -16,7 +16,10 @@ import {
   guardCustomerOrderNumberNotInCompleteOrdersQueue,
   guardStoreOrderNotInCompleteOrdersQueue,
 } from "@/lib/complete-orders-queue-mutation-block";
-import { queryClickUpMockupImagesByCustomerOrderId } from "@/lib/fetch-click-up-mockups";
+import {
+  queryClickUpMockupImagesByCustomerOrderId,
+  queryClickUpMockupImagesByCustomerOrderIdIncludingReorder,
+} from "@/lib/fetch-click-up-mockups";
 import { appendClickUpProductionQueueSetupHint } from "@/lib/supabase-click-up-production-queue-hint";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -24,6 +27,18 @@ const CLICK_UP_SHEET_IMAGES_BUCKET = "click-up-sheet-images";
 const MAX_CLICK_UP_IMAGE_BYTES = 12 * 1024 * 1024;
 const MAX_CLICK_UP_PDF_BYTES = 20 * 1024 * 1024;
 const CLICK_UP_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+
+async function customerEmailForStoreOrderNumber(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  orderNumber: string,
+): Promise<string | null> {
+  const on = orderNumber.trim();
+  if (!on) return null;
+  const { data, error } = await supabase.from("store_orders").select("customer_email").eq("order_number", on).maybeSingle();
+  if (error || !data) return null;
+  const email = String((data as { customer_email?: string | null }).customer_email ?? "").trim();
+  return email.length > 0 ? email : null;
+}
 
 function resolveUploadImageMime(file: File): string | null {
   const raw = (file.type || "").toLowerCase();
@@ -258,9 +273,35 @@ export async function moveClickUpSheetOrderToProduction(
     if (error) {
       return { ok: false, error: appendClickUpProductionQueueSetupHint(error.message) };
     }
+
+    /** Customer My account + track page: mark Processing step complete in delivery timeline (`lib/order-track-delivery`). */
+    const { data: trackingRow } = await supabase
+      .from("store_orders")
+      .select("tracking_token")
+      .eq("id", resolved.productionOrderId)
+      .maybeSingle();
+
+    const { error: statusErr } = await supabase
+      .from("store_orders")
+      .update({ status: "processing" })
+      .eq("id", resolved.productionOrderId)
+      .not("status", "eq", "shipped")
+      .not("status", "eq", "cancelled");
+    if (statusErr) {
+      return { ok: false, error: statusErr.message };
+    }
+
     revalidatePath("/admin/production");
     revalidatePath(`/admin/production/${resolved.productionOrderId}`);
     revalidatePath("/admin/work-process");
+    revalidatePath("/customer");
+    /** Bust client Router Cache / prefetched admin routes so Production list shows the new queue row immediately. */
+    revalidatePath("/admin", "layout");
+    const tt = trackingRow?.tracking_token?.trim();
+    if (tt) {
+      revalidatePath(`/orders/track/${tt}`);
+    }
+    refresh();
     return resolved;
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Could not start production pack.";
@@ -315,10 +356,16 @@ export type ClickUpSheetImageDto = {
   sort_order: number;
   created_at: string;
   is_mockup: boolean;
+  is_master_logo?: boolean;
   /** JSON array string from Add mock-up modal, e.g. `["Embroidery","DTF/HTV"]`. */
   mockup_decorate_methods: string | null;
   /** Optional note from Edit mock-up (MEMO). */
   mockup_memo: string | null;
+  /**
+   * When set, this mock-up row is shown from a prior store order (customer Reorder). Same DB row as the source order —
+   * do not delete/edit from the new order’s sheet UI.
+   */
+  inherited_from_order_number?: string | null;
 };
 
 export type ClickUpSheetImageFilter = "all" | "mockup" | "reference";
@@ -343,19 +390,83 @@ export async function listClickUpSheetImages(
 
   try {
     const supabase = createSupabaseAdminClient();
+    const listDateForOrder = listDate;
+
+    // If the customer has a master logo saved, auto-attach/mark it on this order’s reference images.
+    if (assetFilter === "reference" && orderId.length > 0) {
+      const email = await customerEmailForStoreOrderNumber(supabase, orderId);
+      if (email) {
+        const { data: masterRow } = await supabase
+          .from("customer_master_company_logo")
+          .select("storage_bucket, storage_path")
+          .eq("customer_email", email)
+          .maybeSingle();
+        const masterPath = String((masterRow as { storage_path?: string | null })?.storage_path ?? "").trim();
+        const masterBucket = String((masterRow as { storage_bucket?: string | null })?.storage_bucket ?? CLICK_UP_SHEET_IMAGES_BUCKET).trim() || CLICK_UP_SHEET_IMAGES_BUCKET;
+
+        if (masterPath) {
+          const { data: existingMasters } = await supabase
+            .from("click_up_sheet_images")
+            .select("id")
+            .eq("list_date", listDateForOrder)
+            .eq("customer_order_id", orderId)
+            .eq("is_mockup", false)
+            .eq("is_master_logo", true)
+            .limit(1);
+
+          if (!existingMasters?.length) {
+            const { data: match } = await supabase
+              .from("click_up_sheet_images")
+              .select("id")
+              .eq("list_date", listDateForOrder)
+              .eq("customer_order_id", orderId)
+              .eq("is_mockup", false)
+              .eq("storage_path", masterPath)
+              .limit(1);
+
+            if (match?.length) {
+              await supabase
+                .from("click_up_sheet_images")
+                .update({ is_master_logo: true })
+                .eq("id", match[0]!.id);
+            } else if (masterBucket === CLICK_UP_SHEET_IMAGES_BUCKET) {
+              const { data: topRow } = await supabase
+                .from("click_up_sheet_images")
+                .select("sort_order")
+                .eq("list_date", listDateForOrder)
+                .eq("customer_order_id", orderId)
+                .eq("is_mockup", false)
+                .order("sort_order", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              const nextSort = (topRow?.sort_order ?? -1) + 1;
+              await supabase.from("click_up_sheet_images").insert({
+                list_date: listDateForOrder,
+                customer_order_id: orderId,
+                storage_path: masterPath,
+                sort_order: nextSort,
+                is_mockup: false,
+                is_master_logo: true,
+              });
+            }
+          }
+        }
+      }
+    }
+
     let q =
       orderId.length > 0
         ? supabase
             .from("click_up_sheet_images")
             .select(
-              "id, list_date, customer_order_id, storage_path, sort_order, created_at, is_mockup, mockup_decorate_methods, mockup_memo",
+              "id, list_date, customer_order_id, storage_path, sort_order, created_at, is_mockup, is_master_logo, mockup_decorate_methods, mockup_memo",
             )
             .eq("list_date", listDate)
             .eq("customer_order_id", orderId)
         : supabase
             .from("click_up_sheet_images")
             .select(
-              "id, list_date, customer_order_id, storage_path, sort_order, created_at, is_mockup, mockup_decorate_methods, mockup_memo",
+              "id, list_date, customer_order_id, storage_path, sort_order, created_at, is_mockup, is_master_logo, mockup_decorate_methods, mockup_memo",
             )
             .eq("list_date", listDate)
             .eq("customer_order_id", "");
@@ -383,6 +494,7 @@ export async function listClickUpSheetImages(
       sort_order: r.sort_order,
       created_at: r.created_at,
       is_mockup: Boolean((r as { is_mockup?: boolean }).is_mockup),
+      is_master_logo: Boolean((r as { is_master_logo?: boolean }).is_master_logo),
       mockup_decorate_methods: (r as { mockup_decorate_methods?: string | null }).mockup_decorate_methods ?? null,
       mockup_memo: (r as { mockup_memo?: string | null }).mockup_memo ?? null,
     }));
@@ -392,6 +504,141 @@ export async function listClickUpSheetImages(
     const msg = e instanceof Error ? e.message : "Load failed";
     return { ok: false, error: msg };
   }
+}
+
+function escapeCustomerEmailForIlike(email: string): string {
+  return email.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+/**
+ * When `reordered_from_store_order_id` is missing (legacy checkout), find the most recent older order for the same
+ * email that already has Click up mock-ups. Best-effort only; explicit reorder link is preferred.
+ */
+async function findLatestPriorOrderNumberWithMockupsForEmail(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  args: { currentOrderNumber: string; customerEmail: string; createdAtIso: string },
+): Promise<string | null> {
+  const email = args.customerEmail.trim();
+  const createdAt = args.createdAtIso.trim();
+  const on = args.currentOrderNumber.trim();
+  if (!email || !createdAt || !on) {
+    return null;
+  }
+  const { data: candidates, error } = await supabase
+    .from("store_orders")
+    .select("order_number, created_at")
+    .ilike("customer_email", escapeCustomerEmailForIlike(email))
+    .neq("order_number", on)
+    .lt("created_at", createdAt)
+    .order("created_at", { ascending: false })
+    .limit(25);
+  if (error || !candidates?.length) {
+    return null;
+  }
+  for (const c of candidates) {
+    const n = (c.order_number ?? "").trim();
+    if (!n) {
+      continue;
+    }
+    const mq = await queryClickUpMockupImagesByCustomerOrderId(supabase, n);
+    if (mq.ok && mq.rows.length > 0) {
+      return n;
+    }
+  }
+  return null;
+}
+
+/**
+ * Mock-ups for this Perth worksheet + Order ID, plus mock-ups from the **prior** store order when this order was
+ * created via customer Reorder (`store_orders.reordered_from_store_order_id`).
+ */
+export async function listClickUpSheetMockupsIncludingReorderPrior(
+  listDateYmd: string,
+  customerOrderId: string,
+): Promise<{ ok: true; images: ClickUpSheetImageDto[] } | { ok: false; error: string }> {
+  const current = await listClickUpSheetImages(listDateYmd, customerOrderId, "mockup");
+  if (!current.ok) {
+    return current;
+  }
+  const on = customerOrderId.trim();
+  const own = current.images.map((i) => ({ ...i, inherited_from_order_number: null as string | null }));
+  if (!on) {
+    return { ok: true, images: own };
+  }
+
+  let supabase: ReturnType<typeof createSupabaseAdminClient>;
+  try {
+    supabase = createSupabaseAdminClient();
+  } catch {
+    return { ok: true, images: own };
+  }
+
+  const { data: orderRow, error: ordErr } = await supabase
+    .from("store_orders")
+    .select("reordered_from_store_order_id, customer_email, created_at, order_number")
+    .eq("order_number", on)
+    .maybeSingle();
+
+  if (ordErr || !orderRow) {
+    return { ok: true, images: own };
+  }
+
+  let prevNum: string | null = null;
+
+  const prevId = (orderRow.reordered_from_store_order_id ?? "").trim();
+  if (prevId && /^[0-9a-f-]{36}$/i.test(prevId)) {
+    const { data: srcOrder } = await supabase
+      .from("store_orders")
+      .select("order_number")
+      .eq("id", prevId)
+      .maybeSingle();
+    prevNum = (srcOrder?.order_number ?? "").trim();
+  }
+
+  if (!prevNum) {
+    const email = (orderRow.customer_email ?? "").trim();
+    const createdAt = (orderRow.created_at ?? "").trim();
+    if (email && createdAt) {
+      prevNum = await findLatestPriorOrderNumberWithMockupsForEmail(supabase, {
+        currentOrderNumber: on,
+        customerEmail: email,
+        createdAtIso: createdAt,
+      });
+    }
+  }
+
+  if (!prevNum || prevNum === on) {
+    return { ok: true, images: own };
+  }
+
+  const prior = await queryClickUpMockupImagesByCustomerOrderId(supabase, prevNum);
+  if (!prior.ok) {
+    return { ok: true, images: own };
+  }
+
+  const seenPaths = new Set(own.map((i) => i.storage_path));
+  const inherited: ClickUpSheetImageDto[] = [];
+  for (const row of prior.rows) {
+    if (!row.storage_path || seenPaths.has(row.storage_path)) {
+      continue;
+    }
+    seenPaths.add(row.storage_path);
+    inherited.push({
+      id: row.id,
+      list_date: row.list_date,
+      customer_order_id: row.customer_order_id,
+      storage_path: row.storage_path,
+      public_url: row.public_url,
+      sort_order: row.sort_order,
+      created_at: row.created_at,
+      is_mockup: true,
+      mockup_decorate_methods: row.mockup_decorate_methods,
+      mockup_memo: row.mockup_memo,
+      inherited_from_order_number: prevNum,
+    });
+  }
+
+  return { ok: true, images: [...own, ...inherited] };
 }
 
 export type ListClickUpMockupsByOrderResult =
@@ -415,7 +662,7 @@ export async function listClickUpMockupsByStoreOrderNumber(
 
   try {
     const supabase = createSupabaseAdminClient();
-    const result = await queryClickUpMockupImagesByCustomerOrderId(supabase, id);
+    const result = await queryClickUpMockupImagesByCustomerOrderIdIncludingReorder(supabase, id);
     if (!result.ok) {
       return { ok: false, error: result.error };
     }
@@ -443,10 +690,32 @@ function looksLikeCustomerProvidedAssetUrl(url: string): boolean {
   return /\.(png|jpe?g|gif|webp|svg|pdf)(\?|$)/i.test(url);
 }
 
+function parseSupabasePublicObjectUrl(url: string): { bucket: string; path: string } | null {
+  const u = url.trim();
+  if (!u) return null;
+  // Example: https://xyz.supabase.co/storage/v1/object/public/<bucket>/<path>
+  const m = u.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+?)(?:\?|$)/i);
+  if (!m) return null;
+  const bucket = (m[1] ?? "").trim();
+  const rawPath = (m[2] ?? "").trim();
+  if (!bucket || !rawPath) return null;
+  let path = rawPath;
+  try {
+    path = decodeURIComponent(rawPath);
+  } catch {
+    path = rawPath;
+  }
+  return { bucket, path };
+}
+
 export type CustomerReferenceVisualDto = {
   key: string;
   public_url: string;
   caption: string;
+  /** When present, asset is a Supabase Storage object we can persist as customer master logo. */
+  storage_bucket?: string;
+  storage_path?: string;
+  is_master_logo?: boolean;
 };
 
 /**
@@ -471,7 +740,7 @@ export async function listCustomerReferenceVisualsForStoreOrderNumber(
     const supabase = createSupabaseAdminClient();
     const { data: so, error: soErr } = await supabase
       .from("store_orders")
-      .select("id")
+      .select("id, customer_email")
       .eq("order_number", id)
       .maybeSingle();
 
@@ -480,8 +749,26 @@ export async function listCustomerReferenceVisualsForStoreOrderNumber(
     }
 
     const orderUuid = so.id;
+    const customerEmail = String((so as { customer_email?: string | null }).customer_email ?? "")
+      .trim()
+      .toLowerCase();
     const items: CustomerReferenceVisualDto[] = [];
     const seen = new Set<string>();
+
+    const customerMaster = customerEmail
+      ? await supabase
+          .from("customer_master_company_logo")
+          .select("storage_bucket, storage_path")
+          .eq("customer_email", customerEmail)
+          .maybeSingle()
+      : { data: null as unknown };
+    const masterBucket = String(
+      (customerMaster as { data?: { storage_bucket?: string | null } | null })?.data?.storage_bucket ??
+        PRODUCTION_ORDER_ASSETS_BUCKET,
+    ).trim();
+    const masterPath = String(
+      (customerMaster as { data?: { storage_path?: string | null } | null })?.data?.storage_path ?? "",
+    ).trim();
 
     const { data: assets, error: aErr } = await supabase
       .from("production_order_assets")
@@ -506,10 +793,14 @@ export async function listCustomerReferenceVisualsForStoreOrderNumber(
         seen.add(url);
         const kind = (row.kind ?? "file").trim();
         const label = (row.label ?? "").trim();
+        const isMaster = Boolean(masterPath) && bucket === masterBucket && row.storage_path === masterPath;
         items.push({
           key: `prod:${row.id}`,
           public_url: url,
           caption: `${kind}${label ? ` · ${label}` : ""}`,
+          storage_bucket: bucket,
+          storage_path: row.storage_path,
+          is_master_logo: isMaster,
         });
       }
     }
@@ -548,10 +839,17 @@ export async function listCustomerReferenceVisualsForStoreOrderNumber(
             }
             seen.add(normalized);
             urlIdx += 1;
+            const storage = parseSupabasePublicObjectUrl(normalized);
+            const isMaster =
+              storage != null &&
+              Boolean(masterPath) &&
+              storage.bucket === masterBucket &&
+              storage.path === masterPath;
             items.push({
               key: `line:${urlIdx}:${normalized.slice(0, 64)}`,
               public_url: normalized,
               caption: `${label} · ${pname}`,
+              ...(storage ? { storage_bucket: storage.bucket, storage_path: storage.path, is_master_logo: isMaster } : {}),
             });
           }
         }
@@ -561,6 +859,117 @@ export async function listCustomerReferenceVisualsForStoreOrderNumber(
     return { ok: true, items };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Load failed";
+    return { ok: false, error: msg };
+  }
+}
+
+export async function setCustomerMasterCompanyLogoFromOrderAsset(args: {
+  orderNumber: string;
+  storageBucket: string;
+  storagePath: string;
+  enabled: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await assertAdminSession();
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const orderNumber = args.orderNumber.trim();
+  const storageBucket = args.storageBucket.trim();
+  const storagePath = args.storagePath.trim();
+  if (!orderNumber || !storageBucket || !storagePath) {
+    return { ok: false, error: "Missing order/logo parameters." };
+  }
+
+  const qg = await guardCustomerOrderNumberNotInCompleteOrdersQueue(orderNumber);
+  if (!qg.ok) {
+    return { ok: false, error: qg.error };
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const email = await customerEmailForStoreOrderNumber(supabase, orderNumber);
+    if (!email) {
+      return { ok: false, error: "Could not resolve customer email for this order." };
+    }
+    const emailLower = email.toLowerCase();
+
+    if (args.enabled) {
+      const nowIso = new Date().toISOString();
+      const { error } = await supabase
+        .from("customer_master_company_logo")
+        .upsert(
+          {
+            customer_email: emailLower,
+            storage_bucket: storageBucket,
+            storage_path: storagePath,
+            updated_at: nowIso,
+          },
+          { onConflict: "customer_email" },
+        );
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    } else {
+      const { data: cur } = await supabase
+        .from("customer_master_company_logo")
+        .select("storage_bucket, storage_path")
+        .eq("customer_email", emailLower)
+        .maybeSingle();
+      const curBucket = String((cur as { storage_bucket?: string | null })?.storage_bucket ?? "").trim();
+      const curPath = String((cur as { storage_path?: string | null })?.storage_path ?? "").trim();
+      if (curBucket === storageBucket && curPath === storagePath) {
+        await supabase.from("customer_master_company_logo").delete().eq("customer_email", emailLower);
+      }
+    }
+
+    refresh();
+    revalidatePath("/admin/click-up-sheet");
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Update failed";
+    return { ok: false, error: msg };
+  }
+}
+
+export async function getCustomerMasterCompanyLogoForStoreOrderNumber(
+  orderNumber: string,
+): Promise<{ ok: true; public_url: string | null } | { ok: false; error: string }> {
+  try {
+    await assertAdminSession();
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const on = orderNumber.trim();
+  if (!on) {
+    return { ok: true, public_url: null };
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const email = await customerEmailForStoreOrderNumber(supabase, on);
+    if (!email) {
+      return { ok: true, public_url: null };
+    }
+    const emailLower = email.toLowerCase();
+    const { data, error } = await supabase
+      .from("customer_master_company_logo")
+      .select("storage_bucket, storage_path")
+      .eq("customer_email", emailLower)
+      .maybeSingle();
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    const bucket = String((data as { storage_bucket?: string | null })?.storage_bucket ?? "").trim();
+    const path = String((data as { storage_path?: string | null })?.storage_path ?? "").trim();
+    if (!bucket || !path) {
+      return { ok: true, public_url: null };
+    }
+    return { ok: true, public_url: publicStorageObjectUrl(bucket, path) };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Lookup failed";
     return { ok: false, error: msg };
   }
 }
@@ -674,7 +1083,7 @@ export async function uploadClickUpSheetImage(formData: FormData): Promise<Uploa
           : {}),
       })
       .select(
-        "id, list_date, customer_order_id, storage_path, sort_order, created_at, is_mockup, mockup_decorate_methods, mockup_memo",
+        "id, list_date, customer_order_id, storage_path, sort_order, created_at, is_mockup, is_master_logo, mockup_decorate_methods, mockup_memo",
       )
       .single();
 
@@ -694,12 +1103,129 @@ export async function uploadClickUpSheetImage(formData: FormData): Promise<Uploa
         sort_order: row.sort_order,
         created_at: row.created_at,
         is_mockup: Boolean((row as { is_mockup?: boolean }).is_mockup),
+        is_master_logo: Boolean((row as { is_master_logo?: boolean }).is_master_logo),
         mockup_decorate_methods: (row as { mockup_decorate_methods?: string | null }).mockup_decorate_methods ?? null,
         mockup_memo: (row as { mockup_memo?: string | null }).mockup_memo ?? null,
       },
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Upload failed";
+    return { ok: false, error: msg };
+  }
+}
+
+export async function setClickUpSheetMasterCompanyLogo(
+  imageId: string,
+  nextIsMaster: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await assertAdminSession();
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const id = imageId.trim();
+  if (!id) {
+    return { ok: false, error: "Invalid image id." };
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { data: row, error: fetchErr } = await supabase
+      .from("click_up_sheet_images")
+      .select("id, list_date, customer_order_id, is_mockup, inherited_from_order_number, storage_path")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (fetchErr) {
+      return { ok: false, error: fetchErr.message };
+    }
+    if (!row) {
+      return { ok: false, error: "Image not found." };
+    }
+
+    const isMockup = Boolean((row as { is_mockup?: boolean }).is_mockup);
+    if (isMockup) {
+      return { ok: false, error: "Master logo can only be set on reference images." };
+    }
+    const inheritedFrom = String((row as { inherited_from_order_number?: string | null }).inherited_from_order_number ?? "")
+      .trim();
+    if (inheritedFrom) {
+      return { ok: false, error: "Inherited mock-ups cannot be edited." };
+    }
+
+    const listDate = String((row as { list_date?: string }).list_date ?? "").trim();
+    const customerOrderId = String((row as { customer_order_id?: string | null }).customer_order_id ?? "").trim();
+    const storagePath = String((row as { storage_path?: string | null }).storage_path ?? "").trim();
+    if (customerOrderId) {
+      const qg = await guardCustomerOrderNumberNotInCompleteOrdersQueue(customerOrderId);
+      if (!qg.ok) {
+        return { ok: false, error: qg.error };
+      }
+    }
+
+    if (nextIsMaster) {
+      // Clear any prior master logo for this order/date, then set this row.
+      const { error: clearErr } = await supabase
+        .from("click_up_sheet_images")
+        .update({ is_master_logo: false })
+        .eq("list_date", listDate)
+        .eq("customer_order_id", customerOrderId)
+        .eq("is_mockup", false)
+        .eq("is_master_logo", true);
+      if (clearErr) {
+        return { ok: false, error: clearErr.message };
+      }
+      const { error: setErr } = await supabase.from("click_up_sheet_images").update({ is_master_logo: true }).eq("id", id);
+      if (setErr) {
+        return { ok: false, error: setErr.message };
+      }
+
+      // Persist to customer-level master logo (by customer email from store_orders).
+      const email = customerOrderId ? await customerEmailForStoreOrderNumber(supabase, customerOrderId) : null;
+      if (email && storagePath) {
+        const nowIso = new Date().toISOString();
+        const { error: upErr } = await supabase
+          .from("customer_master_company_logo")
+          .upsert(
+            {
+              customer_email: email,
+              storage_bucket: CLICK_UP_SHEET_IMAGES_BUCKET,
+              storage_path: storagePath,
+              updated_at: nowIso,
+            },
+            { onConflict: "customer_email" },
+          );
+        if (upErr) {
+          return { ok: false, error: upErr.message };
+        }
+      }
+    } else {
+      const { error: unsetErr } = await supabase.from("click_up_sheet_images").update({ is_master_logo: false }).eq("id", id);
+      if (unsetErr) {
+        return { ok: false, error: unsetErr.message };
+      }
+
+      // If this logo was the customer master, clear it (customer can re-select later).
+      const email = customerOrderId ? await customerEmailForStoreOrderNumber(supabase, customerOrderId) : null;
+      if (email && storagePath) {
+        const { data: cur } = await supabase
+          .from("customer_master_company_logo")
+          .select("storage_path")
+          .eq("customer_email", email)
+          .maybeSingle();
+        const curPath = String((cur as { storage_path?: string | null })?.storage_path ?? "").trim();
+        if (curPath && curPath === storagePath) {
+          await supabase.from("customer_master_company_logo").delete().eq("customer_email", email);
+        }
+      }
+    }
+
+    refresh();
+    revalidatePath("/admin/click-up-sheet");
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Update failed";
     return { ok: false, error: msg };
   }
 }

@@ -763,6 +763,7 @@ export type Database = {
           shipped_at: string | null;
           created_at: string;
           invoice_reference: string | null;
+          reordered_from_store_order_id: string | null;
         };
         Insert: {
           id?: string;
@@ -782,6 +783,7 @@ export type Database = {
           shipped_at?: string | null;
           created_at?: string;
           invoice_reference?: string | null;
+          reordered_from_store_order_id?: string | null;
         };
         Update: {
           id?: string;
@@ -801,8 +803,16 @@ export type Database = {
           shipped_at?: string | null;
           created_at?: string;
           invoice_reference?: string | null;
+          reordered_from_store_order_id?: string | null;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "store_orders_reordered_from_store_order_id_fkey";
+            columns: ["reordered_from_store_order_id"];
+            referencedRelation: "store_orders";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       store_order_items: {
         Row: {

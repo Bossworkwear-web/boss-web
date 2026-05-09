@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { appendWarehouseStockHref } from "@/lib/admin-warehouse-stock-query";
+
 export default function WarehouseOverviewPage() {
   return (
     <div className="space-y-8">
@@ -48,7 +50,7 @@ export default function WarehouseOverviewPage() {
             </Link>
           </li>
           <li>
-            <Link href="/admin/stock" className="hover:underline">
+            <Link href={appendWarehouseStockHref("/admin/stock")} className="hover:underline">
               재고 (Stock) →
             </Link>
           </li>

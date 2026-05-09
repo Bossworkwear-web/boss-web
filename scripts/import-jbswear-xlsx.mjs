@@ -5,7 +5,7 @@
  * collecting colors + sizes + image URLs and using min reseller price.
  *
  * Usage (from repo root):
- *   node scripts/import-jbswear-xlsx.mjs --file="data/supplier/JB/JBswear SKU - Reseller.xlsx" --dry-run --limit=5
+ *   node scripts/import-jbswear-xlsx.mjs --file="data/supplier/JB/2026 JBswear SKU - Reseller.xlsx" --dry-run --limit=5
  *   node scripts/import-jbswear-xlsx.mjs --names-only --dry-run
  *   npm run import:jbswear
  *   npm run update:jb-names
@@ -148,6 +148,20 @@ function stripLeadingJbWear(s) {
     .trim()
     .replace(/^jb'?s\s+wear\s+/i, "")
     .trim();
+}
+
+/** XLSX blurb/details use `|` between spec clauses — store as bullet lines for the PDP. */
+function jbXlsxPipeSegmentsToBullets(text) {
+  const t = String(text ?? "").trim();
+  if (!t || !t.includes("|")) {
+    return t;
+  }
+  return t
+    .split("|")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => `- ${s}`)
+    .join("\n");
 }
 
 /** Prefer a short listing title when "Product Name" mixes marketing copy and real titles. */
@@ -293,8 +307,8 @@ async function upsertProductsBatch(supabase, batch) {
 }
 
 const DEFAULT_JB_XLSX_CANDIDATES = [
-  "data/supplier/JB/JBswear SKU - Reseller.xlsx",
   "data/supplier/JB/2026 JBswear SKU - Reseller.xlsx",
+  "data/supplier/JB/JBswear SKU - Reseller.xlsx",
 ];
 
 function resolveJbXlsxPath(root, fileArg) {
@@ -546,12 +560,12 @@ async function main() {
       longestNorm !== bestName &&
       longestRaw.trim().length - bestName.length > 15
     ) {
-      descParts.push(longestRaw.trim());
+      descParts.push(jbXlsxPipeSegmentsToBullets(longestRaw.trim()));
     }
     const blurb = [...g.blurbs].sort((a, b) => b.length - a.length)[0] || "";
     const details = [...g.details].sort((a, b) => b.length - a.length)[0] || "";
-    if (blurb) descParts.push(blurb);
-    if (details) descParts.push(details);
+    if (blurb) descParts.push(jbXlsxPipeSegmentsToBullets(blurb));
+    if (details) descParts.push(jbXlsxPipeSegmentsToBullets(details));
     if (g.website) descParts.push(`More info: ${g.website}`);
     const description = descParts.join("\n\n").trim();
 

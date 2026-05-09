@@ -166,6 +166,30 @@ export default async function AdminWorkProcessPage() {
           }
         }
 
+        const storeIdsForCompleteCheck = [
+          ...new Set(
+            pairs
+              .map((p) => storeByNumber.get(p.customerOrderId)?.id)
+              .filter((id): id is string => Boolean(id)),
+          ),
+        ];
+        const completeStoreOrderIds = new Set<string>();
+        if (storeIdsForCompleteCheck.length > 0) {
+          const { data: cqRows } = await supabase
+            .from("click_up_complete_orders_queue")
+            .select("store_order_id")
+            .in("store_order_id", storeIdsForCompleteCheck);
+          for (const r of cqRows ?? []) {
+            completeStoreOrderIds.add(r.store_order_id);
+          }
+        }
+
+        const pairsForClickUp = pairs.filter((p) => {
+          const sid = storeByNumber.get(p.customerOrderId)?.id;
+          if (!sid) return true;
+          return !completeStoreOrderIds.has(sid);
+        });
+
         const storeOrderDateFmt = new Intl.DateTimeFormat("en-AU", {
           timeZone: "Australia/Perth",
           year: "numeric",
@@ -173,7 +197,7 @@ export default async function AdminWorkProcessPage() {
           day: "numeric",
         });
 
-        clickUpOrderFormRows = pairs.map(({ listDate, customerOrderId }) => {
+        clickUpOrderFormRows = pairsForClickUp.map(({ listDate, customerOrderId }) => {
           const so = storeByNumber.get(customerOrderId);
           const storeOrderDateDisplay = so
             ? storeOrderDateFmt.format(new Date(so.created_at))

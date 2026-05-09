@@ -82,7 +82,7 @@ export default async function AdminQualityCheckSheetPage({
       ) : null}
       {completeOrdersDocumentsView ? (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 print:hidden">
-          Complete Orders 문서 보기 모드: 체크리스트·메모·검사 저장 및 Move to Dispatch는 비활성화됩니다.
+          Completed Order 문서 보기 모드: 체크리스트·메모·검사 저장 및 Move to Dispatch는 비활성화됩니다.
         </div>
       ) : null}
       <div className="flex flex-wrap items-start justify-between gap-4 print:hidden">

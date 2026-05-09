@@ -1,18 +1,31 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { CalculatorIcon, PlacementIcon, UploadIcon } from "@/app/components/icons";
+import { ArrowLeftIcon, ArrowRightIcon, CalculatorIcon, PlacementIcon, UploadIcon } from "@/app/components/icons";
+import {
+  BISLEY_POSITIONAL_GALLERY_COLOR_LABELS,
+  bisleyReorderDrillImagesToMatchColors,
+  bisleyPositionalNormalizedCodesFromUrls,
+  bisleySlugUsesPositionalColorGallery,
+  bisleySortedPositionalImageUrlsIfComplete,
+} from "@/lib/bisley-positional-color-gallery";
 import { isPpeStorefrontProduct } from "@/lib/catalog";
 import { STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { storefrontLeadingSupplierBrand } from "@/lib/product-display-name";
+import { restrictBisleyOrangeOnlyProductColorsIfNeeded } from "@/lib/product-visibility";
 import { STORE_MAIN_SHELL_CLASS } from "@/lib/store-main-shell";
 import { SITE_PAGE_INSET_X_CLASS } from "@/lib/site-layout";
 import { uploadStoreCheckoutReferenceImages } from "@/app/orders/actions";
 import { addCartItem, getCartItems, removeCartItem, updateCartItem, type CartItem } from "@/lib/cart";
 import { productPathSegment } from "@/lib/product-path-slug";
-import { productCardDisplayLines, productDetailDescriptionBody } from "@/lib/product-card-copy";
+import {
+  bisleyPdpDisplayProductNameWithApexPrefix,
+  productCardDisplayLines,
+  productDetailDescriptionBody,
+} from "@/lib/product-card-copy";
 import {
   getSizeGuideBundle,
   inferSizeGuideKind,
@@ -25,6 +38,7 @@ import {
   type SupplierSizeChartLink,
 } from "@/lib/supplier-size-chart-links";
 import { placementLogoLocationSrc } from "@/lib/placement-logo-location";
+import { storefrontVolumeDiscountRateFromSubtotalAud } from "@/lib/storefront-volume-discount";
 import { syncSidebarNavFromProductIfNeeded } from "@/lib/sidebar-nav";
 import type { ProductGoogleRating } from "@/lib/product-google-rating";
 
@@ -45,6 +59,7 @@ type DecoratedServiceType = Exclude<ServiceType, "Plain">;
 /** §3 Service Type — raster artwork in `public/button/` (idle). */
 const SERVICE_TYPE_BUTTON_IMAGE: Record<ServiceType, string> = {
   Plain: "/button/Button_Plain.png",
+  /** Filenames in `public/button/` use legacy typo `Buttom_` — keep in sync with on-disk assets. */
   Embroidery: "/button/Buttom_Emb.png",
   Printing: "/button/Button_Print.png",
 };
@@ -113,6 +128,20 @@ export type ProductDetailData = {
   slug?: string | null;
   /** `products.supplier_name` — shown on Admin → Supplier orders. */
   supplierName?: string;
+  /**
+   * Server-computed PDP header snapshot (prevents hydration mismatches when dev bundles diverge).
+   * When present, the PDP should prefer these over re-deriving from `name` on the client.
+   */
+  displayProductName?: string | null;
+  displayProductCode?: string | null;
+  displayBrandSkuLine?: string | null;
+  /** Server-computed colour list for PDP (preferred over client re-derivation). */
+  displayColorOptions?: string[];
+  /**
+   * Server-computed `productDetailDescriptionBody` output — use on the client so SSR HTML matches hydration
+   * (same code path as RSC, avoids bundle/Turbopack drift for Aussie strip etc.).
+   */
+  pdpDescriptionBody?: string;
   description: string;
   basePrice: number;
   originalPrice?: number;
@@ -125,12 +154,71 @@ export type ProductDetailData = {
   features?: string;
   /** `products.specifications` — fabric, sizing detail, etc. (plain text). */
   specifications?: string;
+  relatedProducts?: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    imageUrl: string | null;
+  }>;
 };
 
 export type PremiumWorkPoloClientProps = {
   product: ProductDetailData;
   placements: PlacementData[];
+  /**
+   * Same string as `product.pdpDescriptionBody`, passed from the RSC page so the Flight payload always
+   * includes the server-rendered DESCRIPTION (avoids stale `unstable_cache` entries without the nested field).
+   */
+  serverPdpDescriptionBody?: string;
 };
+
+function effectivePdpColorOptions(product: ProductDetailData): string[] {
+  const restrictMeta = {
+    slug: product.slug ?? null,
+    supplier_name: product.supplierName ?? null,
+    description: product.description ?? null,
+  };
+  const slugLower = (product.slug ?? "").trim().toLowerCase();
+  const urls = product.imageUrls ?? [];
+  if (bisleySlugUsesPositionalColorGallery(slugLower) && urls.length >= 4) {
+    if (bisleyPositionalNormalizedCodesFromUrls(urls).size === 4) {
+      return restrictBisleyOrangeOnlyProductColorsIfNeeded(product.name, restrictMeta, [
+        ...BISLEY_POSITIONAL_GALLERY_COLOR_LABELS,
+      ]);
+    }
+  }
+
+  const raw =
+    Array.isArray(product.displayColorOptions) && product.displayColorOptions.length > 0
+      ? product.displayColorOptions
+      : product.colorOptions;
+  let restricted = restrictBisleyOrangeOnlyProductColorsIfNeeded(product.name, restrictMeta, raw);
+  // Bisley BPC8580/BPC8580T: chip label should be Navy (not Orange).
+  if (slugLower.includes("bpc8580") || slugLower.includes("bpc8580t")) {
+    restricted = restricted.map((c) => (String(c).trim().toLowerCase() === "orange" ? "Navy" : c));
+  }
+  // Bisley BSHC1333: force chip order to match image order.
+  if ((slugLower.includes("bshc1333") || slugLower.includes("bsh1331")) && restricted.length >= 5) {
+    const canonical = ["Black", "Charcoal", "Green", "Navy", "Stone"];
+    const have = new Set(restricted.map((c) => String(c).trim().toLowerCase()));
+    if (canonical.every((c) => have.has(c.toLowerCase()))) {
+      restricted = canonical;
+    }
+  }
+  // Bisley BSHC1332: force chip order to match image order.
+  if (slugLower.includes("bshc1332") && restricted.length >= 4) {
+    const canonical = ["Black", "Green", "Navy", "Stone"];
+    const have = new Set(restricted.map((c) => String(c).trim().toLowerCase()));
+    if (canonical.every((c) => have.has(c.toLowerCase()))) {
+      restricted = canonical;
+    }
+  }
+  // Syzmik ZJ260: `Product_Multi` gallery assets are not a purchasable colour.
+  if (slugLower.includes("zj260")) {
+    return restricted.filter((c) => String(c).trim().toLowerCase() !== "multi");
+  }
+  return restricted;
+}
 
 function parseCartServiceFlags(serviceType: string): { emb: boolean; prn: boolean } {
   const s = serviceType.trim();
@@ -239,6 +327,10 @@ function cents(n: number) {
 
 /** Matches supplier filenames like `…_Product_MidBlue_01.jpg` (see sync-supplier-catalog). */
 function humanizeColorInFilename(raw: string) {
+  const jb = jbColorNameFromCode(raw);
+  if (jb) {
+    return jb;
+  }
   return raw
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
@@ -246,8 +338,293 @@ function humanizeColorInFilename(raw: string) {
     .trim();
 }
 
+function jbColorNameFromCode(raw: string): string | null {
+  const key = String(raw ?? "")
+    .trim()
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toUpperCase();
+  if (!key) return null;
+
+  // Common JB colour codes that appear in filenames like `1JT_BX_01_...` or `S3FH_B_01_...`.
+  const map: Record<string, string> = {
+    B: "Black",
+    BX: "Black",
+    N: "Navy",
+    NX: "Navy",
+    W: "White",
+    WX: "White",
+    R: "Red",
+    RX: "Red",
+    RO: "Royal",
+    RY: "Royal",
+    C: "Charcoal",
+    CX: "Charcoal",
+    G: "Gunmetal",
+    GX: "Grey",
+    G1: "Gunmetal",
+    Q: "Graphite",
+    QQ: "Graphite Marle",
+    TT: "Slate",
+    FF: "Army",
+    A: "Aqua",
+    AQ: "Aqua",
+    LM: "Lime",
+    Y: "Yellow",
+    O: "Orange",
+    PK: "Pink",
+    PU: "Purple",
+    BR: "Brown",
+    KH: "Khaki",
+    SD: "Sand",
+    CR: "Cream",
+    SI: "Silver",
+    GD: "Gold",
+  };
+  return map[key] ?? null;
+}
+
+function bisleyColorNameFromCode(raw: string): string | null {
+  const key = String(raw ?? "")
+    .trim()
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toUpperCase();
+  if (!key) return null;
+  const map: Record<string, string> = {
+    BBLK: "Black",
+    BLACK: "Black",
+    BF51: "Yellow",
+    BF61: "Orange",
+    BCDR: "Khaki",
+    BPCT: "Navy",
+    BSAN: "Sand",
+    BSAND: "Sand",
+    BVCB: "Royal",
+    BGRG: "Bottle",
+    BVEO: "Orange",
+    BPLB: "Sky",
+    BWHT: "White",
+    BDKN: "Midnight",
+    BPEY: "Sand",
+    BOLV: "Olive",
+    SKY: "Sky",
+    WHITE: "White",
+    MIDNIGHT: "Midnight",
+    SAND: "Sand",
+    BCCG: "Charcoal",
+    BSTN: "Stone",
+    BCRU: "Blue",
+    BLWR: "Green",
+  };
+  return map[key] ?? null;
+}
+
 function compactColorKey(input: string) {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/** Loose label match vs DB / API (spacing, unicode); keep in sync with `apColourNormKey` in sync-aussie-pacific-api.mjs. */
+function pdpColourNormKey(input: string): string {
+  return String(input ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/\s+/g, " ");
+}
+
+function indexOfColorOption(colOpts: readonly string[], picked: string): number {
+  const trimmed = picked.trim();
+  let idx = colOpts.indexOf(trimmed);
+  if (idx >= 0) return idx;
+  const wantNorm = pdpColourNormKey(trimmed);
+  idx = colOpts.findIndex((c) => pdpColourNormKey(c) === wantNorm);
+  if (idx >= 0) return idx;
+  const want = compactColorKey(trimmed);
+  return colOpts.findIndex((c) => compactColorKey(c) === want);
+}
+
+/** Same token list as `deriveColorOptionsFromImageUrls` in `app/products/[slug]/page.tsx`. */
+const SIMPLE_COLOR_WORDS_COMBO = new Set(
+  [
+    "black",
+    "white",
+    "red",
+    "gold",
+    "navy",
+    "royal",
+    "maroon",
+    "charcoal",
+    "grey",
+    "gray",
+    "orange",
+    "yellow",
+    "green",
+    "blue",
+    "pink",
+    "purple",
+    "brown",
+    "khaki",
+    "lime",
+    "aqua",
+    "teal",
+    "silver",
+    "natural",
+    "sand",
+    "cream",
+  ].map((s) => s.toLowerCase()),
+);
+
+function titleCaseWord(w: string) {
+  return w.length === 0 ? w : w[0]!.toUpperCase() + w.slice(1).toLowerCase();
+}
+
+function formatComboColorFromWords(words: string[]) {
+  return words.map(titleCaseWord).join(" / ");
+}
+
+function extractColorTokenFromGalleryFilename(fileNoQuery: string): string | null {
+  const shot = fileNoQuery.match(/_(?:Product|Talent)_([A-Za-z0-9_-]+)_/i);
+  if (shot?.[1]) {
+    return shot[1];
+  }
+  const generic = fileNoQuery.match(/^[A-Za-z0-9]+_([A-Za-z0-9_-]+)_(?:\d{1,3})\.[A-Za-z0-9]+$/i);
+  if (generic?.[1]) {
+    return generic[1];
+  }
+  const tail = fileNoQuery.match(/_([A-Za-z0-9_-]+)_(?:\d{1,3})\.[A-Za-z0-9]+$/i);
+  if (tail?.[1]) {
+    return tail[1];
+  }
+  return null;
+}
+
+/** `humanizeColorToken` on the server — no JB single-letter remap (combo tokens stay intact). */
+function humanizeSupplierFilenameToken(raw: string) {
+  return raw
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim();
+}
+
+/**
+ * One catalogue label string from a supplier product-shot filename (Biz / Syzmik `_Product_` / `_Talent_`).
+ * Mirrors `deriveColorOptionsFromImageUrls` for a single file (Talent included so thumbnail clicks still map).
+ */
+function supplierDisplayColorLabelFromFileNoQuery(fileNoQuery: string): string | null {
+  const token = extractColorTokenFromGalleryFilename(fileNoQuery);
+  if (!token) {
+    // Blue Whale supplier-media images often use space-separated filenames like:
+    // `V85 FLUORO YELLOW BK.jpg`, `C81 orange navy.jpg`, `C81 YELLOW NAVY VENT.jpg`
+    const m = fileNoQuery.match(/^([A-Za-z0-9]+)\s+(.+)\.(jpg|jpeg|png|webp)$/i);
+    if (m?.[1] && m?.[2]) {
+      const rest = m[2]
+        .replace(/\b(back|bk|vent)\b/gi, " ")
+        .replace(/\bunder\s*arm\b/gi, " ")
+        .replace(/\bmodel\b/gi, " ")
+        .replace(/\b0?\d+\b/g, " ")
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!rest) return null;
+      const wordsRaw = rest
+        .split(/\s+/)
+        .map((w) => w.trim())
+        .filter(Boolean);
+      const words = wordsRaw
+        .filter((w) => !/^and$/i.test(w))
+        .filter((w) => !/^safety$/i.test(w))
+        .filter((w) => w.length > 0)
+        .filter((w) => SIMPLE_COLOR_WORDS_COMBO.has(w.toLowerCase()) || w.toLowerCase() === "fluoro" || w.toLowerCase() === "navy");
+      const unique = words
+        .map((w) => w.toLowerCase())
+        .filter((w, i, arr) => arr.indexOf(w) === i);
+      if (unique.length >= 2) {
+        return unique.map(titleCaseWord).join(" / ");
+      }
+      if (unique.length === 1) {
+        return titleCaseWord(unique[0] ?? "");
+      }
+      // Fallback: keep something readable so code maps (e.g. FYN) can still normalize later.
+      return wordsRaw.map(titleCaseWord).join(" ");
+    }
+    return null;
+  }
+  if (/[_-]/.test(token)) {
+    const parts = token
+      .split(/[_-]+/g)
+      .map((p) => humanizeSupplierFilenameToken(p))
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (parts.length >= 2) {
+      return parts.map(titleCaseWord).join(" / ");
+    }
+  }
+  const human = humanizeSupplierFilenameToken(token);
+  if (!human) {
+    return null;
+  }
+  const words = human
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter(Boolean);
+  if (words.length >= 2 && words.every((w) => SIMPLE_COLOR_WORDS_COMBO.has(w))) {
+    return formatComboColorFromWords(words);
+  }
+  return human;
+}
+
+/** Normalize supplier quirks so `Black / P Grey` matches storefront `Black / Grey`. */
+function normalizeSupplierColorSynonyms(label: string): string {
+  let s = label.replace(/\s+/g, " ").trim();
+  // Blue Whale / generic: ignore marketing qualifiers when matching filenames.
+  s = s.replace(/\bSafety\b/gi, "").replace(/\bFluoro\b/gi, "").replace(/\s+/g, " ").trim();
+  s = s.replace(/\bnavy\s*blue\b/gi, "navy");
+  // Some supplier-media filenames split "navy blue" into separate tokens; treat lone "blue" as part of navy.
+  if (/\bnavy\b/i.test(s)) {
+    s = s.replace(/\bblue\b/gi, "").replace(/\s+/g, " ").trim();
+  }
+  s = s.replace(/\byello\b/gi, "yellow");
+  // Blue Whale image tokens like `FYN` / `FON` appear in filenames; map them to the labelled combos.
+  s = s.replace(/\bfyn\b/gi, "yellow navy");
+  s = s.replace(/\bfon\b/gi, "orange navy");
+  s = s.replace(/\bfybt\b/gi, "yellow bottle green");
+  // Bisley Apex / taped combos sometimes use TT01/TT02 tokens in filenames.
+  // Keep the `/` so `colorMatchKey("Yellow/Navy")` matches too (it strips `/ Navy` combos).
+  s = s.replace(/\btt01\b/gi, "yellow / navy");
+  s = s.replace(/\btt02\b/gi, "orange / navy");
+  // Some Bisley media uses TT04 for the Yellow/Navy combo (e.g. BJ6730T).
+  s = s.replace(/\btt04\b/gi, "yellow / navy");
+  // Some Bisley media uses TT05 for the Orange/Navy combo (e.g. BJ6934T).
+  s = s.replace(/\btt05\b/gi, "orange / navy");
+  // Some Bisley media uses TT21 for the Pink/Navy combo (e.g. BKL6975).
+  s = s.replace(/\btt21\b/gi, "pink / navy");
+  // Blue Whale: some SKUs have mis-linked supplier-media images from nearby styles; normalize those too.
+  s = s.replace(/\bc82\b/gi, "");
+  s = s.replace(/\bc83\b/gi, "");
+  s = s.replace(/\s+/g, " ").trim();
+  s = s.replace(/\bBlack\s+P\s+Grey\b/gi, "Black / Grey");
+  if (s.includes("/")) {
+    const parts = s
+      .split(/\s*\/\s*/)
+      .map((seg) => seg.trim())
+      .filter(Boolean)
+      .map((seg) => seg.replace(/\bnavy\b/gi, "navy").trim());
+    const kept = parts
+      .filter((p) => compactColorKey(p) !== "navy")
+      .map((p) => {
+        if (/^p\s*grey$/i.test(p) || compactColorKey(p) === "pgrey") {
+          return "Grey";
+        }
+        return p;
+      });
+    return (kept.length > 0 ? kept : parts).join(" / ");
+  }
+  return s;
+}
+
+function colorMatchKey(label: string): string {
+  return compactColorKey(normalizeSupplierColorSynonyms(label));
 }
 
 /** Single URL vs colour — same rules as gallery hero pick (for reverse lookup from thumbnails). */
@@ -259,10 +636,26 @@ function scoreGalleryUrlForColor(color: string, url: string): number {
   const colorCompact = compactColorKey(trimmed);
   const colorLower = trimmed.toLowerCase();
   const colorWords = colorLower.split(/\s+/).filter((w) => w.length > 1);
+  const isComboLabel = trimmed.includes("/");
 
   const file = decodeURIComponent(url.split("/").pop() ?? url);
   const pathLower = url.toLowerCase();
   let score = 0;
+
+  // Blue Whale: some image filenames use supplier short codes (e.g. FYN/FON) instead of colour words.
+  // Map those codes directly to Yellow/Orange so chips pick the correct hero image.
+  if (/\bfyn\b/i.test(file)) {
+    if (colorLower.includes("yellow")) score += 140;
+    if (colorLower.includes("orange")) score -= 35;
+  }
+  if (/\bfon\b/i.test(file)) {
+    if (colorLower.includes("orange")) score += 140;
+    if (colorLower.includes("yellow")) score -= 35;
+  }
+  if (/\bfybt\b/i.test(file)) {
+    if (colorLower.includes("bottle") || colorLower.includes("green")) score += 140;
+    if (colorLower.includes("navy")) score -= 25;
+  }
 
   const shotMatch = file.match(/_(?:Product|Talent)_([A-Za-z0-9_-]+)_/i);
   if (shotMatch) {
@@ -272,8 +665,27 @@ function scoreGalleryUrlForColor(color: string, url: string): number {
       score += 120;
     } else if (fileCompact === colorCompact) {
       score += 120;
-    } else if (fileCompact.includes(colorCompact) || colorCompact.includes(fileCompact)) {
+    } else if (
+      !isComboLabel &&
+      (fileCompact.includes(colorCompact) || colorCompact.includes(fileCompact))
+    ) {
       score += 70;
+    } else if (isComboLabel) {
+      const parts = trimmed
+        .split(/\s*\/\s*/)
+        .map((p) => compactColorKey(normalizeSupplierColorSynonyms(p.trim())))
+        .filter((p) => p.length > 1);
+      let matched = 0;
+      for (const p of parts) {
+        if (fileCompact.includes(p)) {
+          matched++;
+        }
+      }
+      if (parts.length >= 2 && matched === parts.length) {
+        score += 105;
+      } else if (matched > 0) {
+        score += matched * 22;
+      }
     } else {
       for (const w of colorWords) {
         if (w.length > 2 && fileCompact.includes(w)) {
@@ -285,6 +697,49 @@ function scoreGalleryUrlForColor(color: string, url: string): number {
       score += 45;
     } else if (/Talent/i.test(file)) {
       score -= 35;
+    }
+  }
+
+  // JB's Wear filenames often use compact colour codes like `_BX_`, `_NX_`, or `_B_`.
+  // Try to extract that code and match against the colour label.
+  const jbCodeMatch = file.match(/^[A-Za-z0-9]+[_-]([A-Za-z0-9]{1,3})X?[_-]/);
+  if (jbCodeMatch?.[1]) {
+    const mapped = jbColorNameFromCode(jbCodeMatch[1]);
+    if (mapped) {
+      const mappedCompact = compactColorKey(mapped);
+      if (mappedCompact && colorCompact === mappedCompact) {
+        score += 110;
+      } else if (mappedCompact && (mappedCompact.includes(colorCompact) || colorCompact.includes(mappedCompact))) {
+        score += 85;
+      } else {
+        const mappedWords = mapped
+          .toLowerCase()
+          .split(/\s+/)
+          .map((w) => w.trim())
+          .filter(Boolean);
+        for (const w of mappedWords) {
+          if (w.length > 2 && colorCompact.includes(w)) {
+            score += 22;
+          }
+        }
+      }
+      if (/[_-]0?1\./i.test(file)) {
+        score += 6;
+      }
+    }
+  }
+
+  // Bisley: some catalogs use short codes in filenames (e.g. BBEAN55_BBLK_…, BBEAN55_BF51_…).
+  const bisleyCodeMatch = file.match(/^[A-Za-z0-9]+[_-]([A-Za-z0-9]{3,6})[_-]/);
+  if (bisleyCodeMatch?.[1]) {
+    const mapped = bisleyColorNameFromCode(bisleyCodeMatch[1]);
+    if (mapped) {
+      const mappedCompact = compactColorKey(mapped);
+      if (mappedCompact && colorCompact === mappedCompact) {
+        score += 120;
+      } else if (mappedCompact && (mappedCompact.includes(colorCompact) || colorCompact.includes(mappedCompact))) {
+        score += 90;
+      }
     }
   }
 
@@ -306,59 +761,311 @@ function scoreGalleryUrlForColor(color: string, url: string): number {
   return score;
 }
 
+function galleryFilenameTail(url: string): string {
+  const tail = url.split("/").pop() ?? url;
+  try {
+    return decodeURIComponent(tail);
+  } catch {
+    return tail;
+  }
+}
+
+/**
+ * Slug `jb-s3fsz` → `S3FSZ` for filenames like `S3FSZBX_01.jpg` (style + colour run together).
+ * Skips long marketing slugs (e.g. `jb-premium-work-polo`) so we do not strip the wrong prefix.
+ */
+function jbStyleCodeUpperFromSlug(slug: string | null | undefined): string | null {
+  const s = (slug ?? "").trim().toLowerCase();
+  if (!s.startsWith("jb-")) {
+    return null;
+  }
+  const rest = s.slice(3).replace(/-/g, "");
+  if (!rest || rest.length < 2 || rest.length > 12 || !/^[a-z0-9]+$/.test(rest)) {
+    return null;
+  }
+  return rest.toUpperCase();
+}
+
+/** Same rules as `deriveJbColorsFromImageUrls` in `app/products/[slug]/page.tsx`, plus compact `STYLE+CODE_` names. */
+function jbExtractColorCodeFromJbFilename(fileNoQuery: string, styleUpper: string | null): string | null {
+  const m = fileNoQuery.match(/^[A-Za-z0-9]+[_-]([A-Za-z0-9]{1,3})X?[_-]/);
+  if (m?.[1]) {
+    return String(m[1]);
+  }
+  const base = fileNoQuery.replace(/\.[^.]+$/i, "");
+  if (styleUpper && base.length > styleUpper.length) {
+    const up = base.toUpperCase();
+    if (up.startsWith(styleUpper)) {
+      const after = base.slice(styleUpper.length);
+      const m2 = after.match(/^([A-Za-z0-9]{1,3})X?[_-]/);
+      if (m2?.[1]) {
+        return String(m2[1]);
+      }
+    }
+  }
+  return null;
+}
+
+function jbMappedDisplayColorFromImageUrl(url: string, styleUpper: string | null): string | null {
+  const tail = galleryFilenameTail(url);
+  const fileNoQuery = (tail.split("?")[0] ?? "").trim();
+  if (!fileNoQuery) {
+    return null;
+  }
+  const code = jbExtractColorCodeFromJbFilename(fileNoQuery, styleUpper);
+  if (!code) {
+    return null;
+  }
+  return jbColorNameFromCode(code);
+}
+
+/** True when filenames look like supplier product shots we can match to a colour label. */
+function galleryHasStructuredProductShots(urls: readonly string[]): boolean {
+  for (const u of urls) {
+    if (typeof u !== "string" || !u.trim()) continue;
+    const lower = u.toLowerCase();
+    const isSupplierMedia = lower.includes("/api/supplier-media/");
+    // Remote opaque hosts only: same-origin `/api/supplier-media/…` still carries real filenames (Biz / JB)
+    // after `resolveStorefrontImageUrlList` — do not skip those or structured matching breaks site-wide.
+    // Aussie Pacific opaque keys on S3/CloudFront can satisfy the loose `*_…_01.jpg` heuristic below.
+    if (lower.includes("amazonaws.com") || lower.includes("cloudfront.net")) {
+      continue;
+    }
+    const fileNoQuery = (galleryFilenameTail(u).split("?")[0] ?? "").trim();
+    if (/_(?:Product|Talent)_/i.test(fileNoQuery)) {
+      return true;
+    }
+    // JB-style `SKU_Color_01.jpg` — but NOT opaque S3 keys like `1k_hash1_hash2_1.jpg` (many `_` segments).
+    if (/^[A-Za-z0-9]+_[A-Za-z0-9_-]+_(?:\d{1,3})\.[A-Za-z0-9]+$/i.test(fileNoQuery)) {
+      const underscoreCount = (fileNoQuery.match(/_/g) ?? []).length;
+      if (underscoreCount <= 2) {
+        return true;
+      }
+    }
+    // Blue Whale (and some supplier-media imports): filenames use spaces, e.g. `V85 FLUORO YELLOW BK.jpg`.
+    if (
+      isSupplierMedia &&
+      /^[A-Za-z0-9]+\s+[A-Za-z0-9][A-Za-z0-9\s-]*\.(jpg|jpeg|png|webp)$/i.test(fileNoQuery)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Pick the hero image for a colour from gallery URLs (`_Product_` / `_Talent_` tokens).
  * Prefers flat `_Product_` shots so the colour swatch matches the garment, not on-model `_Talent_` marketing.
  * JB's Wear: when `import-jbswear-xlsx` tagged the gallery with `#jbpc=N`, use index order (see `parseJbGalleryUrls`).
  */
 function pickPrimaryImageForColor(color: string, urls: string[], opts?: GalleryColorPickOpts): string {
-  if (!urls.length) {
+  const list = urls.map((s) => (typeof s === "string" ? s.trim() : "")).filter((s) => s.length > 0);
+  if (!list.length) {
     return "";
   }
   const trimmed = color.trim();
   if (!trimmed) {
-    return urls[0];
+    return list[0]!;
   }
 
   const pc = opts?.jbPrefixCount ?? 0;
   const colOpts = opts?.colorOptions;
+  /** Aussie Pacific: never use filename heuristics — always gallery index × stride vs colour chips. */
+  if (opts?.forceOpaqueColorIndex) {
+    const sync = galleryIndexSyncHeroForColor(trimmed, list, colOpts, true);
+    if (sync) {
+      return sync;
+    }
+    return list[0]!;
+  }
   if (
     opts?.isJbWear &&
     pc > 0 &&
     colOpts &&
-    pc === colOpts.length &&
-    urls.length >= pc
+    list.length >= pc
   ) {
-    const i = colOpts.indexOf(color);
+    const i = indexOfColorOption(colOpts, String(color));
     if (i >= 0 && i < pc) {
-      return urls[i] ?? urls[0];
+      return list[i] ?? list[0]!;
     }
   }
 
-  const scored = urls.map((url) => ({
+  if (opts?.isJbWear && colOpts && pc === 0) {
+    const style = opts.jbStyleCodeUpper ?? null;
+    const want = compactColorKey(trimmed);
+    for (const u of list) {
+      const mapped = jbMappedDisplayColorFromImageUrl(u, style);
+      if (mapped && compactColorKey(mapped) === want) {
+        return u;
+      }
+    }
+    if (list.length === colOpts.length) {
+      const i = indexOfColorOption(colOpts, trimmed);
+      if (i >= 0 && i < list.length) {
+        return list[i] ?? list[0]!;
+      }
+    }
+  }
+
+  if (!opts?.isJbWear && galleryHasStructuredProductShots(list)) {
+    const wantKey = colorMatchKey(trimmed);
+    if (wantKey.length >= 3) {
+      const pickStructuredMatch = (productFlatLayOnly: boolean) => {
+        for (const u of list) {
+          const fn = (galleryFilenameTail(u).split("?")[0] ?? "").trim();
+          // Match `sync-supplier-catalog.mjs`: flat lays are `_Product_` and not on-model `Talent` shots.
+          if (productFlatLayOnly && (!/_Product_/i.test(fn) || /Talent/i.test(fn))) {
+            continue;
+          }
+          const der = supplierDisplayColorLabelFromFileNoQuery(fn);
+          if (der && colorMatchKey(der) === wantKey) {
+            return u;
+          }
+        }
+        return null;
+      };
+      const flatLay = pickStructuredMatch(true);
+      if (flatLay) {
+        return flatLay;
+      }
+      const anyShot = pickStructuredMatch(false);
+      if (anyShot) {
+        return anyShot;
+      }
+    }
+  }
+
+  // Opaque CDN keys (e.g. Aussie Pacific): hero follows colour chip index when import order matches `colorOptions`.
+  if (!galleryHasStructuredProductShots(list)) {
+    const sync = galleryIndexSyncHeroForColor(trimmed, list, colOpts, false);
+    if (sync) {
+      return sync;
+    }
+    return list[0]!;
+  }
+
+  const scored = list.map((url, idx) => ({
     url,
+    idx,
     score: scoreGalleryUrlForColor(trimmed, url),
   }));
 
-  scored.sort((a, b) => b.score - a.score);
-  if (scored[0].score > 0) {
-    return scored[0].url;
+  scored.sort((a, b) => {
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+    return a.idx - b.idx;
+  });
+
+  const winner = scored[0]!;
+  const firstScore = scoreGalleryUrlForColor(trimmed, list[0]!);
+
+  if (winner.score <= 0) {
+    return list[0]!;
   }
-  return urls[0];
+  if (winner.idx === 0) {
+    return list[0]!;
+  }
+  // Only move off the first image for a decisive filename match or a large score gap.
+  if (winner.score >= 120) {
+    return winner.url;
+  }
+  if (winner.score > firstScore + 45) {
+    return winner.url;
+  }
+  return list[0]!;
 }
 
-function extractColorTokenFromGalleryFilename(fileNoQuery: string): string | null {
-  const shot = fileNoQuery.match(/_(?:Product|Talent)_([A-Za-z0-9_-]+)_/i);
-  if (shot?.[1]) {
-    return shot[1];
+/**
+ * When URLs are opaque, heuristics cannot map an image to a colour — but many catalogues still list
+ * gallery images in the same left-to-right order as the storefront colour chips.
+ */
+function inferColorFromGalleryIndexOrder(
+  imageUrl: string,
+  colors: readonly string[],
+  galleryUrls: readonly string[],
+): string | null {
+  if (colors.length <= 1 || galleryUrls.length <= 1) {
+    return null;
   }
-  const generic = fileNoQuery.match(/^[A-Za-z0-9]+_([A-Za-z0-9_-]+)_(?:\d{1,3})\.[A-Za-z0-9]+$/i);
-  if (generic?.[1]) {
-    return generic[1];
+  const idx = galleryUrls.indexOf(imageUrl);
+  if (idx < 0) {
+    return null;
   }
-  const tail = fileNoQuery.match(/_([A-Za-z0-9_-]+)_(?:\d{1,3})\.[A-Za-z0-9]+$/i);
-  if (tail?.[1]) {
-    return tail[1];
+  if (galleryUrls.length === colors.length) {
+    return colors[idx] ?? null;
+  }
+  if (galleryUrls.length > colors.length && idx < colors.length) {
+    return colors[idx] ?? null;
+  }
+  const k = Math.min(colors.length - 1, Math.max(0, Math.floor((idx * colors.length) / galleryUrls.length)));
+  return colors[k] ?? null;
+}
+
+/**
+ * How many consecutive gallery images belong to each colour (1 = one hero per chip, 2 = front+back, …).
+ * Requires `galleryLength` divisible by `colorCount` and at least one image per colour.
+ */
+function galleryStrideImagesPerColor(colorCount: number, galleryLength: number): number {
+  if (colorCount <= 1 || galleryLength <= 1 || galleryLength < colorCount) {
+    return 1;
+  }
+  if (galleryLength % colorCount !== 0) {
+    return 1;
+  }
+  return Math.floor(galleryLength / colorCount);
+}
+
+/**
+ * Signed / opaque gallery URLs (e.g. Aussie Pacific S3 keys): filenames do not carry colour tokens, but the
+ * import order usually matches `available_colors` / `colorOptions` left-to-right with one hero per colour.
+ */
+function galleryImageIndexSyncColor(
+  imageUrl: string,
+  colors: readonly string[],
+  galleryUrls: readonly string[],
+  forceOpaque = false,
+): string | null {
+  if (colors.length <= 1 || galleryUrls.length <= 1) {
+    return null;
+  }
+  if (galleryHasStructuredProductShots(galleryUrls) && !forceOpaque) {
+    return null;
+  }
+  const idx = galleryUrls.indexOf(imageUrl);
+  if (idx < 0) {
+    return null;
+  }
+  const stride = galleryStrideImagesPerColor(colors.length, galleryUrls.length);
+  const ci = Math.floor(idx / stride);
+  if (ci >= 0 && ci < colors.length) {
+    return colors[ci] ?? null;
+  }
+  return null;
+}
+
+/** Colour chip → hero URL when gallery order matches `colorOptions` (opaque URLs). */
+function galleryIndexSyncHeroForColor(
+  color: string,
+  list: readonly string[],
+  colOpts: readonly string[] | undefined,
+  forceOpaque = false,
+): string | null {
+  const trimmed = color.trim();
+  if (!trimmed || !colOpts || colOpts.length <= 1 || list.length <= 1) {
+    return null;
+  }
+  if (galleryHasStructuredProductShots(list) && !forceOpaque) {
+    return null;
+  }
+  const idx = indexOfColorOption(colOpts, trimmed);
+  if (idx < 0) {
+    return null;
+  }
+  const stride = galleryStrideImagesPerColor(colOpts.length, list.length);
+  const base = idx * stride;
+  if (base >= 0 && base < list.length) {
+    return list[base] ?? null;
   }
   return null;
 }
@@ -368,14 +1075,37 @@ function scoreColorLabelAgainstFileToken(colorLabel: string, tokenRaw: string): 
   const fromFile = humanizeColorInFilename(tokenRaw);
   const fileCompact = compactColorKey(fromFile);
   const labelCompact = compactColorKey(colorLabel);
+  const isCombo = colorLabel.includes("/");
   if (!fileCompact || !labelCompact) {
     return 0;
   }
   if (labelCompact === fileCompact) {
     return 100;
   }
-  if (fileCompact.includes(labelCompact) || labelCompact.includes(fileCompact)) {
+  if (colorMatchKey(colorLabel) === colorMatchKey(fromFile)) {
+    return 98;
+  }
+  if (!isCombo && (fileCompact.includes(labelCompact) || labelCompact.includes(fileCompact))) {
     return 80;
+  }
+  if (isCombo) {
+    const parts = colorLabel
+      .split(/\s*\/\s*/)
+      .map((p) => compactColorKey(normalizeSupplierColorSynonyms(p.trim())))
+      .filter((p) => p.length > 1);
+    let matched = 0;
+    for (const p of parts) {
+      if (fileCompact.includes(p)) {
+        matched++;
+      }
+    }
+    if (parts.length >= 2 && matched === parts.length) {
+      return 90;
+    }
+    if (matched > 0) {
+      return matched * 20;
+    }
+    return 0;
   }
   let s = 0;
   const labelWords = colorLabel
@@ -422,12 +1152,62 @@ function inferBestColorForGalleryImage(
   if (
     pickOpts?.isJbWear &&
     pc > 0 &&
-    pc === colors.length &&
     galleryUrls.length >= pc
   ) {
     const idx = galleryUrls.indexOf(imageUrl);
     if (idx >= 0 && idx < pc) {
       return colors[idx] ?? null;
+    }
+  }
+
+  if (pickOpts?.isJbWear) {
+    const style = pickOpts.jbStyleCodeUpper ?? null;
+    const mapped = jbMappedDisplayColorFromImageUrl(imageUrl, style);
+    if (mapped) {
+      if (colors.includes(mapped)) {
+        return mapped;
+      }
+      const hit = colors.find((c) => compactColorKey(c) === compactColorKey(mapped));
+      if (hit) {
+        return hit;
+      }
+      const hitNorm = colors.find((c) => pdpColourNormKey(c) === pdpColourNormKey(mapped));
+      if (hitNorm) {
+        return hitNorm;
+      }
+    }
+    const idx = galleryUrls.indexOf(imageUrl);
+    if (idx >= 0) {
+      if (galleryUrls.length === colors.length) {
+        return colors[idx] ?? null;
+      }
+      if (galleryUrls.length > colors.length && idx < colors.length) {
+        return colors[idx] ?? null;
+      }
+    }
+  }
+
+  const opaqueSyncColor = galleryImageIndexSyncColor(
+    imageUrl,
+    colors,
+    galleryUrls,
+    pickOpts?.forceOpaqueColorIndex,
+  );
+  if (opaqueSyncColor != null) {
+    return opaqueSyncColor;
+  }
+
+  if (!pickOpts?.isJbWear) {
+    const fileNoQueryDerived = (galleryFilenameTail(imageUrl).split("?")[0] ?? "").trim();
+    const supplierDerived = supplierDisplayColorLabelFromFileNoQuery(fileNoQueryDerived);
+    if (supplierDerived) {
+      const key = colorMatchKey(supplierDerived);
+      if (key.length >= 3) {
+        const byKey = colors.find((c) => colorMatchKey(c) === key);
+        if (byKey) {
+          return byKey;
+        }
+      }
     }
   }
 
@@ -449,8 +1229,7 @@ function inferBestColorForGalleryImage(
     }
   }
 
-  const file = decodeURIComponent(imageUrl.split("/").pop() ?? imageUrl);
-  const fileNoQuery = (file.split("?")[0] ?? file).trim();
+  const fileNoQuery = (galleryFilenameTail(imageUrl).split("?")[0] ?? "").trim();
   const token = extractColorTokenFromGalleryFilename(fileNoQuery);
   if (token) {
     let tokenBest: { color: string; score: number } | null = null;
@@ -465,7 +1244,7 @@ function inferBestColorForGalleryImage(
     }
   }
 
-  return null;
+  return inferColorFromGalleryIndexOrder(imageUrl, colors, galleryUrls);
 }
 
 function toShortCode(label: string) {
@@ -485,6 +1264,9 @@ function toShortCode(label: string) {
 const PLACEHOLDER_GALLERY_IMAGE =
   "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1600&q=80";
 
+/** PDP thumbnail strip: show this many images per “page” with prev/next. */
+const GALLERY_THUMB_PAGE_SIZE = 5;
+
 /** Fragment on first gallery URL from `import-jbswear-xlsx.mjs` when every colour has an XLSX hero image. */
 const JB_GALLERY_PREFIX_HASH_RE = /#jbpc=(\d+)$/i;
 
@@ -493,6 +1275,13 @@ export type GalleryColorPickOpts = {
   /** From `#jbpc=N` after stripping; N === colorOptions.length means first N images align with colour order. */
   jbPrefixCount?: number;
   isJbWear?: boolean;
+  /** Compact style from slug `jb-s3fsz` → `S3FSZ` for `STYLE+CODE_` JB filenames. */
+  jbStyleCodeUpper?: string | null;
+  /**
+   * Aussie Pacific (`ap-` slug / supplier): gallery URLs are opaque — always map chip index × stride to images
+   * and skip filename-based “structured” detection that blocks index sync.
+   */
+  forceOpaqueColorIndex?: boolean;
 };
 
 function parseJbGalleryUrls(raw: readonly string[]): { urls: string[]; prefixCount: number } {
@@ -500,17 +1289,21 @@ function parseJbGalleryUrls(raw: readonly string[]): { urls: string[]; prefixCou
     return { urls: [], prefixCount: 0 };
   }
   let prefixCount = 0;
-  const urls = raw.map((u) => {
-    const m = JB_GALLERY_PREFIX_HASH_RE.exec(u);
-    if (m) {
-      const n = parseInt(m[1] ?? "", 10);
-      if (Number.isFinite(n) && n > 0) {
-        prefixCount = n;
+  const urls = raw
+    .map((u) => {
+      const s = typeof u === "string" ? u : "";
+      const m = JB_GALLERY_PREFIX_HASH_RE.exec(s);
+      if (m) {
+        const n = parseInt(m[1] ?? "", 10);
+        if (Number.isFinite(n) && n > 0) {
+          prefixCount = n;
+        }
+        return s.slice(0, m.index);
       }
-      return u.slice(0, m.index);
-    }
-    return u;
-  });
+      return s;
+    })
+    .map((u) => u.trim())
+    .filter((u) => u.length > 0);
   return { urls, prefixCount };
 }
 
@@ -526,6 +1319,61 @@ function isJbWearStorefrontProduct(slug: string | null | undefined, supplierName
     sup === "jbswear" ||
     /\bjbs\s*wear\b/i.test(supplierName ?? "")
   );
+}
+
+function isSyzmikStorefrontProduct(slug: string | null | undefined, supplierName: string | undefined): boolean {
+  const s = (slug ?? "").trim().toLowerCase();
+  if (s.includes("syzmik") || s.startsWith("fb-syzmik-")) {
+    return true;
+  }
+  const sup = (supplierName ?? "").trim().toLowerCase();
+  return sup === "syzmik";
+}
+
+function syzmikFormatDescriptionSemicolonLineBreaks(desc: string): string {
+  // Many Syzmik descriptions arrive as `Sentence; Sentence; Sentence` blocks.
+  // Render `;` as a paragraph/list line break while preserving the semicolon.
+  return desc.replace(/;\s*/g, ";\n");
+}
+
+function syzmikFormatDescriptionFeaturesColonAndCommas(desc: string): string {
+  const s = String(desc ?? "");
+  if (!s.trim()) return s;
+  const lines = s.split(/\r?\n/);
+  const out: string[] = [];
+
+  for (const line of lines) {
+    const m = /^(\s*features\s*):\s*(.*)$/i.exec(line);
+    if (!m) {
+      out.push(line);
+      continue;
+    }
+    const label = (m[1] ?? "Features").trim();
+    const rest = (m[2] ?? "").trim();
+    if (!rest) {
+      out.push(`${label}:`);
+      continue;
+    }
+    // `Features: A, B, C` → `Features:\n\t- A\n\t- B\n\t- C`
+    const bullets = syzmikFormatFeaturesCommaToTabbedBullets(rest);
+    out.push(`${label}:\n${bullets}`);
+  }
+
+  return out.join("\n");
+}
+
+function syzmikFormatFeaturesCommaToTabbedBullets(raw: string): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return s;
+  // If it already has structured newlines/bullets, keep it as-is.
+  if (/\r?\n/.test(s) || /^\s*-\s+/m.test(s)) return s;
+  if (!s.includes(",")) return s;
+  const parts = s
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length <= 1) return s;
+  return `\t- ${parts.join("\n\t- ")}`;
 }
 
 function galleryForUrls(urls: string[]) {
@@ -831,35 +1679,110 @@ function HeroImageLightbox({
   );
 }
 
-export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloClientProps) {
+/**
+ * One description paragraph (`\n\n`-split block): each non-empty line shows a large bullet + tab-like indent,
+ * then the text. Lines that start with `- ` in the DB still strip the hyphen and use the same bullet style.
+ */
+function ProductDescriptionFormattedBlock({ block }: { block: string }) {
+  const lines = block.split(/\r?\n/);
+  return (
+    <div className="space-y-0.5">
+      {lines.map((rawLine, i) => {
+        const trimmed = rawLine.trim();
+        if (!trimmed) {
+          return <div key={i} className="h-1 min-h-1 shrink-0" aria-hidden />;
+        }
+        /** Tab/space-indented `- item` (e.g. Biz Collection Features sub-lines) — smaller dash, no big bullet. */
+        const indentedHyphen = /^(\s+)-\s+(.*)$/.exec(rawLine);
+        if (indentedHyphen && indentedHyphen[1].length > 0) {
+          const text = indentedHyphen[2].trim();
+          return (
+            <div
+              key={i}
+              className="flex items-start gap-2 pl-5 sm:gap-3 sm:pl-7"
+            >
+              <span className="shrink-0 select-none pt-[0.12em] font-medium text-brand-navy/75" aria-hidden>
+                -
+              </span>
+              <span className="min-w-0 flex-1 whitespace-pre-wrap pt-[0.12em] text-brand-navy/75">{text}</span>
+            </div>
+          );
+        }
+        const hyphenLead = /^-\s+(.*)$/.exec(trimmed);
+        const text = hyphenLead ? hyphenLead[1].trim() : trimmed;
+        return (
+          <div key={i} className="flex items-start gap-2 sm:gap-3">
+            <span
+              className="shrink-0 select-none text-[1.42em] font-semibold leading-[1.2] text-brand-navy/90 sm:text-[1.48em]"
+              aria-hidden
+            >
+              •
+            </span>
+            <span className="min-w-0 flex-1 whitespace-pre-wrap pl-1 pt-[0.12em] sm:pl-2">{text}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function PremiumWorkPoloClient({
+  product,
+  placements,
+  serverPdpDescriptionBody: serverPdpDescriptionFromRsc,
+}: PremiumWorkPoloClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
 
+  const colorOptions = useMemo(() => effectivePdpColorOptions(product), [product]);
+
   const { productName, productCode } = useMemo(
     () =>
-      productCardDisplayLines(
-        product.name,
-        product.description,
-        product.slug,
-        product.supplierName ?? null,
-        product.colorOptions,
-        undefined,
-        product.sizeOptions,
-      ),
+      product.displayProductName != null || product.displayProductCode != null
+        ? {
+            productName: product.displayProductName ?? null,
+            productCode: String(product.displayProductCode ?? "").trim(),
+          }
+        : productCardDisplayLines(
+            product.name,
+            product.description,
+            product.slug,
+            product.supplierName ?? null,
+            colorOptions,
+            undefined,
+            product.sizeOptions,
+          ),
     [
-      product.colorOptions,
+      colorOptions,
       product.description,
+      product.displayProductCode,
+      product.displayProductName,
       product.name,
       product.sizeOptions,
       product.slug,
       product.supplierName,
     ],
   );
+  const pdpProductTitle = useMemo(
+    () =>
+      bisleyPdpDisplayProductNameWithApexPrefix(
+        productName,
+        productCode,
+        product.supplierName ?? null,
+        product.slug ?? null,
+        product.name,
+      ),
+    [product.name, product.slug, product.supplierName, productCode, productName],
+  );
   const brandAndModelLine = useMemo(() => {
+    if (product.displayBrandSkuLine && product.displayBrandSkuLine.trim().length > 0) {
+      return product.displayBrandSkuLine.trim();
+    }
     const fromName = storefrontLeadingSupplierBrand(product.name);
     const fromSupplierName = product.supplierName?.trim() ? product.supplierName.trim() : null;
     const slug = (product.slug ?? "").trim().toLowerCase();
+    const supplierLower = (fromSupplierName ?? "").toLowerCase();
     const inferredFromSlug =
       slug.startsWith("fb-syzmik-") || slug.includes("syzmik")
         ? "Syzmik"
@@ -869,16 +1792,69 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
             ? "JB's Wear"
             : null;
     const brand = fromName ?? fromSupplierName ?? inferredFromSlug;
+    if (supplierLower === "aussie pacific" || slug.startsWith("ap-")) {
+      return `Aussie Pacific / ${productCode}`;
+    }
     return brand ? `${brand} / ${productCode}` : productCode;
-  }, [product.name, product.supplierName, productCode]);
-  const displayDescription = useMemo(
-    () => productDetailDescriptionBody(product.description, productName),
-    [product.description, productName],
-  );
-  const cartLabel = productName ? `${productName} (${productCode})` : productCode;
-  const heroAlt = cartLabel;
+  }, [product.displayBrandSkuLine, product.name, product.slug, product.supplierName, productCode]);
+  const displayDescription = useMemo(() => {
+    const base =
+      typeof serverPdpDescriptionFromRsc === "string"
+        ? serverPdpDescriptionFromRsc
+        : typeof product.pdpDescriptionBody === "string"
+          ? product.pdpDescriptionBody
+          : productDetailDescriptionBody(
+      product.description,
+      productName,
+      product.supplierName,
+      product.slug,
+      product.name,
+            );
+    if (!base) {
+      return base;
+    }
+    if (isSyzmikStorefrontProduct(product.slug, product.supplierName)) {
+      return syzmikFormatDescriptionFeaturesColonAndCommas(syzmikFormatDescriptionSemicolonLineBreaks(base));
+    }
+    return base;
+  }, [
+    product.description,
+    product.name,
+    product.pdpDescriptionBody,
+    productName,
+    product.supplierName,
+    product.slug,
+    serverPdpDescriptionFromRsc,
+  ]);
 
-  const galleryParsed = useMemo(() => parseJbGalleryUrls(product.imageUrls), [product.imageUrls]);
+  const displayFeatures = useMemo(() => {
+    const base = typeof product.features === "string" ? product.features : "";
+    if (!base) return base;
+    if (isSyzmikStorefrontProduct(product.slug, product.supplierName)) {
+      return syzmikFormatFeaturesCommaToTabbedBullets(base);
+    }
+    return base;
+  }, [product.features, product.slug, product.supplierName]);
+  const cartLabel = pdpProductTitle ? `${pdpProductTitle} (${productCode})` : productCode;
+  const heroAlt = cartLabel;
+  const related = product.relatedProducts ?? [];
+
+  const productImageUrlsForGallery = useMemo((): string[] => {
+    const raw = product.imageUrls ?? [];
+    const slugLower = (product.slug ?? "").trim().toLowerCase();
+    if (!bisleySlugUsesPositionalColorGallery(slugLower) || raw.length < 2) {
+      return raw;
+    }
+    const strict = bisleySortedPositionalImageUrlsIfComplete(raw);
+    if (strict) return strict;
+    const byDb = bisleyReorderDrillImagesToMatchColors(raw, effectivePdpColorOptions(product));
+    return byDb ?? raw;
+  }, [product.imageUrls, product.slug]);
+
+  const galleryParsed = useMemo(
+    () => parseJbGalleryUrls(productImageUrlsForGallery),
+    [productImageUrlsForGallery],
+  );
 
   const galleryImages = useMemo(
     () => galleryForUrls(galleryParsed.urls),
@@ -887,12 +1863,20 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
 
   const galleryPickOpts = useMemo((): GalleryColorPickOpts => {
     const isJb = isJbWearStorefrontProduct(product.slug, product.supplierName);
+    const slugLower = (product.slug ?? "").trim().toLowerCase();
+    const supLower = (product.supplierName ?? "").trim().toLowerCase();
+    const forceOpaqueColorIndex =
+      supLower === "aussie pacific" ||
+      slugLower.startsWith("ap-") ||
+      bisleySlugUsesPositionalColorGallery(slugLower);
     return {
-      colorOptions: product.colorOptions,
+      colorOptions,
       jbPrefixCount: galleryParsed.prefixCount,
       isJbWear: isJb,
+      jbStyleCodeUpper: jbStyleCodeUpperFromSlug(product.slug),
+      forceOpaqueColorIndex,
     };
-  }, [galleryParsed.prefixCount, product.colorOptions, product.slug, product.supplierName]);
+  }, [colorOptions, galleryParsed.prefixCount, product.slug, product.supplierName]);
 
   const ppePlainOnly = useMemo(
     () =>
@@ -961,20 +1945,34 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
     Embroidery: false,
     Printing: false,
   });
-  const [selectedColor, setSelectedColor] = useState<string>(product.colorOptions[0] ?? "");
+  const initialColors = effectivePdpColorOptions(product);
+  const [selectedColor, setSelectedColor] = useState<string>(initialColors[0] ?? "");
+  const selectedColorIsDiscontinued = /\bdiscontinued\b/i.test(selectedColor);
   const [placementAssignments, setPlacementAssignments] = useState<
     Record<string, DecoratedServiceType | null>
   >({});
   const [colorSizeQuantities, setColorSizeQuantities] = useState<
     Record<string, Record<string, number>>
-  >(() => emptyColorSizeQuantities(product.colorOptions, product.sizeOptions));
+  >(() => emptyColorSizeQuantities(initialColors, product.sizeOptions));
   const [activeImage, setActiveImage] = useState<string>(() => {
-    const { urls, prefixCount } = parseJbGalleryUrls(product.imageUrls);
+    const rawUrls = product.imageUrls ?? [];
+    const slugLower = (product.slug ?? "").trim().toLowerCase();
+    const urlsForPick =
+      bisleySlugUsesPositionalColorGallery(slugLower) && rawUrls.length >= 4
+        ? (bisleySortedPositionalImageUrlsIfComplete(rawUrls) ?? rawUrls)
+        : rawUrls;
+    const { urls, prefixCount } = parseJbGalleryUrls(urlsForPick);
     const g = galleryForUrls(urls);
-    return pickPrimaryImageForColor(product.colorOptions[0] ?? "", g, {
-      colorOptions: product.colorOptions,
+    const supLower = (product.supplierName ?? "").trim().toLowerCase();
+    const forceOpaqueColorIndex =
+      supLower === "aussie pacific" ||
+      slugLower.startsWith("ap-") ||
+      bisleySlugUsesPositionalColorGallery(slugLower);
+    return pickPrimaryImageForColor(initialColors[0] ?? "", g, {
+      colorOptions: initialColors,
       jbPrefixCount: prefixCount,
       isJbWear: isJbWearStorefrontProduct(product.slug, product.supplierName),
+      forceOpaqueColorIndex,
     });
   });
   const [cartMessage, setCartMessage] = useState<string>("");
@@ -986,11 +1984,16 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
   const logoDragDepthRef = useRef(0);
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const [heroLightboxOpen, setHeroLightboxOpen] = useState(false);
+  /** Which block of `GALLERY_THUMB_PAGE_SIZE` gallery thumbnails is visible under the hero. */
+  const [galleryThumbPage, setGalleryThumbPage] = useState(0);
   /** Set when opening this product via Cart → Edit; primary button updates that line instead of adding. */
   const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
   const prevProductIdRef = useRef(product.id);
   const galleryImagesRef = useRef(galleryImages);
   const galleryPickOptsRef = useRef(galleryPickOpts);
+  /** First thumbnail “page” — measured for slide viewport width + `translateX` step. */
+  const galleryThumbFirstPageMeasureRef = useRef<HTMLDivElement | null>(null);
+  const [galleryThumbSlideViewportPx, setGalleryThumbSlideViewportPx] = useState(0);
   galleryImagesRef.current = galleryImages;
   galleryPickOptsRef.current = galleryPickOpts;
 
@@ -1029,8 +2032,21 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
     () => getSizeGuideBundle(sizeGuideKind, product.name),
     [product.name, sizeGuideKind],
   );
-  const colourCount = product.colorOptions.length;
+  const colourCount = colorOptions.length;
   const manyColours = colourCount >= 10;
+
+  const galleryThumbPages = useMemo(() => {
+    const pages: string[][] = [];
+    for (let i = 0; i < galleryImages.length; i += GALLERY_THUMB_PAGE_SIZE) {
+      pages.push(galleryImages.slice(i, i + GALLERY_THUMB_PAGE_SIZE));
+    }
+    return pages.length > 0 ? pages : [[]];
+  }, [galleryImages]);
+  const galleryThumbPageCount = Math.max(1, galleryThumbPages.length);
+  const effectiveGalleryThumbPage = Math.min(galleryThumbPage, galleryThumbPageCount - 1);
+  const galleryThumbSliceStart = effectiveGalleryThumbPage * GALLERY_THUMB_PAGE_SIZE;
+  const currentThumbPage = galleryThumbPages[effectiveGalleryThumbPage] ?? [];
+  const galleryThumbNavVisible = galleryImages.length > GALLERY_THUMB_PAGE_SIZE;
 
   const sizeGuideDownloadSlug = (product.slug?.trim() || productCode || product.id).replace(
     /[^a-z0-9-]+/gi,
@@ -1041,23 +2057,58 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
     [product.name, product.slug],
   );
 
-  /** When the image set changes, re-pick hero for the current colour (colour chip / thumbnails set hero otherwise). */
+  /** When the image set changes, re-pick hero for the current colour (chip / thumbnail clicks set hero directly). */
   useEffect(() => {
     setActiveImage(pickPrimaryImageForColor(selectedColor, galleryImages, galleryPickOpts));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedColour updates hero in click handlers
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fixed dep count for Fast Refresh; `selectedColor` is latest on each render when `galleryImages` / `galleryPickOpts` change.
   }, [galleryImages, galleryPickOpts]);
+
+  useEffect(() => {
+    const maxPage = Math.max(0, Math.ceil(galleryImages.length / GALLERY_THUMB_PAGE_SIZE) - 1);
+    setGalleryThumbPage((p) => Math.min(p, maxPage));
+  }, [galleryImages.length]);
+
+  useLayoutEffect(() => {
+    const el = galleryThumbFirstPageMeasureRef.current;
+    if (!el) {
+      return;
+    }
+    const update = () => {
+      const w = Math.round(el.getBoundingClientRect().width);
+      setGalleryThumbSlideViewportPx((prev) => (w > 0 && w !== prev ? w : prev));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    const raf = requestAnimationFrame(update);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [galleryImages]);
+
+  useEffect(() => {
+    const idx = galleryImages.indexOf(activeImage);
+    if (idx < 0) {
+      return;
+    }
+    const page = Math.floor(idx / GALLERY_THUMB_PAGE_SIZE);
+    setGalleryThumbPage((prev) => (prev === page ? prev : page));
+  }, [activeImage, galleryImages]);
 
   useEffect(() => {
     if (prevProductIdRef.current !== product.id) {
       setEditingCartItemId(null);
+      setGalleryThumbPage(0);
+      setGalleryThumbSlideViewportPx(0);
       prevProductIdRef.current = product.id;
     }
   }, [product.id]);
 
   useEffect(() => {
-    setColorSizeQuantities(emptyColorSizeQuantities(product.colorOptions, product.sizeOptions));
+    setColorSizeQuantities(emptyColorSizeQuantities(colorOptions, product.sizeOptions));
     setLogoAttachments(logoAttachmentsFlushReducer);
-  }, [product.id]);
+  }, [colorOptions, product.id, product.sizeOptions]);
 
   /** Refs keep a fixed dependency list (avoids Fast Refresh errors if hook dep count changes across edits). */
   useEffect(() => {
@@ -1083,16 +2134,16 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
 
     const color = (line.color ?? "").trim();
     const size = (line.size ?? "").trim();
-    const nextColor = product.colorOptions.includes(color) ? color : (product.colorOptions[0] ?? "");
+    const nextColor = colorOptions.includes(color) ? color : (colorOptions[0] ?? "");
     setSelectedColor(nextColor);
     setActiveImage(
       pickPrimaryImageForColor(nextColor, galleryImagesRef.current, galleryPickOptsRef.current),
     );
 
     const q = Number(line.quantity);
-    const next = emptyColorSizeQuantities(product.colorOptions, product.sizeOptions);
+    const next = emptyColorSizeQuantities(colorOptions, product.sizeOptions);
     if (
-      product.colorOptions.includes(color) &&
+      colorOptions.includes(color) &&
       product.sizeOptions.includes(size) &&
       Number.isFinite(q) &&
       q > 0
@@ -1112,7 +2163,7 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
   }, [
     searchParams,
     product.id,
-    product.colorOptions,
+    colorOptions,
     product.sizeOptions,
     pathname,
     router,
@@ -1156,7 +2207,7 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
 
   const totalPieces = useMemo(() => {
     let sum = 0;
-    for (const color of product.colorOptions) {
+    for (const color of colorOptions) {
       const sq = colorSizeQuantities[color];
       if (!sq) {
         continue;
@@ -1166,11 +2217,15 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
       }
     }
     return sum;
-  }, [product.colorOptions, product.sizeOptions, colorSizeQuantities]);
+  }, [colorOptions, product.sizeOptions, colorSizeQuantities]);
 
   const totalPrice = useMemo(() => {
-    const totalCents = cents(perItemPrice) * totalPieces;
-    return totalCents / 100;
+    if (totalPieces <= 0) {
+      return 0;
+    }
+    const gross = perItemPrice * totalPieces;
+    const rate = storefrontVolumeDiscountRateFromSubtotalAud(gross);
+    return Math.round(gross * (1 - rate) * 100) / 100;
   }, [perItemPrice, totalPieces]);
 
   function assignPlacement(id: string, service: DecoratedServiceType) {
@@ -1233,7 +2288,7 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
     }
 
     const lines: { color: string; size: string; qty: number }[] = [];
-    for (const color of product.colorOptions) {
+    for (const color of colorOptions) {
       const sq = colorSizeQuantities[color] ?? emptySizeQuantities(product.sizeOptions);
       for (const size of product.sizeOptions) {
         const qty = Math.max(0, Math.min(999, Math.floor(sq[size] ?? 0)));
@@ -1247,6 +2302,10 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
       setCartMessage("Set quantity for at least one size (per colour).");
       return;
     }
+
+    const pieceQtySum = lines.reduce((s, l) => s + l.qty, 0);
+    /** List-price batch total (cents). Volume discount is applied at cart / checkout on full-cart subtotal. */
+    const grossBatchCents = pieceQtySum > 0 ? Math.round(perItemPrice * pieceQtySum * 100) : 0;
 
     if (logoAttachments.length > 0 && !readBrowserCookie("customer_email").trim()) {
       setCartMessage("Please sign in and save your email in account details to attach logo files.");
@@ -1295,35 +2354,58 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
         }
       }
 
-      function linePayload(lineColor: string, size: string, qty: number): Omit<CartItem, "id" | "addedAt"> {
+      function linePayload(
+        lineColor: string,
+        size: string,
+        qty: number,
+        lineTotalAud: number,
+      ): Omit<CartItem, "id" | "addedAt"> {
         const colorHero = pickPrimaryImageForColor(lineColor, galleryImages, galleryPickOpts)?.trim();
         const heroImage = colorHero || fallbackHero;
-        const lineTotal = Math.round(perItemPrice * qty * 100) / 100;
+        const listUnitAud = perItemPrice;
+        const unitAud = qty > 0 ? Math.round((lineTotalAud / qty) * 100) / 100 : listUnitAud;
         return {
           productId: product.id,
           supplierName: product.supplierName?.trim() || undefined,
           productPathSlug: productPathSegment({ name: product.name, slug: product.slug ?? null }),
           imageUrl: heroImage,
           productName: cartLabel,
+          category: product.category?.trim() || undefined,
           serviceType: serviceLabel,
           color: lineColor,
           size,
           quantity: qty,
           placements: placementLabels,
-          unitPrice: perItemPrice,
-          totalPrice: lineTotal,
+          listUnitPrice: listUnitAud,
+          unitPrice: unitAud,
+          totalPrice: lineTotalAud,
           notes: notesForCart.length > 0 ? notesForCart : undefined,
           ...(sharedRefUrls && sharedRefUrls.length > 0 ? { referenceImageUrls: sharedRefUrls } : {}),
         };
       }
 
+      let allocatedLineCents = 0;
+      function lineTotalAudForLine(qty: number, lineIndex: number): number {
+        const isLast = lineIndex === lines.length - 1;
+        const lineCents = isLast
+          ? grossBatchCents - allocatedLineCents
+          : Math.round((grossBatchCents * qty) / pieceQtySum);
+        if (!isLast) {
+          allocatedLineCents += lineCents;
+        }
+        return lineCents / 100;
+      }
+
       if (editingCartItemId) {
         if (lines.length === 1) {
           const { color: lineColor, size, qty } = lines[0];
-          const ok = updateCartItem(editingCartItemId, linePayload(lineColor, size, qty));
+          const ok = updateCartItem(
+            editingCartItemId,
+            linePayload(lineColor, size, qty, lineTotalAudForLine(qty, 0)),
+          );
           if (ok) {
             setEditingCartItemId(null);
-            setColorSizeQuantities(emptyColorSizeQuantities(product.colorOptions, product.sizeOptions));
+            setColorSizeQuantities(emptyColorSizeQuantities(colorOptions, product.sizeOptions));
             setOrderNotes("");
             setLogoAttachments(logoAttachmentsFlushReducer);
             setCartMessage("Cart updated.");
@@ -1338,21 +2420,25 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
 
         removeCartItem(editingCartItemId);
         setEditingCartItemId(null);
-        for (const { color: lineColor, size, qty } of lines) {
-          addCartItem(linePayload(lineColor, size, qty));
+        allocatedLineCents = 0;
+        for (let i = 0; i < lines.length; i++) {
+          const { color: lineColor, size, qty } = lines[i];
+          addCartItem(linePayload(lineColor, size, qty, lineTotalAudForLine(qty, i)));
         }
-        setColorSizeQuantities(emptyColorSizeQuantities(product.colorOptions, product.sizeOptions));
+        setColorSizeQuantities(emptyColorSizeQuantities(colorOptions, product.sizeOptions));
         setOrderNotes("");
         setLogoAttachments(logoAttachmentsFlushReducer);
         setCartMessage(`Cart updated: ${lines.length} lines added (sizes / colours).`);
         return;
       }
 
-      for (const { color: lineColor, size, qty } of lines) {
-        addCartItem(linePayload(lineColor, size, qty));
+      allocatedLineCents = 0;
+      for (let i = 0; i < lines.length; i++) {
+        const { color: lineColor, size, qty } = lines[i];
+        addCartItem(linePayload(lineColor, size, qty, lineTotalAudForLine(qty, i)));
       }
 
-      setColorSizeQuantities(emptyColorSizeQuantities(product.colorOptions, product.sizeOptions));
+      setColorSizeQuantities(emptyColorSizeQuantities(colorOptions, product.sizeOptions));
       setOrderNotes("");
       setLogoAttachments(logoAttachmentsFlushReducer);
       setCartMessage(lines.length > 1 ? `Added ${lines.length} lines to your cart.` : "Added to cart.");
@@ -1416,94 +2502,81 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
     !ppePlainOnly && (isEmbroiderySelected || isPrintingSelected);
 
   const renderRealtimeTotalPricePanel = (useStickyOnLargeScreens: boolean) => (
-    <div
-      className={`rounded-2xl border border-brand-navy/15 bg-brand-navy p-4 text-white sm:p-5${useStickyOnLargeScreens ? " lg:sticky lg:bottom-4" : ""}`}
-    >
-      <h2 className="inline-flex items-center gap-2 text-[1.26rem] font-medium uppercase tracking-[0.1em] text-slate-200">
-        <CalculatorIcon className="h-4 w-4" />
-        Real-time Total Price
-      </h2>
-      <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-        <div>
-          <p className="mb-1 text-[1.08rem] font-semibold text-slate-300">Total pieces</p>
-          <p className="text-[1.44rem] font-light tabular-nums text-white">{totalPieces}</p>
-        </div>
-        <div className="text-left sm:text-right">
-          <p className="product-detail-per-item text-[1.26rem] font-light text-slate-300">
-            Per item: {toCurrency(perItemPrice)}
-          </p>
-          <p className="product-detail-total mt-1 inline-block text-[2.7rem] font-light text-brand-orange tabular-nums">
-            {toCurrency(totalPrice)}
-          </p>
-        </div>
-      </div>
-      <div className="mt-4 space-y-2 rounded-xl border border-white/20 bg-white/5 px-3 py-3 text-[1.02rem] leading-snug text-slate-100 sm:text-[1.08rem]">
-        <p className="font-semibold uppercase tracking-[0.08em] text-slate-300">Your selection</p>
-        <p>
-          <span className="text-slate-400">Product · </span>
-          {cartLabel}
-        </p>
-        <div>
-          <p className="text-slate-400">By colour &amp; size</p>
-          {totalPieces > 0 ? (
-            <ul className="mt-2 space-y-2 text-slate-100">
-              {product.colorOptions.map((color) => {
-                const sq = colorSizeQuantities[color] ?? emptySizeQuantities(product.sizeOptions);
-                const sizesWithQty = product.sizeOptions.filter((s) => (sq[s] ?? 0) > 0);
-                if (sizesWithQty.length === 0) {
-                  return null;
-                }
-                return (
-                  <li key={color}>
-                    <span className="font-medium text-white">{color}</span>
-                    <ul className="mt-0.5 list-inside list-disc space-y-0.5 pl-1 text-slate-200">
-                      {sizesWithQty.map((s) => (
-                        <li key={`${color}-${s}`} className="tabular-nums">
-                          {s} × {sq[s]}
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="mt-1 text-slate-400">Enter a quantity for at least one size in any colour.</p>
-          )}
-        </div>
-        <p className="border-t border-white/10 pt-2 text-slate-200 tabular-nums">
-          <span className="text-slate-400">Total pieces · </span>
-          {totalPieces}
-        </p>
-      </div>
-      <p className="product-detail-volume-discount-rates mt-4 grid w-full grid-cols-1 gap-y-[0.66rem] text-[1.3464rem] font-light leading-snug text-slate-300/90 sm:grid-cols-2 sm:gap-x-[0.99rem] sm:gap-y-[0.66rem] lg:grid-cols-4 lg:gap-y-0 sm:text-[1.4256rem]">
-        <span className="inline-flex min-w-0 w-full items-center gap-[0.495rem] sm:justify-center">
-          <span className="h-[0.495rem] w-[0.495rem] shrink-0 rounded-full bg-slate-300" aria-hidden />
-          <span className="min-w-0 whitespace-pre-wrap sm:text-center">Buy 10+  Get 2.5% Discount</span>
-        </span>
-        <span className="inline-flex min-w-0 w-full items-center gap-[0.495rem] sm:justify-center">
-          <span className="h-[0.495rem] w-[0.495rem] shrink-0 rounded-full bg-slate-300" aria-hidden />
-          <span className="min-w-0 whitespace-pre-wrap sm:text-center">Buy 20+  Get 5% Discount</span>
-        </span>
-        <span className="inline-flex min-w-0 w-full items-center gap-[0.495rem] sm:justify-center">
-          <span className="h-[0.495rem] w-[0.495rem] shrink-0 rounded-full bg-slate-300" aria-hidden />
-          <span className="min-w-0 whitespace-pre-wrap sm:text-center">Buy 50+  Get 7.5% Discount</span>
-        </span>
-        <span className="inline-flex min-w-0 w-full items-center gap-[0.495rem] sm:justify-center">
-          <span className="h-[0.495rem] w-[0.495rem] shrink-0 rounded-full bg-slate-300" aria-hidden />
-          <span className="min-w-0 whitespace-pre-wrap sm:text-center">Buy 100+  Get 10% Discount</span>
-        </span>
-      </p>
-      <button
-        type="button"
-        disabled={cartSubmitBusy}
-        onClick={() => void handleAddToCart()}
-        className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-white/25 bg-white/10 px-5 py-3 text-[1.26rem] font-medium text-white transition hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+    <>
+      <div
+        className={`rounded-2xl border border-brand-navy/15 bg-brand-navy p-4 text-white sm:p-5${useStickyOnLargeScreens ? " lg:sticky lg:top-[calc(var(--site-header-height)+1rem)]" : ""}`}
       >
-        {cartSubmitBusy ? "Uploading…" : editingCartItemId ? "Update" : "Add to Cart"}
-      </button>
-      {cartMessage && <p className="mt-2 text-[1.08rem] text-slate-200">{cartMessage}</p>}
-    </div>
+        <h2 className="inline-flex items-center gap-2 text-[1.26rem] font-medium uppercase tracking-[0.1em] text-slate-200">
+          <CalculatorIcon className="h-4 w-4" />
+          Real-time Total Price
+        </h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div>
+            <p className="mb-1 text-[1.08rem] font-semibold text-slate-300">Total pieces</p>
+            <p className="text-[1.44rem] font-light tabular-nums text-white">{totalPieces}</p>
+          </div>
+          <div className="text-left sm:text-right">
+            <p className="product-detail-per-item text-[1.26rem] font-light text-slate-300">
+              Per item: {toCurrency(perItemPrice)}
+            </p>
+            <p className="product-detail-total mt-1 inline-block text-[2.7rem] font-light text-brand-orange tabular-nums">
+              {toCurrency(totalPrice)}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 space-y-2 rounded-xl border border-white/20 bg-white/5 px-3 py-3 text-[1.02rem] leading-snug text-slate-100 sm:text-[1.08rem]">
+          <p className="font-semibold uppercase tracking-[0.08em] text-slate-300">Your selection</p>
+          <p>
+            <span className="text-slate-400">Product · </span>
+            {cartLabel}
+          </p>
+          <div>
+            <p className="text-slate-400">By colour &amp; size</p>
+            {totalPieces > 0 ? (
+              <ul className="mt-2 space-y-2 text-slate-100">
+                {colorOptions.map((color) => {
+                  const sq = colorSizeQuantities[color] ?? emptySizeQuantities(product.sizeOptions);
+                  const sizesWithQty = product.sizeOptions.filter((s) => (sq[s] ?? 0) > 0);
+                  if (sizesWithQty.length === 0) {
+                    return null;
+                  }
+                  return (
+                    <li key={color}>
+                      <span className="font-medium text-white">{color}</span>
+                      <ul className="mt-0.5 list-inside list-disc space-y-0.5 pl-1 text-slate-200">
+                        {sizesWithQty.map((s) => (
+                          <li key={`${color}-${s}`} className="tabular-nums">
+                            {s} × {sq[s]}
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="mt-1 text-slate-400">Enter a quantity for at least one size in any colour.</p>
+            )}
+          </div>
+          <p className="border-t border-white/10 pt-2 text-slate-200 tabular-nums">
+            <span className="text-slate-400">Total pieces · </span>
+            {totalPieces}
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={cartSubmitBusy}
+          onClick={() => void handleAddToCart()}
+          className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-white/25 bg-white/10 px-5 py-3 text-[1.26rem] font-medium text-white transition hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+        >
+          {cartSubmitBusy ? "Uploading…" : editingCartItemId ? "Update" : "Add to Cart"}
+        </button>
+        {cartMessage && <p className="mt-2 text-[1.08rem] text-slate-200">{cartMessage}</p>}
+      </div>
+      <p className="product-detail-volume-promo px-1">
+        Buy more, Get more discount up to 20%
+      </p>
+    </>
   );
 
   return (
@@ -1525,70 +2598,177 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
               className="pointer-events-none h-auto max-h-[384px] w-full max-w-full rounded-3xl object-contain object-center sm:max-h-[504px] lg:max-h-[624px]"
               loading="eager"
               decoding="async"
+              suppressHydrationWarning
             />
           </button>
-          <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
-            {galleryImages.map((image, index) => {
-              const isActive = activeImage === image;
-
-              return (
-                <button
-                  key={`${image}-${index}`}
-                  type="button"
-                  onClick={() => {
-                    setActiveImage(image);
-                    const inferred = inferBestColorForGalleryImage(
-                      image,
-                      product.colorOptions,
-                      galleryImages,
-                      galleryPickOpts,
-                    );
-                    if (inferred != null) {
-                      setSelectedColor(inferred);
+          <div className="mx-auto flex w-full max-w-full items-center justify-center gap-0.5 sm:gap-1">
+            {galleryThumbNavVisible ? (
+              <button
+                type="button"
+                aria-label="이전 이미지"
+                disabled={effectiveGalleryThumbPage <= 0}
+                onClick={() => setGalleryThumbPage((p) => Math.max(0, p - 1))}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-brand-navy/15 bg-white text-brand-navy transition hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-40 sm:h-11 sm:w-11"
+              >
+                <ArrowLeftIcon className="h-5 w-5" />
+              </button>
+            ) : null}
+            <div
+              role="group"
+              aria-label={`제품 이미지 ${galleryThumbSliceStart + 1}–${galleryThumbSliceStart + currentThumbPage.length} / 전체 ${galleryImages.length}`}
+              className="max-w-full overflow-hidden py-0.5"
+              style={galleryThumbSlideViewportPx > 0 ? { width: galleryThumbSlideViewportPx } : undefined}
+            >
+              <div
+                className="flex will-change-transform motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out motion-reduce:transition-none"
+                style={
+                  galleryThumbSlideViewportPx > 0
+                    ? {
+                        transform: `translate3d(-${effectiveGalleryThumbPage * galleryThumbSlideViewportPx}px,0,0)`,
+                      }
+                    : undefined
+                }
+              >
+                {galleryThumbPages.map((pageUrls, pageIdx) => (
+                  <div
+                    key={`pdp-gallery-thumb-page-${pageIdx}`}
+                    ref={pageIdx === 0 ? galleryThumbFirstPageMeasureRef : undefined}
+                    className="flex shrink-0 justify-center gap-2 sm:gap-3"
+                    style={
+                      galleryThumbSlideViewportPx > 0
+                        ? { width: galleryThumbSlideViewportPx, minWidth: galleryThumbSlideViewportPx }
+                        : undefined
                     }
-                  }}
-                  aria-label={`${heroAlt} view ${index + 1}`}
-                  className={`flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-white sm:h-24 sm:w-24 ${
-                    isActive ? "border-brand-orange" : "border-brand-navy/15"
-                  }`}
-                >
-                  <img
-                    src={image}
-                    alt=""
-                    className="max-h-full w-full object-contain object-center"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </button>
-              );
-            })}
-          </div>
-          {displayDescription ? (
-            <div className="mt-4 w-full space-y-3 border-t border-brand-navy/10 pt-4 text-left text-[1.08rem] leading-[1.85rem] text-brand-navy/75 sm:mt-5 sm:pt-5 sm:text-[1.2rem] sm:leading-[2rem] lg:max-w-[36rem]">
-              {displayDescription
-                .split(/\n\s*\n/)
-                .map((block) => block.trim())
-                .filter(Boolean)
-                .map((block, i) => (
-                  <p key={i} className="whitespace-pre-line">
-                    {block}
-                  </p>
+                    aria-hidden={pageIdx !== effectiveGalleryThumbPage}
+                  >
+                    {pageUrls.map((image, localIdx) => {
+                      const index = pageIdx * GALLERY_THUMB_PAGE_SIZE + localIdx;
+                      const isActive = activeImage === image;
+
+                      return (
+                        <button
+                          key={`${image}-${index}`}
+                          type="button"
+                          onClick={() => {
+                            setActiveImage(image);
+                            const inferred = inferBestColorForGalleryImage(
+                              image,
+                              colorOptions,
+                              galleryImages,
+                              galleryPickOpts,
+                            );
+                            if (inferred != null) {
+                              setSelectedColor(inferred);
+                            }
+                          }}
+                          aria-label={`${heroAlt} view ${index + 1}`}
+                          aria-current={isActive ? "true" : undefined}
+                          suppressHydrationWarning
+                          className={`flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-white sm:h-24 sm:w-24 ${
+                            isActive ? "border-brand-orange" : "border-brand-navy/15"
+                          }`}
+                        >
+                          <img
+                            src={image}
+                            alt=""
+                            className="max-h-full w-full object-contain object-center"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
                 ))}
+              </div>
+            </div>
+            {galleryThumbNavVisible ? (
+              <button
+                type="button"
+                aria-label="다음 이미지"
+                disabled={effectiveGalleryThumbPage >= galleryThumbPageCount - 1}
+                onClick={() =>
+                  setGalleryThumbPage((p) => Math.min(galleryThumbPageCount - 1, p + 1))
+                }
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-brand-navy/15 bg-white text-brand-navy transition hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-40 sm:h-11 sm:w-11"
+              >
+                <ArrowRightIcon className="h-5 w-5" />
+              </button>
+            ) : null}
+          </div>
+          {galleryThumbNavVisible ? (
+            <p className="text-center text-[0.85rem] font-medium tabular-nums text-brand-navy/50">
+              이미지 {galleryThumbSliceStart + 1}–{galleryThumbSliceStart + currentThumbPage.length} / 전체{" "}
+              {galleryImages.length} · {effectiveGalleryThumbPage + 1} / {galleryThumbPageCount} 페이지
+            </p>
+          ) : null}
+          {displayDescription ? (
+            <div className="mt-4 w-full max-w-[36rem] mx-auto space-y-1.5 border-t border-brand-navy/10 pt-4 sm:mt-5 sm:pt-5">
+              <h2 className="text-center text-[1.02rem] font-semibold uppercase tracking-[0.1em] text-brand-navy/80">
+                DESCRIPTION
+              </h2>
+              <div className="space-y-1.5 text-left text-[1.08rem] leading-[1.465rem] text-brand-navy/75 sm:text-[1.2rem] sm:leading-[1.6rem]">
+                {displayDescription
+                  .split(/\n\s*\n/)
+                  .map((block) => block.trim())
+                  .filter(Boolean)
+                  .map((block, i) => (
+                    <ProductDescriptionFormattedBlock key={i} block={block} />
+                  ))}
+              </div>
             </div>
           ) : null}
-          {product.features?.trim() ? (
-            <div className="mt-4 w-full space-y-3 border-t border-brand-navy/10 pt-4 text-left lg:max-w-[36rem]">
+          {related.length ? (
+            <section className="mt-4 w-full max-w-[36rem] mx-auto space-y-3 border-t border-brand-navy/10 pt-4 text-left">
+              <h2 className="text-[1.02rem] font-semibold uppercase tracking-[0.1em] text-brand-navy/80">
+                Related styles
+              </h2>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {related.map((item) => {
+                  const href = `/products/${encodeURIComponent(productPathSegment({ name: item.name, slug: item.slug }))}`;
+                  return (
+                    <Link
+                      key={item.id}
+                      href={href}
+                      className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-brand-navy/10 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+                    >
+                      <div className="flex aspect-square w-full items-center justify-center overflow-hidden border-b border-brand-navy/10 bg-white p-3">
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt=""
+                            className="max-h-full w-full object-contain object-center"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        ) : (
+                          <div className="h-full w-full bg-brand-surface" aria-hidden />
+                        )}
+                      </div>
+                      <div className="min-w-0 space-y-1 px-3 py-2">
+                        <p className="line-clamp-2 text-[0.98rem] font-medium leading-snug text-brand-navy">
+                          {item.name}
+                        </p>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+          {displayFeatures?.trim() ? (
+            <div className="mt-4 w-full max-w-[36rem] mx-auto space-y-3 border-t border-brand-navy/10 pt-4 text-left">
               <h2 className="text-[1.02rem] font-semibold uppercase tracking-[0.1em] text-brand-navy/80">
                 Features of product
               </h2>
               <div className="space-y-3 text-[1.02rem] leading-[1.75rem] text-brand-navy/75 sm:text-[1.14rem] sm:leading-[1.9rem]">
-                {product.features
+                {displayFeatures
                   .trim()
                   .split(/\n\s*\n/)
                   .map((block) => block.trim())
                   .filter(Boolean)
                   .map((block, i) => (
-                    <p key={i} className="whitespace-pre-line">
+                    <p key={i} className="whitespace-pre-wrap">
                       {block}
                     </p>
                   ))}
@@ -1596,7 +2776,7 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
             </div>
           ) : null}
           {product.specifications?.trim() ? (
-            <div className="mt-4 w-full space-y-3 border-t border-brand-navy/10 pt-4 text-left lg:max-w-[36rem]">
+            <div className="mt-4 w-full max-w-[36rem] mx-auto space-y-3 border-t border-brand-navy/10 pt-4 text-left">
               <h2 className="text-[1.02rem] font-semibold uppercase tracking-[0.1em] text-brand-navy/80">
                 Product specifications
               </h2>
@@ -1621,10 +2801,10 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
             <p className="text-[1.08rem] font-semibold uppercase tracking-[0.12em] text-brand-navy/70">
               {product.category}
             </p>
-            {productName ? (
+            {pdpProductTitle ? (
               <>
                 <h1 className="product-detail-title text-[3.3696rem] font-medium leading-tight text-brand-navy sm:text-[4.212rem]">
-                  {productName}
+                  {pdpProductTitle}
                 </h1>
                 <p className="product-detail-sku text-[2.16rem] font-light text-black">
                   {brandAndModelLine}
@@ -1686,7 +2866,7 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
                     : "grid grid-cols-2 gap-2 sm:grid-cols-3"
                 }
               >
-                {product.colorOptions.map((color) => {
+                {colorOptions.map((color) => {
                   const isActive = selectedColor === color;
                   return (
                     <button
@@ -1724,13 +2904,18 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
             <p className="text-[1.02rem] font-semibold text-brand-navy/80">
               Editing: <span className="text-brand-orange">{selectedColor || "—"}</span>
             </p>
+            {selectedColorIsDiscontinued ? (
+              <p className="rounded-lg border border-brand-navy/10 bg-brand-surface px-3 py-2 text-[1.02rem] font-medium text-brand-navy/70">
+                This colour is discontinued. Size &amp; quantity entry is disabled.
+              </p>
+            ) : null}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               {product.sizeOptions.map((size) => {
                 const row =
                   colorSizeQuantities[selectedColor] ?? emptySizeQuantities(product.sizeOptions);
                 const sizeQtyId = `size-qty-${compactColorKey(selectedColor)}-${compactColorKey(size)}`;
                 return (
-                <div
+                  <div
                   key={size}
                   className="flex flex-col gap-1.5 rounded-xl bg-white px-3 py-2.5"
                 >
@@ -1744,6 +2929,7 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
                     min={0}
                     max={999}
                     inputMode="numeric"
+                    disabled={selectedColorIsDiscontinued}
                     value={row[size] ?? 0}
                     onChange={(e) => {
                       const v = Math.max(0, Math.min(999, Math.floor(Number(e.target.value) || 0)));
@@ -1755,9 +2941,11 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
                         };
                       });
                     }}
-                    className="w-full rounded-lg border border-brand-navy/20 bg-brand-surface/40 px-2 py-1.5 text-[1.26rem] text-brand-navy tabular-nums focus:border-brand-orange focus:outline-none focus:ring-1 focus:ring-brand-orange"
+                    className={`w-full rounded-lg border border-brand-navy/20 bg-brand-surface/40 px-2 py-1.5 text-[1.26rem] text-brand-navy tabular-nums focus:border-brand-orange focus:outline-none focus:ring-1 focus:ring-brand-orange ${
+                      selectedColorIsDiscontinued ? "cursor-not-allowed opacity-50" : ""
+                    }`}
                   />
-                </div>
+                  </div>
                 );
               })}
             </div>
@@ -1765,6 +2953,7 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
               <button
                 type="button"
                 onClick={() => setSizeGuideOpen(true)}
+                disabled={selectedColorIsDiscontinued}
                 className="text-[1.26rem] font-semibold text-brand-navy underline decoration-2 decoration-brand-orange/60 underline-offset-2 transition hover:text-brand-orange hover:decoration-brand-orange"
               >
                 Size guide — measurements &amp; how to choose
@@ -1777,21 +2966,48 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
               3. Service Type
             </h2>
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              {(Object.keys(servicePricing) as ServiceType[]).map((service) => {
+              {/* Column 1 aligns with Placement Selector diagram icons (LC/RC/CC...) */}
+              {(() => {
+                const service: ServiceType = "Plain";
+                const isActive = isPlainSelected;
+                const buttonArtSrc = isActive
+                  ? SERVICE_TYPE_BUTTON_IMAGE_SELECTED[service]
+                  : SERVICE_TYPE_BUTTON_IMAGE[service];
+                return (
+                  <button
+                    key={service}
+                    type="button"
+                    aria-label="Plain"
+                    aria-pressed={isActive}
+                    onClick={() => handleServiceChange(service)}
+                    className={`relative justify-self-center w-[40%] max-w-full overflow-hidden rounded-[2rem] border-0 bg-transparent p-0 transition-shadow duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-orange sm:rounded-[2.35rem] ${
+                      isActive
+                        ? "shadow-[0_10px_28px_-8px_rgba(0,31,63,0.3)]"
+                        : SERVICE_TYPE_BUTTON_SHADOW_IDLE[service]
+                    }`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- static assets in public/button */}
+                    <img
+                      src={buttonArtSrc}
+                      alt=""
+                      width={512}
+                      height={512}
+                      draggable={false}
+                      className="pointer-events-none h-auto w-full select-none object-contain"
+                    />
+                  </button>
+                );
+              })()}
+
+              {/* Columns 2-3 align with Embroidery / Printing price buttons */}
+              {(Array.from(["Embroidery", "Printing"]) as ServiceType[]).map((service) => {
                 const disabled = ppePlainOnly && service !== "Plain";
-                const isActive =
-                  service === "Plain"
-                    ? isPlainSelected
-                    : service === "Embroidery"
-                      ? isEmbroiderySelected
-                      : isPrintingSelected;
+                const isActive = service === "Embroidery" ? isEmbroiderySelected : isPrintingSelected;
                 const label = service === "Printing" ? "Print" : service;
                 const activeGlowClass =
                   service === "Printing"
                     ? "shadow-[0_10px_28px_-8px_rgba(59,130,246,0.38)]"
-                    : service === "Embroidery"
-                      ? "shadow-[0_10px_28px_-8px_rgba(255,133,27,0.38)]"
-                      : "shadow-[0_10px_28px_-8px_rgba(0,31,63,0.3)]";
+                    : "shadow-[0_10px_28px_-8px_rgba(255,133,27,0.38)]";
                 const buttonArtSrc = isActive
                   ? SERVICE_TYPE_BUTTON_IMAGE_SELECTED[service]
                   : SERVICE_TYPE_BUTTON_IMAGE[service];
@@ -1853,7 +3069,7 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
                     return (
                       <div
                         key={`combined-${option.id}`}
-                        className={`flex items-center justify-between overflow-visible rounded-xl px-3 py-3 transition sm:px-4 ${rowSelectedClass}`}
+                        className={`grid grid-cols-3 items-center gap-2 overflow-visible rounded-xl px-3 py-3 transition sm:gap-3 sm:px-4 ${rowSelectedClass}`}
                       >
                         <div className="flex min-w-0 items-center gap-2 overflow-visible sm:gap-3">
                           {diagramSrc ? (
@@ -1874,42 +3090,47 @@ export function PremiumWorkPoloClient({ product, placements }: PremiumWorkPoloCl
                             {option.label} <span className="text-brand-navy/50">({option.short})</span>
                           </span>
                         </div>
-                        <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 sm:gap-x-3">
-                          {isEmbroiderySelected &&
-                            (isEmbroideryOfferedForPlacement(option.diagramAbbr) ? (
-                              <button
-                                type="button"
-                                onClick={() => assignPlacement(option.id, "Embroidery")}
-                                className={`rounded-md border px-2.5 py-1 text-[1.08rem] font-medium transition sm:px-3 sm:text-[1.26rem] ${
-                                  assignedService === "Embroidery"
-                                    ? "border-brand-orange bg-brand-orange text-brand-navy"
-                                    : "border-brand-navy/20 bg-white text-brand-navy hover:border-brand-orange"
-                                }`}
-                              >
-                                Emb +{toCurrencyExact(option.embroideryCost)}
-                              </button>
-                            ) : (
-                              <span
-                                className="inline-block min-w-[4.75rem] border-none bg-transparent p-0 text-center text-[1.08rem] font-medium tabular-nums text-brand-navy/40 shadow-none ring-0 sm:min-w-[5.5rem] sm:text-[1.26rem]"
-                                aria-label="Embroidery not available for this placement"
-                              >
-                                -
-                              </span>
-                            ))}
-                          {isPrintingSelected && (
+                        {/* Column 2 aligns with Embroidery icon */}
+                        {isEmbroiderySelected ? (
+                          isEmbroideryOfferedForPlacement(option.diagramAbbr) ? (
                             <button
                               type="button"
-                              onClick={() => assignPlacement(option.id, "Printing")}
-                              className={`rounded-md border px-2.5 py-1 text-[1.08rem] font-medium transition sm:px-3 sm:text-[1.26rem] ${
-                                assignedService === "Printing"
-                                  ? "border-blue-600 bg-blue-500 text-white"
-                                  : "border-brand-navy/20 bg-white text-brand-navy hover:border-blue-500 hover:text-blue-600"
+                              onClick={() => assignPlacement(option.id, "Embroidery")}
+                              className={`mx-auto w-[72%] max-w-full whitespace-nowrap rounded-md border px-2.5 py-1 text-[1.08rem] font-medium transition sm:px-3 sm:text-[1.26rem] ${
+                                assignedService === "Embroidery"
+                                  ? "border-brand-orange bg-brand-orange text-brand-navy"
+                                  : "border-brand-navy/20 bg-white text-brand-navy hover:border-brand-orange"
                               }`}
                             >
-                              Print +{toCurrencyExact(option.printingCost)}
+                              Emb +{toCurrencyExact(option.embroideryCost)}
                             </button>
-                          )}
-                        </div>
+                          ) : (
+                            <span
+                              className="inline-flex mx-auto w-[72%] max-w-full items-center justify-center border-none bg-transparent p-0 text-[1.08rem] font-medium tabular-nums text-brand-navy/40 shadow-none ring-0 sm:text-[1.26rem]"
+                              aria-label="Embroidery not available for this placement"
+                            >
+                              -
+                            </span>
+                          )
+                        ) : (
+                          <span className="block" aria-hidden />
+                        )}
+                        {/* Column 3 aligns with Printing icon */}
+                        {isPrintingSelected ? (
+                          <button
+                            type="button"
+                            onClick={() => assignPlacement(option.id, "Printing")}
+                            className={`mx-auto w-[72%] max-w-full whitespace-nowrap rounded-md border px-2.5 py-1 text-[1.08rem] font-medium transition sm:px-3 sm:text-[1.26rem] ${
+                              assignedService === "Printing"
+                                ? "border-blue-600 bg-blue-500 text-white"
+                                : "border-brand-navy/20 bg-white text-brand-navy hover:border-blue-500 hover:text-blue-600"
+                            }`}
+                          >
+                            Print +{toCurrencyExact(option.printingCost)}
+                          </button>
+                        ) : (
+                          <span className="block" aria-hidden />
+                        )}
                       </div>
                     );
                   })}

@@ -4,12 +4,12 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 
-import {
-  calculateDeliveryFee,
-  distanceKmFromCompanyBase,
-  extractAustralianPostcodeFromAddress,
-} from "@/lib/customer-delivery-estimate";
+import { extractAustralianPostcodeFromAddress } from "@/lib/customer-delivery-estimate";
+import { computeStorefrontCheckoutFees } from "@/lib/storefront-cart-checkout-fees";
+import { hasPriorEmbroideryOrderForCustomerEmail } from "@/lib/storefront-prior-embroidery-order";
+import { totalEstimatedShippingWeightKg } from "@/lib/delivery-shipping-weight";
 import type { StoreOrderCartLine } from "@/lib/store-order-cart-payload";
+import { storefrontVolumeAdjustedCartLines } from "@/lib/storefront-volume-discount";
 import { sendStoreOrderConfirmationEmail } from "@/lib/store-order-email";
 import { allocateNextBossStoreOrderNumber } from "@/lib/boss-customer-order-id";
 import { getPerthYmd } from "@/lib/perth-calendar";
@@ -24,11 +24,6 @@ const CHECKOUT_REF_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif"
 
 function dollarsToCents(d: number): number {
   return Math.round(d * 100);
-}
-
-function estimatedWeightKgFromLines(lines: StoreOrderCartLine[]): number {
-  const w = lines.reduce((sum, line) => sum + line.quantity * 0.35, 0);
-  return Number(w.toFixed(2));
 }
 
 function sanitizeStorageSegment(s: string, max: number): string {
@@ -180,7 +175,41 @@ export type PlaceStoreOrderResult =
   | { ok: true; orderNumber: string; trackingToken: string; trackUrl: string }
   | { ok: false; error: string };
 
-export async function placeStoreOrder(items: StoreOrderCartLine[]): Promise<PlaceStoreOrderResult> {
+export type PlaceStoreOrderOptions = {
+  /** `store_orders.id` of the order the customer reordered from (same email); persisted for Click Up mock-up carry-over. */
+  reorderedFromStoreOrderId?: string;
+};
+
+function escapeCustomerEmailForIlikeExact(email: string): string {
+  return email.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+async function resolveReorderedFromStoreOrderIdForInsert(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  customerEmail: string,
+  candidate: string | undefined,
+): Promise<string | null> {
+  const raw = (candidate ?? "").trim();
+  if (!raw || !/^[0-9a-f-]{36}$/i.test(raw)) {
+    return null;
+  }
+  const ilikeExact = escapeCustomerEmailForIlikeExact(customerEmail);
+  const { data, error } = await supabase
+    .from("store_orders")
+    .select("id")
+    .eq("id", raw)
+    .ilike("customer_email", ilikeExact)
+    .maybeSingle();
+  if (error || !data?.id) {
+    return null;
+  }
+  return data.id;
+}
+
+export async function placeStoreOrder(
+  items: StoreOrderCartLine[],
+  options?: PlaceStoreOrderOptions,
+): Promise<PlaceStoreOrderResult> {
   if (!Array.isArray(items) || items.length === 0) {
     return { ok: false, error: "Your cart is empty." };
   }
@@ -214,18 +243,17 @@ export async function placeStoreOrder(items: StoreOrderCartLine[]): Promise<Plac
   }
 
   const postcode = extractAustralianPostcodeFromAddress(deliveryAddress);
-  const weightKg = estimatedWeightKgFromLines(items);
-  const distanceKm = distanceKmFromCompanyBase(postcode);
-  const deliveryFeeDollars = calculateDeliveryFee(distanceKm, weightKg);
-  const subtotalDollars = items.reduce((s, line) => s + line.totalPrice, 0);
+  const weightKg = totalEstimatedShippingWeightKg(items);
+  const pricedLines = storefrontVolumeAdjustedCartLines(items);
+  const subtotalDollars = pricedLines.reduce((s, line) => s + line.totalPrice, 0);
   if (!Number.isFinite(subtotalDollars) || subtotalDollars < 0) {
     return { ok: false, error: "Invalid order total." };
   }
-  const totalDollars = subtotalDollars + deliveryFeeDollars;
-
-  const subtotalCents = dollarsToCents(subtotalDollars);
-  const deliveryFeeCents = dollarsToCents(deliveryFeeDollars);
-  const totalCents = dollarsToCents(totalDollars);
+  const itemsPricedForOrder: StoreOrderCartLine[] = items.map((line, idx) => ({
+    ...line,
+    unitPrice: pricedLines[idx]!.unitPrice,
+    totalPrice: pricedLines[idx]!.totalPrice,
+  }));
 
   let supabase: ReturnType<typeof createSupabaseAdminClient>;
   try {
@@ -233,6 +261,22 @@ export async function placeStoreOrder(items: StoreOrderCartLine[]): Promise<Plac
   } catch {
     return { ok: false, error: "Orders are temporarily unavailable (database not configured)." };
   }
+
+  const hasPriorEmbroidery = await hasPriorEmbroideryOrderForCustomerEmail(supabase, customerEmail);
+  const fees = computeStorefrontCheckoutFees({
+    subtotalAud: subtotalDollars,
+    items: itemsPricedForOrder,
+    deliveryPostcode: postcode,
+    estimatedWeightKg: weightKg,
+    isCustomerSignedIn: true,
+    hasPriorEmbroideryOrder: hasPriorEmbroidery,
+  });
+  const deliveryFeeDollars = fees.deliveryFeeAud;
+  const totalDollars = fees.totalAud;
+
+  const subtotalCents = dollarsToCents(subtotalDollars);
+  const deliveryFeeCents = dollarsToCents(deliveryFeeDollars);
+  const totalCents = dollarsToCents(totalDollars);
 
   const insertPayload = {
     customer_email: customerEmail,
@@ -249,6 +293,12 @@ export async function placeStoreOrder(items: StoreOrderCartLine[]): Promise<Plac
   let orderRow: { id: string; tracking_token: string } | null = null;
   let orderNumber = "";
 
+  const reorderedFromResolved = await resolveReorderedFromStoreOrderIdForInsert(
+    supabase,
+    customerEmail,
+    options?.reorderedFromStoreOrderId,
+  );
+
   for (let attempt = 0; attempt < 8; attempt++) {
     const alloc = await allocateNextBossStoreOrderNumber(supabase);
     if (!alloc.ok) {
@@ -261,6 +311,7 @@ export async function placeStoreOrder(items: StoreOrderCartLine[]): Promise<Plac
       .insert({
         ...insertPayload,
         order_number: orderNumber,
+        ...(reorderedFromResolved ? { reordered_from_store_order_id: reorderedFromResolved } : {}),
       })
       .select("id, tracking_token")
       .single();
@@ -294,7 +345,7 @@ export async function placeStoreOrder(items: StoreOrderCartLine[]): Promise<Plac
   const orderId = orderRow.id;
   const trackingToken = orderRow.tracking_token;
 
-  const normalizedItems: StoreOrderCartLine[] = items.map((line) => {
+  const normalizedItems: StoreOrderCartLine[] = itemsPricedForOrder.map((line) => {
     const refUrls = sanitizeReferenceImageUrlsFromClient(line.referenceImageUrls);
     const mergedNotes = mergeNotesWithReferenceImageUrls(line.notes, refUrls);
     return {

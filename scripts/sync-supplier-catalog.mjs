@@ -24,6 +24,7 @@ import { basename, dirname, extname, join, relative, sep, posix } from "node:pat
 import { fileURLToPath } from "node:url";
 
 import { getBossWebRoot, loadEnvLocal } from "./lib/load-env.mjs";
+import { splitCsvFields, loadFashionBizSumMarketingMaps } from "./lib/fashion-biz-sum-csv-maps.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -243,27 +244,6 @@ function dbCategoryFromSyzmikStyleName(styleName) {
   return null;
 }
 
-function splitCsvFields(line) {
-  const out = [];
-  let cur = "";
-  let q = false;
-  for (let i = 0; i < line.length; i += 1) {
-    const c = line[i];
-    if (c === '"') {
-      q = !q;
-      continue;
-    }
-    if (c === "," && !q) {
-      out.push(cur);
-      cur = "";
-      continue;
-    }
-    cur += c;
-  }
-  out.push(cur);
-  return out;
-}
-
 /** style_code (uppercase) → DB category label from local `data/supplier/fashion-biz/csv/*syzmik*.csv` */
 function loadSyzmikStyleCategoryMap(root) {
   const map = new Map();
@@ -305,57 +285,6 @@ function loadSyzmikStyleCategoryMap(root) {
       if (cat) {
         map.set(styleCode.toUpperCase(), cat);
       }
-    }
-  }
-  return map;
-}
-
-/**
- * style_code (uppercase) → `short_description` from Fashion Biz `*sum*.csv`
- * (`biz-care`, `biz-collection`, `syzmik`; columns: style, …, short_description).
- */
-function loadFashionBizSumShortDescriptions(root) {
-  const map = new Map();
-  const csvDir = join(root, "data", "supplier", "fashion-biz", "csv");
-  if (!existsSync(csvDir)) {
-    return map;
-  }
-  let files;
-  try {
-    files = readdirSync(csvDir).filter((f) => {
-      const l = f.toLowerCase();
-      return (
-        l.endsWith(".csv") &&
-        l.includes("sum") &&
-        (l.includes("biz-care") || l.includes("biz-collection") || l.includes("syzmik"))
-      );
-    });
-  } catch {
-    return map;
-  }
-  for (const file of files) {
-    let text;
-    try {
-      text = readFileSync(join(csvDir, file), "utf8");
-    } catch {
-      continue;
-    }
-    const lines = text.split(/\r?\n/);
-    for (let li = 1; li < lines.length; li += 1) {
-      const line = lines[li];
-      if (!line.trim()) {
-        continue;
-      }
-      const cols = splitCsvFields(line);
-      if (cols.length < 5) {
-        continue;
-      }
-      const style = cols[0]?.trim();
-      const shortDesc = cols[4]?.trim();
-      if (!style || !shortDesc) {
-        continue;
-      }
-      map.set(style.toUpperCase(), shortDesc);
     }
   }
   return map;
@@ -665,6 +594,12 @@ function colorsFromFiles(files) {
   return [...colors].sort();
 }
 
+/** Same colour token as `colorsFromFiles` — used to group gallery URLs per chip order. */
+function shotColorLabelFromFashionBizFilename(file) {
+  const m = String(file).match(/_(?:Product|Talent)_([A-Za-z0-9]+)_/i);
+  return m ? humanizeColor(m[1]) : null;
+}
+
 function publicStorageUrlFor(supabaseUrl, bucket, supplierSlug, relUnix) {
   const base = `${supabaseUrl.replace(/\/$/, "")}/storage/v1/object/public/${bucket}`;
   const parts = [supplierSlug, ...relUnix.split("/").filter(Boolean)].map((p) =>
@@ -677,10 +612,14 @@ function publicStorageUrlFor(supabaseUrl, bucket, supplierSlug, relUnix) {
 const MAX_PRODUCT_GALLERY_IMAGES = 48;
 
 /**
- * Gallery URL order for every scanned product folder (Biz Care, Biz Collection, Syzmik, …):
- * Talent / on-model first, then `_Product_` flat lays, then other images.
+ * Gallery URL order for Fashion Biz folders (Biz Care, Biz Collection, Syzmik, …).
+ *
+ * When `sortedColorLabels` is set (same order as `available_colors` / `colorsFromFiles`), URLs are grouped
+ * by colour so PDP chip index aligns with contiguous gallery blocks. Within each colour: `_Product_` flat
+ * lays first (matches storefront hero preference), then `Talent` on-model. Previously we sorted all Talent
+ * then all Product by filename — chip order is alphabetical by colour name, so those two orderings desynced.
  */
-function pickImagePaths(files, relDirUnix, supplierSlug, imageMode, supabaseUrl, bucket) {
+function pickImagePaths(files, relDirUnix, supplierSlug, imageMode, supabaseUrl, bucket, sortedColorLabels) {
   const images = files.filter((f) => IMG_EXT.has(extname(f).toLowerCase()));
   const talentShots = images.filter((f) => /Talent/i.test(f));
   const productShots = images.filter((f) => /_Product_/i.test(f) && !/Talent/i.test(f));
@@ -688,8 +627,42 @@ function pickImagePaths(files, relDirUnix, supplierSlug, imageMode, supabaseUrl,
     (f) => !/_Product_/i.test(f) && !/Talent/i.test(f),
   );
   let ordered;
-  if (productShots.length > 0 || talentShots.length > 0) {
-    // On-model / lifestyle first (upload + gallery order), then flat product shots.
+  if (
+    Array.isArray(sortedColorLabels) &&
+    sortedColorLabels.length > 0 &&
+    (productShots.length > 0 || talentShots.length > 0)
+  ) {
+    const used = new Set();
+    const byColor = [];
+    for (const color of sortedColorLabels) {
+      const prod = productShots
+        .filter((f) => shotColorLabelFromFashionBizFilename(f) === color)
+        .sort((a, b) => a.localeCompare(b));
+      const tal = talentShots
+        .filter((f) => shotColorLabelFromFashionBizFilename(f) === color)
+        .sort((a, b) => a.localeCompare(b));
+      for (const f of prod) {
+        if (!used.has(f)) {
+          used.add(f);
+          byColor.push(f);
+        }
+      }
+      for (const f of tal) {
+        if (!used.has(f)) {
+          used.add(f);
+          byColor.push(f);
+        }
+      }
+    }
+    const restProductTalent = [...productShots, ...talentShots]
+      .filter((f) => !used.has(f))
+      .sort((a, b) => a.localeCompare(b));
+    for (const f of restProductTalent) {
+      used.add(f);
+      byColor.push(f);
+    }
+    ordered = [...byColor, ...otherShots.slice().sort((a, b) => a.localeCompare(b))];
+  } else if (productShots.length > 0 || talentShots.length > 0) {
     ordered = [
       ...talentShots.slice().sort((a, b) => a.localeCompare(b)),
       ...productShots.slice().sort((a, b) => a.localeCompare(b)),
@@ -791,6 +764,7 @@ function buildRow(
   syzmikStyleCategoryMap,
   bizCareStyleTitles,
   bizSumShortDescriptions,
+  bizSumDetailDescriptions,
   bizSumSizes,
   bizStyleBasePrices,
 ) {
@@ -868,21 +842,39 @@ function buildRow(
   const skuPart = sku.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const slug = `${cfg.productSlugPrefix}-${slugifyBrand(brand)}-${skuPart}`;
   const relUnderImages = posix.join(cfg.imagesSubdir, relPosix);
-  const imageUrls = pickImagePaths(files, relUnderImages, supplierSlug, imageMode, supabaseUrl, bucket);
   const availableColors = colorsFromFiles(files);
+  const imageUrls = pickImagePaths(
+    files,
+    relUnderImages,
+    supplierSlug,
+    imageMode,
+    supabaseUrl,
+    bucket,
+    availableColors.length > 0 ? availableColors : undefined,
+  );
   const fallbackColors =
     availableColors.length > 0 ? availableColors : ["Black", "Navy", "Charcoal", "White", "Grey"];
 
-  const sumTitle = (bizSumShortDescriptions?.get(String(sku).toUpperCase()) ?? "").trim();
+  const styleKeyForCopy = String(sku).toUpperCase().replace(/-CLEARANCE$/i, "");
+  const sumTitle = (bizSumShortDescriptions?.get(styleKeyForCopy) ?? "").trim();
+  const detailBody = (bizSumDetailDescriptions?.get(styleKeyForCopy) ?? "").trim();
   const baseDescription = cfg.descriptionTemplate
     .replace(/\{name\}/g, name)
     .replace(/\{displayName\}/g, cfg.displayName)
     .replace(/\{section\}/g, section)
     .replace(/\{brand\}/g, brand)
     .replace(/\{sku\}/g, sku);
-  const description = sumTitle ? `${sumTitle}\n\n${baseDescription}` : baseDescription;
+  const descriptionParts = [];
+  if (sumTitle) {
+    descriptionParts.push(sumTitle);
+  }
+  if (detailBody) {
+    descriptionParts.push(detailBody);
+  }
+  descriptionParts.push(baseDescription);
+  const description = descriptionParts.join("\n\n");
 
-  const styleKeyForPrice = String(sku).toUpperCase().replace(/-CLEARANCE$/i, "");
+  const styleKeyForPrice = styleKeyForCopy;
   const fromCsvPrice = bizStyleBasePrices?.get(styleKeyForPrice) ?? null;
   const resolvedPrice =
     typeof fromCsvPrice === "number" && Number.isFinite(fromCsvPrice) && fromCsvPrice > 0
@@ -1055,9 +1047,13 @@ async function main() {
     console.log(`Biz Care CSV style titles loaded: ${bizCareStyleTitles.size} style codes`);
   }
 
-  const bizSumShortDescriptions = loadFashionBizSumShortDescriptions(root);
+  const { shortByStyle: bizSumShortDescriptions, detailByStyle: bizSumDetailDescriptions } =
+    loadFashionBizSumMarketingMaps(root);
   if (bizSumShortDescriptions.size > 0) {
     console.log(`Fashion Biz sum.csv short descriptions: ${bizSumShortDescriptions.size} style codes`);
+  }
+  if (bizSumDetailDescriptions.size > 0) {
+    console.log(`Fashion Biz sum.csv stringified descriptions: ${bizSumDetailDescriptions.size} style codes`);
   }
 
   const bizSumSizes = loadFashionBizSumSizes(root);
@@ -1081,6 +1077,7 @@ async function main() {
       syzmikStyleCategoryMap,
       bizCareStyleTitles,
       bizSumShortDescriptions,
+      bizSumDetailDescriptions,
       bizSumSizes,
       bizStyleBasePrices,
     ),

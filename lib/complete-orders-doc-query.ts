@@ -1,4 +1,4 @@
-/** Query flag when opening admin links from Complete Orders → Pre-process documents (read-only reference). */
+/** Query flag when opening admin links from Completed Order → Pre-process documents (read-only reference). */
 export const COMPLETE_ORDERS_DOC_QUERY_PARAM = "complete_orders_doc";
 
 export function appendCompleteOrdersDocQuery(href: string): string {

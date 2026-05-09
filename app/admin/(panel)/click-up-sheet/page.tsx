@@ -7,8 +7,10 @@ import { createSupabaseAdminClient } from "@/lib/supabase";
 
 import {
   listClickUpSheetImages,
+  listClickUpSheetMockupsIncludingReorderPrior,
   listCustomerReferenceVisualsForStoreOrderNumber,
   loadSupplierOrderLinesForClickUpSheet,
+  getCustomerMasterCompanyLogoForStoreOrderNumber,
   type ClickUpSheetImageDto,
   type ClickUpSupplierLineRow,
   type CustomerReferenceVisualDto,
@@ -49,6 +51,7 @@ export default async function AdminClickUpSheetPage({
   let initialMockupImages: ClickUpSheetImageDto[] = [];
   let initialReferenceImages: ClickUpSheetImageDto[] = [];
   let initialCustomerReferenceItems: CustomerReferenceVisualDto[] = [];
+  let initialCustomerMasterLogoUrl: string | null = null;
 
   if (initialCustomerOrderId) {
     try {
@@ -58,6 +61,26 @@ export default async function AdminClickUpSheetPage({
       }
     } catch {
       // Supabase not configured
+    }
+    try {
+      const masterRes = await getCustomerMasterCompanyLogoForStoreOrderNumber(initialCustomerOrderId);
+      if (masterRes.ok) {
+        initialCustomerMasterLogoUrl = masterRes.public_url;
+      }
+    } catch {
+      // Supabase not configured
+    }
+    /** Mock-ups + 재오더 이전 주문 목업: Order ID만 있어도 불러야 워크시트 날짜 없이도 전승 목업이 보임. */
+    try {
+      const mockupRes = await listClickUpSheetMockupsIncludingReorderPrior(
+        initialListDate,
+        initialCustomerOrderId,
+      );
+      if (mockupRes.ok) {
+        initialMockupImages = mockupRes.images;
+      }
+    } catch {
+      // Table or bucket missing
     }
   }
 
@@ -74,13 +97,11 @@ export default async function AdminClickUpSheetPage({
       // Supabase not configured
     }
     try {
-      const [mockupRes, referenceRes] = await Promise.all([
-        listClickUpSheetImages(initialListDate, initialCustomerOrderId, "mockup"),
-        listClickUpSheetImages(initialListDate, initialCustomerOrderId, "reference"),
-      ]);
-      if (mockupRes.ok) {
-        initialMockupImages = mockupRes.images;
-      }
+      const referenceRes = await listClickUpSheetImages(
+        initialListDate,
+        initialCustomerOrderId,
+        "reference",
+      );
       if (referenceRes.ok) {
         initialReferenceImages = referenceRes.images;
       }
@@ -101,6 +122,7 @@ export default async function AdminClickUpSheetPage({
       initialMockupImages={initialMockupImages}
       initialReferenceImages={initialReferenceImages}
       initialCustomerReferenceItems={initialCustomerReferenceItems}
+      initialCustomerMasterLogoUrl={initialCustomerMasterLogoUrl}
       completeOrdersDocumentsView={completeOrdersDocumentsView}
     />
   );

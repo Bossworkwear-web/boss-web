@@ -12,12 +12,15 @@ export function ImageUrlLightbox({
   src,
   alt = "",
   ariaLabel = "Enlarged image",
+  /** ~4× inline mock-up preview: larger viewport cap (no new tab). */
+  enlarged = false,
 }: {
   open: boolean;
   onClose: () => void;
   src: string;
   alt?: string;
   ariaLabel?: string;
+  enlarged?: boolean;
 }) {
   useEffect(() => {
     if (!open || typeof document === "undefined") {
@@ -47,6 +50,11 @@ export function ImageUrlLightbox({
     return null;
   }
 
+  /** ~4× cart / track inline mock-up caps (16rem × 20rem thumbnails). */
+  const frame = enlarged
+    ? "max-h-[min(90dvh,calc(16rem*4))] max-w-[min(92vw,calc(20rem*4))]"
+    : "max-h-[50dvh] max-w-[50vw]";
+
   return (
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6"
@@ -67,12 +75,12 @@ export function ImageUrlLightbox({
       >
         Close
       </button>
-      <div className="relative z-10 flex max-h-[50dvh] max-w-[50vw] items-center justify-center overflow-auto">
+      <div className={`relative z-10 flex ${frame} items-center justify-center overflow-auto`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
           alt={alt}
-          className="block h-auto max-h-[50dvh] w-auto max-w-[50vw] cursor-zoom-out object-contain"
+          className={`block h-auto w-auto cursor-zoom-out object-contain ${frame}`}
           loading="eager"
           decoding="async"
           onClick={onClose}

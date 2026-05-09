@@ -56,7 +56,7 @@ export default async function Home({ searchParams }: HomePageProps) {
         <HomeHero />
         <HomeCompanyIntro />
         <section className="bg-white pt-[1.5cm]">
-          <div className="mx-auto flex w-full max-w-[120rem] flex-col items-center px-4 pb-2 sm:px-6">
+          <div className="mx-auto flex w-full max-w-[1800px] flex-col items-center px-4 pb-2 sm:px-6">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/BossWW_image.jpg"

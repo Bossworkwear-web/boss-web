@@ -2,7 +2,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase";
 
 /** Shown when `click_up_complete_orders_queue` still holds this store order (finished / archive list). */
 export const COMPLETE_ORDERS_QUEUE_MUTATION_BLOCKED =
-  "This order is in Complete Orders — changes are disabled. Use Work process or remove it from Complete Orders to edit.";
+  "이 주문은 완료 목록(Completed Order)에 있어 변경·Production 이동 등을 할 수 없습니다. Work process에서 단계를 확인하거나, Completed Order에서 해당 주문을 빼낸 뒤 다시 시도하세요.";
 
 export async function guardStoreOrderNotInCompleteOrdersQueue(
   storeOrderId: string,

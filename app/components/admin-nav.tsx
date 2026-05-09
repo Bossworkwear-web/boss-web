@@ -6,13 +6,15 @@ import { usePathname, useRouter } from "next/navigation";
 
 const LINKS = [
   { href: "/admin", label: "Dashboard" },
+  { href: "/admin/customer-info", label: "Customer Info" },
   { href: "/admin/store-orders", label: "Store orders" },
   { href: "/admin/supplier-orders", label: "Supplier orders" },
   { href: "/admin/work-process", label: "Click Up" },
+  { href: "/admin/incoming-goods", label: "Incoming goods" },
   { href: "/admin/production", label: "Production" },
   { href: "/admin/quality-control", label: "Quality Control" },
   { href: "/admin/dispatch", label: "Dispatch" },
-  { href: "/admin/complete-orders", label: "Complete Orders" },
+  { href: "/admin/complete-orders", label: "Completed Order" },
   { href: "/admin/warehouse", label: "Warehouse" },
   { href: "/admin/stock", label: "Stock" },
   { href: "/admin/clearance-stock", label: "Clearance Stock" },

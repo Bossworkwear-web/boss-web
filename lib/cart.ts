@@ -12,11 +12,15 @@ export type CartItem = {
   /** First product image URL for cart thumbnails. */
   imageUrl?: string;
   productName: string;
+  /** From `products.category` when adding from catalog (optional on legacy localStorage lines). */
+  category?: string | null;
   serviceType: string;
   color: string;
   size: string;
   quantity: number;
   placements: string[];
+  /** Pre–volume-discount unit (incl. placements). Optional on legacy lines; defaults to `unitPrice`. */
+  listUnitPrice?: number;
   unitPrice: number;
   totalPrice: number;
   addedAt: string;
@@ -29,6 +33,8 @@ export type CartItem = {
 const CART_STORAGE_KEY = "boss_web_cart_items";
 /** Public mockup image URLs from last My account → Reorder (`click_up_sheet_images.is_mockup`). */
 const CART_REORDER_MOCKUPS_KEY = "boss_web_cart_reorder_mockups";
+/** `store_orders.id` of the order used for Reorder — passed through checkout into `store_orders.reordered_from_store_order_id`. */
+const CART_REORDER_SOURCE_ORDER_ID_KEY = "boss_web_cart_reorder_source_order_id";
 const CART_UPDATED_EVENT = "boss-web-cart-updated";
 
 function clearReorderMockupsFromStorage() {
@@ -36,6 +42,31 @@ function clearReorderMockupsFromStorage() {
     return;
   }
   window.localStorage.removeItem(CART_REORDER_MOCKUPS_KEY);
+}
+
+function clearReorderSourceOrderIdFromStorage() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.removeItem(CART_REORDER_SOURCE_ORDER_ID_KEY);
+}
+
+function clearReorderMetaFromStorage() {
+  clearReorderMockupsFromStorage();
+  clearReorderSourceOrderIdFromStorage();
+}
+
+/** Prior order UUID from last Reorder (must match `store_orders.id`). */
+export function getReorderSourceStoreOrderId(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const raw = window.localStorage.getItem(CART_REORDER_SOURCE_ORDER_ID_KEY);
+  const id = (raw ?? "").trim();
+  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    return null;
+  }
+  return id;
 }
 
 export function getReorderMockupImageUrls(): string[] {
@@ -91,7 +122,7 @@ export function addCartItem(item: Omit<CartItem, "id" | "addedAt">) {
     return;
   }
 
-  clearReorderMockupsFromStorage();
+  clearReorderMetaFromStorage();
   const items = getCartItems();
   const nextItem: CartItem = {
     ...item,
@@ -109,7 +140,7 @@ export function updateCartItem(itemId: string, updates: Omit<CartItem, "id" | "a
   if (typeof window === "undefined") {
     return false;
   }
-  clearReorderMockupsFromStorage();
+  clearReorderMetaFromStorage();
   const items = getCartItems();
   const idx = items.findIndex((row) => row.id === itemId);
   if (idx === -1) {
@@ -130,7 +161,7 @@ export function removeCartItem(itemId: string) {
   if (typeof window === "undefined") {
     return;
   }
-  clearReorderMockupsFromStorage();
+  clearReorderMetaFromStorage();
   const items = getCartItems().filter((item) => item.id !== itemId);
   window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
   emitCartUpdated();
@@ -141,14 +172,14 @@ export function clearCartItems() {
     return;
   }
   window.localStorage.removeItem(CART_STORAGE_KEY);
-  clearReorderMockupsFromStorage();
+  clearReorderMetaFromStorage();
   emitCartUpdated();
 }
 
 /** Replace the entire cart (e.g. reorder from account history). Each line gets a new id and timestamp. */
 export function replaceCartWithLines(
   lines: Omit<CartItem, "id" | "addedAt">[],
-  options?: { mockupImageUrls?: string[] },
+  options?: { mockupImageUrls?: string[]; reorderedFromStoreOrderId?: string },
 ) {
   if (typeof window === "undefined") {
     return;
@@ -167,6 +198,12 @@ export function replaceCartWithLines(
   } else {
     clearReorderMockupsFromStorage();
   }
+  const src = (options?.reorderedFromStoreOrderId ?? "").trim();
+  if (/^[0-9a-f-]{36}$/i.test(src)) {
+    window.localStorage.setItem(CART_REORDER_SOURCE_ORDER_ID_KEY, src);
+  } else {
+    clearReorderSourceOrderIdFromStorage();
+  }
   emitCartUpdated();
 }
 
@@ -176,7 +213,11 @@ export function subscribeCartUpdates(listener: () => void) {
   }
 
   const onStorage = (event: StorageEvent) => {
-    if (event.key === CART_STORAGE_KEY || event.key === CART_REORDER_MOCKUPS_KEY) {
+    if (
+      event.key === CART_STORAGE_KEY ||
+      event.key === CART_REORDER_MOCKUPS_KEY ||
+      event.key === CART_REORDER_SOURCE_ORDER_ID_KEY
+    ) {
       listener();
     }
   };

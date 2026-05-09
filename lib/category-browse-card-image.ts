@@ -1,5 +1,5 @@
 import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
-import { resolveStorefrontImageUrl } from "@/lib/storefront-image-url";
+import { resolveStorefrontImageUrl, resolveStorefrontImageUrlList } from "@/lib/storefront-image-url";
 
 /** Placeholder hero images when a product row has no `image_urls` — aligned with category browse grids. */
 export const DEFAULT_IMAGE_BY_SUB: Record<string, string> = {
@@ -46,8 +46,8 @@ export function heroOverrideCardImageUrl(item: BrowseCardImageRow): string | nul
 }
 
 export function categoryBrowseCardImageUrl(item: BrowseCardImageRow, resolvedSubSlug: string): string {
-  const rawFirst = item.image_urls?.[0]?.trim() ?? "";
-  const dbUrl = rawFirst ? resolveStorefrontImageUrl(rawFirst) || rawFirst : null;
+  const resolvedList = resolveStorefrontImageUrlList(item.image_urls);
+  const dbUrl = resolvedList[0]?.trim() ? resolvedList[0]!.trim() : null;
   return (
     heroOverrideCardImageUrl(item) ??
     dbUrl ??

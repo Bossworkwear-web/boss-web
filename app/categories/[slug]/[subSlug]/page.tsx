@@ -9,6 +9,12 @@ import { ProductGridPriceCells } from "@/app/components/product-grid-price";
 import { ProductNavLink } from "@/app/components/product-nav-link";
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
 import { TopNav } from "@/app/components/top-nav";
+import { ChefCategoryTopAd } from "@/app/components/chef-category-top-ad";
+import { HealthCareCategoryTopAd } from "@/app/components/health-care-category-top-ad";
+import { KidsCategoryTopAd } from "@/app/components/kids-category-top-ad";
+import { MensCategoryTopAd } from "@/app/components/mens-category-top-ad";
+import { PpeCategoryTopAd } from "@/app/components/ppe-category-top-ad";
+import { WomensCategoryTopAd } from "@/app/components/womens-category-top-ad";
 import { WorkwearCategoryTopAd } from "@/app/components/workwear-category-top-ad";
 import { getDiscountPercent } from "@/lib/discounts";
 import { categoryBrowseCardImageUrl } from "@/lib/category-browse-card-image";
@@ -293,6 +299,12 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
       <TopNav />
       <MainWithSupplierRail>
         {slug === "workwear" ? <WorkwearCategoryTopAd /> : null}
+        {slug === "mens" ? <MensCategoryTopAd /> : null}
+        {slug === "womens" ? <WomensCategoryTopAd /> : null}
+        {slug === "kids" ? <KidsCategoryTopAd /> : null}
+        {slug === HEALTH_CARE_MAIN_SLUG ? <HealthCareCategoryTopAd /> : null}
+        {slug === "ppe" ? <PpeCategoryTopAd /> : null}
+        {slug === "chef" ? <ChefCategoryTopAd /> : null}
         <section className={`${SITE_PAGE_ROW_CLASS} py-10`}>
           <CategoryGetAQuoteCta />
           <header className="mb-7 space-y-6">
@@ -305,16 +317,18 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
               </CategoryBrowseTitle>
               <CategoryBrandFilter brands={brandsForDropdown} />
             </div>
-            <p className="text-sm text-brand-navy/65">
-              <Link href={`/categories/${slug}`} className="font-semibold text-brand-orange hover:underline">
-                All {main.label}
-              </Link>
-              <span className="text-brand-navy/55"> · </span>
-              Choose a product to open its product page.
-            </p>
-            <p className="text-sm text-brand-navy/55">
-              Prices include {Math.round(STOREFRONT_RETAIL_GST_RATE * 100)}% GST.
-            </p>
+            <div className="space-y-1.5">
+              <p className="text-sm text-brand-navy/65">
+                <Link href={`/categories/${slug}`} className="font-semibold text-brand-orange hover:underline">
+                  All {main.label}
+                </Link>
+                <span className="text-brand-navy/55"> · </span>
+                Choose a product to open its product page.
+              </p>
+              <p className="text-sm text-brand-navy/55">
+                Prices include {Math.round(STOREFRONT_RETAIL_GST_RATE * 100)}% GST.
+              </p>
+            </div>
           </header>
 
           <div className="subcategory-browse-grid subcategory-browse-grid-gap grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5">
@@ -376,7 +390,7 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
                       {listPrice != null ? (
                         <>
                           <span
-                            className="select-none whitespace-pre text-brand-navy/45"
+                            className="product-card-grid-separator select-none whitespace-pre text-brand-navy/45"
                             aria-hidden
                           >
                             {PRODUCT_CARD_CODE_PRICE_SEPARATOR}

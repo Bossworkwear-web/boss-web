@@ -421,7 +421,7 @@ export function ProductShowcase({
                           {listPrice != null ? (
                             <>
                               <span
-                                className="select-none whitespace-pre text-brand-navy/45"
+                                className="product-card-grid-separator select-none whitespace-pre text-brand-navy/45"
                                 aria-hidden
                               >
                                 {PRODUCT_CARD_CODE_PRICE_SEPARATOR}
@@ -472,7 +472,7 @@ export function ProductShowcase({
                           {p.retailPrice != null ? (
                             <>
                               <span
-                                className="select-none whitespace-pre text-brand-navy/45"
+                                className="product-card-grid-separator select-none whitespace-pre text-brand-navy/45"
                                 aria-hidden
                               >
                                 {PRODUCT_CARD_CODE_PRICE_SEPARATOR}

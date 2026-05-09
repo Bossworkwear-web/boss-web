@@ -8,6 +8,7 @@ import { TopNav } from "@/app/components/top-nav";
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
+import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
 import { CustomerDetailPasswordPopovers } from "./customer-detail-password-popovers";
@@ -76,6 +77,8 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
     }[]
   > = {};
 
+  let masterLogoUrl: string | null = null;
+
   try {
     const supabase = createSupabaseAdminClient();
     const { data: p } = await supabase
@@ -86,6 +89,15 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
       .eq("email_address", emailNorm)
       .maybeSingle();
     profile = p;
+
+    const { data: master } = await supabase
+      .from("customer_master_company_logo")
+      .select("storage_bucket, storage_path")
+      .eq("customer_email", emailNorm)
+      .maybeSingle();
+    const bucket = String((master as { storage_bucket?: string | null })?.storage_bucket ?? "").trim();
+    const path = String((master as { storage_path?: string | null })?.storage_path ?? "").trim();
+    masterLogoUrl = bucket && path ? publicStorageObjectUrl(bucket, path) : null;
 
     const ilikeExact = sessionEmail.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
     const { data: o } = await supabase
@@ -156,6 +168,17 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
           />
 
           <section id="ordered-records" className="scroll-mt-[calc(var(--site-header-height)+1rem)] space-y-4">
+            {masterLogoUrl ? (
+              <div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={masterLogoUrl}
+                  alt="Master logo"
+                  className="h-[21rem] w-auto max-w-full rounded-xl border border-brand-navy/10 bg-white object-contain"
+                  loading="lazy"
+                />
+              </div>
+            ) : null}
             <h2 className="text-[1.62rem] font-semibold text-brand-navy">Ordered records</h2>
             <p className="text-[1.26rem] text-brand-navy/70">
               Past store orders are listed below. Open <span className="font-medium text-brand-navy/80">Line items</span>{" "}

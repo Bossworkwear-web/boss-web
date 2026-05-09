@@ -11,6 +11,7 @@ import {
   applyCatalogSupplierNameIfEmpty,
   createSupplierOrderLine,
   deleteSupplierOrderLine,
+  getClickUpSheetHrefAfterSupplierReady,
   saveSupplierOrdersDaySheetSnapshot,
   setSupplierDailySheetReadyForProcessing,
   updateSupplierOrderLine,
@@ -26,8 +27,10 @@ export type SupplierDayOrderTableProps = {
   listDateTitle: string;
   lines: SupplierOrderLineRow[];
   migrationHint: string | null;
-  /** Complete Orders pre-process doc hub: no edits, ready toggle, or row changes. */
+  /** Completed Order pre-process doc hub: no edits, ready toggle, or row changes. */
   completeOrdersDocumentsView?: boolean;
+  /** Warehouse Manager link: print / view only (same edit lock as documents view). */
+  warehouseManagerView?: boolean;
   /** When true, this Perth worksheet appears on Click Up. */
   readyForProcessing: boolean;
   /** Recent `store_orders.order_number` values (Customer order ID) for datalist suggestions. */
@@ -49,18 +52,19 @@ export function SupplierDayOrderTable({
   lines: initialLines,
   migrationHint,
   completeOrdersDocumentsView = false,
+  warehouseManagerView = false,
   readyForProcessing: readyForProcessingProp,
   storeOrderNumberOptions = [],
   productSupplierNameOptions = [],
   productImageByProductKey = {},
   onPrint,
 }: SupplierDayOrderTableProps) {
-  const editLocked = Boolean(migrationHint) || completeOrdersDocumentsView;
+  const editLocked = Boolean(migrationHint) || completeOrdersDocumentsView || warehouseManagerView;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [pendingReady, startReadyTransition] = useTransition();
   const [readyForProcessing, setReadyForProcessing] = useState(readyForProcessingProp);
-  /** Per–order-line acknowledgment; all must be true to turn on Ready for Processing. */
+  /** Per–order-line OK flag (optional; Ready for Processing does not require every row checked). */
   const [lineAck, setLineAck] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(initialLines.map((r) => [r.id, Boolean(r.sheet_row_ok)])),
   );
@@ -240,13 +244,7 @@ export function SupplierDayOrderTable({
     return out;
   }
 
-  const allLinesAcknowledged = rows.length > 0 && rows.every((r) => lineAck[r.id]);
-  const canTurnReadyOn = allLinesAcknowledged;
-  const readyMasterDisabled =
-    editLocked ||
-    pendingReady ||
-    (!readyForProcessing && !canTurnReadyOn) ||
-    rows.length === 0;
+  const readyMasterDisabled = editLocked || pendingReady || rows.length === 0;
 
   function refresh() {
     router.refresh();
@@ -330,7 +328,12 @@ export function SupplierDayOrderTable({
       )}
       {completeOrdersDocumentsView && !migrationHint ? (
         <p className="border-b border-slate-200 bg-slate-100 px-4 py-3 text-sm text-slate-800">
-          Complete Orders 문서 보기 모드: 시트를 수정하거나 Ready for Processing을 바꿀 수 없습니다.
+          Completed Order 문서 보기 모드: 시트를 수정하거나 Ready for Processing을 바꿀 수 없습니다.
+        </p>
+      ) : null}
+      {warehouseManagerView && !migrationHint && !completeOrdersDocumentsView ? (
+        <p className="border-b border-slate-200 bg-slate-100 px-4 py-3 text-sm text-slate-800">
+          창고 매니저 보기: 인쇄·열람만 가능합니다. 수정·삭제·행 추가·Ready for Processing은 사용할 수 없습니다.
         </p>
       ) : null}
 
@@ -354,7 +357,7 @@ export function SupplierDayOrderTable({
         <table className="w-full min-w-[1180px] text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-500">
             <tr>
-              <th className="w-10 px-1 py-2 text-center" title="Check each line before marking the sheet Ready for Processing">
+              <th className="w-10 px-1 py-2 text-center" title="Optional line acknowledgment (not required for Ready for Processing)">
                 OK
               </th>
               <th className="px-2 py-2" title="Matches products.supplier_name in catalog">
@@ -690,13 +693,10 @@ export function SupplierDayOrderTable({
                 });
                 return;
               }
-              if (!canTurnReadyOn) return;
               const prevAck = { ...lineAck };
-              const allOk: Record<string, boolean> = Object.fromEntries(rows.map((r) => [r.id, true]));
-              setLineAck(allOk);
               setReadyForProcessing(true);
               startReadyTransition(async () => {
-                const snap = collectDaySheetSnapshot(allOk);
+                const snap = collectDaySheetSnapshot(lineAck);
                 if (snap === null) {
                   setReadyForProcessing(false);
                   setLineAck(prevAck);
@@ -717,16 +717,28 @@ export function SupplierDayOrderTable({
                   setErrorText(readyRes.error);
                   return;
                 }
-                router.refresh();
+                const nav = await getClickUpSheetHrefAfterSupplierReady(listDateYmd);
+                if (!nav.ok) {
+                  setReadyForProcessing(false);
+                  setLineAck(prevAck);
+                  setErrorText(nav.error);
+                  return;
+                }
+                if (nav.navigateHref) {
+                  router.push(nav.navigateHref);
+                } else {
+                  router.refresh();
+                }
               });
             }}
           />
           <span>
             <span className="font-semibold">Ready for Processing</span>
             <span className="mt-0.5 block text-xs text-slate-600">
-              Every product row must be checked (OK) above. Turning this on saves the whole worksheet (all fields and
-              dates), marks every line OK, then adds this date to{" "}
-              <strong className="text-brand-navy">Click Up</strong>. Uncheck to remove from that list.
+              Turning this on saves the whole worksheet (all fields and dates), adds this date to{" "}
+              <strong className="text-brand-navy">Click Up</strong>, and opens the Click Up sheet for the first order
+              on this date that is not completed and not already in Production/QC/Dispatch (otherwise this page
+              refreshes). Uncheck to remove from that list.
             </span>
           </span>
         </label>

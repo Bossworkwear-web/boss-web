@@ -10,6 +10,8 @@ export type OrderTrackMockupItem = {
   listDate: string;
   decorateSummary: string;
   memo: string | null;
+  /** When set, this file is shown from a prior order (reorder carry-over). */
+  priorOrderReference?: string | null;
 };
 
 function isPdfUrl(url: string): boolean {
@@ -30,11 +32,18 @@ export function OrderTrackMockupsGrid({
       <ul className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
         {items.map((item) => {
           const pdf = isPdfUrl(item.publicUrl);
+          const priorRef = (item.priorOrderReference ?? "").trim();
           return (
             <li
               key={item.id}
               className="overflow-hidden rounded-2xl border border-brand-navy/15 bg-brand-surface/30"
             >
+              {priorRef ? (
+                <p className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-center text-[0.75rem] font-semibold uppercase tracking-wide text-amber-950">
+                  From previous order{" "}
+                  <span className="font-mono normal-case tracking-normal text-[0.85rem]">{priorRef}</span>
+                </p>
+              ) : null}
               <p className="border-b border-brand-navy/10 bg-white/80 px-3 py-2 text-[1.3125rem] text-brand-navy/70">
                 Perth sheet:{" "}
                 <span className="font-mono font-semibold text-brand-navy">{item.listDate}</span>
@@ -101,6 +110,7 @@ export function OrderTrackMockupsGrid({
         src={lightboxSrc ?? ""}
         alt={`Mock-up for order ${orderNumber}`}
         ariaLabel="Full size mock-up image"
+        enlarged
       />
     </>
   );

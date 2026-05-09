@@ -14,6 +14,8 @@ type CustomerDetailsPageProps = {
     status?: string;
     full_name?: string;
     email?: string;
+    /** Set from My account (e.g. Edit customer details) so the back link targets /customer. */
+    from?: string;
   }>;
 };
 
@@ -108,7 +110,7 @@ async function submitCustomerDetails(formData: FormData) {
     oauthPending && oauthEmailCookie && emailNorm === oauthEmailCookie && !isEditMode,
   );
 
-  if (!customerName || !contactNumber || !emailAddress || !deliveryAddress || !billingAddress) {
+  if (!customerName || !organisation || !contactNumber || !emailAddress || !deliveryAddress || !billingAddress) {
     redirect("/customer-details?status=invalid");
   }
 
@@ -343,26 +345,34 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
     !!prefilledDeliveryAddress &&
     (!!prefilledBillingAddress ? prefilledDeliveryAddress === prefilledBillingAddress : true);
 
+  const signedInCustomer = Boolean(loggedInEmail.trim());
+  const backToMyAccount = params.from === "my-account" || signedInCustomer;
+
   return (
     <main className="min-h-screen bg-white py-10 text-brand-navy">
       <div className={SITE_PAGE_ROW_CLASS}>
-        <div className="mx-auto w-full max-w-[70%] space-y-6">
+        <div className="mx-auto w-full max-w-[calc(70%/1.2)] origin-top [zoom:1.2] space-y-6">
         <header className="space-y-3">
-          <Link href="/sign-up" className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-orange">
+          <Link
+            href={backToMyAccount ? "/customer" : "/sign-up"}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-orange"
+          >
             <ArrowLeftIcon className="h-4 w-4" />
-            Back to sign up
+            {backToMyAccount ? "Back to My account" : "Back to sign up"}
           </Link>
           <h1 className="text-3xl font-medium">Customer Details</h1>
           <p className="text-sm text-brand-navy/70">
-            Enter your details so we can process quotes, delivery, and invoicing. Organisation is optional if
-            you are ordering as an individual.
+            Enter your details so we can process quotes, delivery, and invoicing.{" "}
+            <strong>Organisation</strong> is required — use your company or trading name, or enter your own full name if
+            you do not have one.
           </p>
         </header>
 
         {status === "invalid" && (
           <p className="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-4 py-3 text-sm font-medium text-orange-700">
             <NotesIcon className="h-4 w-4" />
-            Please fill in all required fields.
+            Please fill in all required fields. Organisation is required — if you have no company name, enter your own
+            full name.
           </p>
         )}
         {status === "invalid_postcode" && (
@@ -406,15 +416,19 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
             </div>
             <div className="grid gap-2">
               <label htmlFor="organisation" className="text-sm font-semibold">
-                Organisation
+                Organisation *
               </label>
               <input
                 id="organisation"
                 name="organisation"
+                required
                 defaultValue={prefilledOrganisation}
-                placeholder="Leave blank if ordering as an individual"
+                placeholder="Company or trading name — or your full name if you have no organisation"
                 className="rounded-md border border-brand-navy/20 px-3 py-2"
               />
+              <p className="text-xs text-brand-navy/60">
+                No company? Put your own name here so we can invoice and deliver correctly.
+              </p>
             </div>
             <div className="grid gap-2">
               <label htmlFor="contact_number" className="text-sm font-semibold">

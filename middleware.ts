@@ -1,44 +1,14 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-import { publicStorageObjectUrl } from "./lib/supabase-public-storage-url";
-
 /** Must stay in sync with `lib/admin-constants.ts` — Vercel Edge middleware cannot import app `@/` paths. */
 const ADMIN_SESSION_COOKIE = "boss_admin_session";
 
-const SUPPLIER_MEDIA_PREFIX = "/api/supplier-media/";
-
-function supplierMediaRedirect(request: NextRequest): NextResponse | null {
-  const { pathname } = request.nextUrl;
-  if (!pathname.startsWith(SUPPLIER_MEDIA_PREFIX)) {
-    return null;
-  }
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    return new NextResponse("Method Not Allowed", { status: 405 });
-  }
-  const tail = pathname.slice(SUPPLIER_MEDIA_PREFIX.length);
-  const parts = tail.split("/").filter(Boolean);
-  if (parts.length < 2) {
-    return new NextResponse("Not found", { status: 404 });
-  }
-  const supplier = parts[0]!;
-  const segments = parts.slice(1);
-  const bucket = process.env.SUPPLIER_IMAGES_BUCKET ?? "supplier-product-images";
-  const objectPath = [supplier, ...segments].join("/").replace(/\/+/g, "/");
-  const url = publicStorageObjectUrl(bucket, objectPath);
-  if (!url) {
-    return new NextResponse("Storage not configured", { status: 503 });
-  }
-  return NextResponse.redirect(url, 307);
-}
+/** Must stay in sync with `lib/supplier-orders-warehouse-manager.ts`. */
+const SUPPLIER_ORDERS_WAREHOUSE_MANAGER_COOKIE = "boss_supplier_orders_wm";
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  const media = supplierMediaRedirect(request);
-  if (media) {
-    return media;
-  }
 
   if (!pathname.startsWith("/admin")) {
     return NextResponse.next();
@@ -50,6 +20,29 @@ export function middleware(request: NextRequest) {
 
   const session = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
   if (session === "1") {
+    if (pathname === "/admin/supplier-orders") {
+      const res = NextResponse.next();
+      const wm = request.nextUrl.searchParams.get("warehouse_manager");
+      const wmActive = wm === "1" || wm === "true";
+      if (wmActive) {
+        res.cookies.set(SUPPLIER_ORDERS_WAREHOUSE_MANAGER_COOKIE, "1", {
+          path: "/admin",
+          maxAge: 60 * 60 * 8,
+          sameSite: "lax",
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+        });
+      } else {
+        res.cookies.set(SUPPLIER_ORDERS_WAREHOUSE_MANAGER_COOKIE, "", {
+          path: "/admin",
+          maxAge: 0,
+          sameSite: "lax",
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+        });
+      }
+      return res;
+    }
     return NextResponse.next();
   }
 
@@ -60,5 +53,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin", "/admin/:path*", "/api/supplier-media", "/api/supplier-media/:path*"],
+  matcher: ["/admin", "/admin/:path*"],
 };

@@ -104,10 +104,11 @@ export async function getOrderLinesForReorder(orderId: string): Promise<GetOrder
     const imageUrlByProductId = new Map<string, string>();
     const pathSlugByProductId = new Map<string, string>();
     const supplierNameByProductId = new Map<string, string>();
+    const categoryByProductId = new Map<string, string | null>();
     if (productIds.length > 0) {
       const { data: productRows } = await supabase
         .from("products")
-        .select("id, name, slug, image_urls, supplier_name")
+        .select("id, name, slug, category, image_urls, supplier_name")
         .in("id", productIds);
       for (const p of productRows ?? []) {
         const urls = p.image_urls;
@@ -123,6 +124,8 @@ export async function getOrderLinesForReorder(orderId: string): Promise<GetOrder
         );
         const sn = typeof p.supplier_name === "string" ? p.supplier_name.trim() : "";
         if (sn) supplierNameByProductId.set(p.id, sn);
+        const cat = typeof p.category === "string" ? p.category.trim() : "";
+        categoryByProductId.set(p.id, cat.length > 0 ? cat : null);
       }
     }
 
@@ -134,6 +137,9 @@ export async function getOrderLinesForReorder(orderId: string): Promise<GetOrder
           ? { supplierName: supplierNameByProductId.get(pid)! }
           : {}),
         productName: row.product_name,
+        ...(uuidRe.test(pid) && categoryByProductId.has(pid)
+          ? { category: categoryByProductId.get(pid) ?? null }
+          : {}),
         serviceType: row.service_type ?? "",
         color: row.color ?? "",
         size: row.size ?? "",

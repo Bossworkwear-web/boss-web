@@ -1,4 +1,4 @@
-/** Complete Orders → VIEW: pre-process document hub for one store order. */
+/** Completed Order → VIEW: pre-process document hub for one store order. */
 export function completeOrderDocumentsHref(storeOrderId: string, listDate: string, orderNumber: string): string {
   const q = new URLSearchParams();
   const ld = listDate.trim();

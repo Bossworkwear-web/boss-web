@@ -41,8 +41,9 @@ export function CategoryBrandFilter({ brands }: Props) {
           Brand
         </label>
         <select
-          className="min-w-[21rem] rounded-xl border border-brand-navy/20 bg-white px-[1.2rem] py-[0.9rem] text-[1.26rem] text-brand-navy shadow-sm outline-none transition focus:border-brand-orange"
+          className="category-filter-native-select min-w-[14.7rem] rounded-xl bg-white px-[0.96rem] py-[0.72rem] text-[1.008rem] text-brand-navy shadow-sm outline-none transition"
           value={current}
+          suppressHydrationWarning
           disabled={disabled}
           onChange={(e) => {
             const next = e.target.value;
@@ -75,8 +76,9 @@ export function CategoryBrandFilter({ brands }: Props) {
           Sort
         </label>
         <select
-          className="min-w-[14rem] rounded-xl border border-brand-navy/20 bg-white px-[1.2rem] py-[0.9rem] text-[1.26rem] text-brand-navy shadow-sm outline-none transition focus:border-brand-orange"
+          className="category-filter-native-select min-w-[14rem] rounded-xl bg-white px-[0.96rem] py-[0.72rem] text-[1.008rem] text-brand-navy shadow-sm outline-none transition"
           value={sort}
+          suppressHydrationWarning
           onChange={(e) => {
             const next = normalizeSortParam(e.target.value);
             const nextParams = new URLSearchParams(searchParams.toString());

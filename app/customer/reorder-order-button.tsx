@@ -33,7 +33,10 @@ export function ReorderOrderButton({ orderId }: ReorderOrderButtonProps) {
         setPending(false);
         return;
       }
-      replaceCartWithLines(res.lines, { mockupImageUrls: res.mockupImageUrls });
+      replaceCartWithLines(res.lines, {
+        mockupImageUrls: res.mockupImageUrls,
+        reorderedFromStoreOrderId: orderId,
+      });
       router.push("/cart");
     } catch {
       setError("Could not load this order.");
