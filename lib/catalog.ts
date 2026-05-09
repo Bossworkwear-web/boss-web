@@ -18,8 +18,6 @@ export const MAIN_CATEGORIES = [
   { slug: HEALTH_CARE_MAIN_SLUG, label: "Health care" },
   { slug: "chef", label: "Chef" },
   { slug: "ppe", label: "PPE" },
-  { slug: "special-offer", label: "Special Offer" },
-  { slug: "clearance", label: "Clearance" },
 ] as const;
 
 export const SUB_CATEGORIES = [

@@ -1,6 +1,40 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
 
 export const dynamic = "force-dynamic";
+
+/** Repo-local fallback when Storage has no object (dev / before upload). */
+const AP_2310_BACK_DISK_PARTS = ["data", "supplier", "Aussie Pacific", "2310_back.webp"] as const;
+
+function localAp2310BackAbsPath(): string {
+  return join(process.cwd(), ...AP_2310_BACK_DISK_PARTS);
+}
+
+/** `/api/supplier-media/aussie-pacific/2310_back.webp` */
+function isAp2310BackMediaRequest(parts: string[]): boolean {
+  if (parts.length < 2) return false;
+  const sup = String(parts[0] ?? "").trim().toLowerCase();
+  const file = String(parts[parts.length - 1] ?? "").trim().toLowerCase();
+  if (file !== "2310_back.webp") return false;
+  return sup === "aussie-pacific" || sup === "aussie pacific";
+}
+
+function tryLocalAp2310BackResponse(): Response | null {
+  const fp = localAp2310BackAbsPath();
+  if (!existsSync(fp)) {
+    return null;
+  }
+  const buf = readFileSync(fp);
+  return new Response(buf, {
+    status: 200,
+    headers: {
+      "Content-Type": "image/webp",
+      "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+    },
+  });
+}
 
 const BUCKET = process.env.SUPPLIER_IMAGES_BUCKET ?? "supplier-product-images";
 
@@ -123,6 +157,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ path?: string[]
   const filename = filenameFromParts(parts);
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   if (!baseUrl.trim()) {
+    const localEarly = isAp2310BackMediaRequest(parts) ? tryLocalAp2310BackResponse() : null;
+    if (localEarly) {
+      return localEarly;
+    }
     return new Response("Storage not configured", { status: 503 });
   }
 
@@ -146,6 +184,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ path?: string[]
   }
 
   if (!upstream || !upstream.ok) {
+    const local = isAp2310BackMediaRequest(parts) ? tryLocalAp2310BackResponse() : null;
+    if (local) {
+      return local;
+    }
     return new Response("Not found", { status: 404 });
   }
 
@@ -180,6 +222,15 @@ export async function HEAD(req: Request, ctx: { params: Promise<{ path?: string[
 
   const filename = filenameFromParts(parts);
   if (!(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim()) {
+    if (isAp2310BackMediaRequest(parts) && existsSync(localAp2310BackAbsPath())) {
+      return new Response(null, {
+        status: 200,
+        headers: {
+          "Content-Type": "image/webp",
+          "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+        },
+      });
+    }
     return new Response(null, { status: 503 });
   }
 
@@ -202,6 +253,15 @@ export async function HEAD(req: Request, ctx: { params: Promise<{ path?: string[
   }
 
   if (!upstream || !upstream.ok) {
+    if (isAp2310BackMediaRequest(parts) && existsSync(localAp2310BackAbsPath())) {
+      return new Response(null, {
+        status: 200,
+        headers: {
+          "Content-Type": "image/webp",
+          "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+        },
+      });
+    }
     return new Response(null, { status: 404 });
   }
 

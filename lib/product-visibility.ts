@@ -423,17 +423,24 @@ const BISLEY_MENS_PANTS_EXCLUSIVE_STYLE_CODES = new Set(
   ["BS021M", "BS10112R", "BS10112S"].map((c) => c.toUpperCase()),
 );
 
-/** Bisley SKUs that must appear only under Men's/Pants (never Workwear or any other category browse). */
+/**
+ * Bisley **or** Biz Care / Biz Collection SKUs (same style tokens) that must appear only under Men's/Pants
+ * (never Men's/Shirts, Workwear, or any other category browse).
+ */
 export function isBisleyMensPantsExclusiveListing(productName: string, meta?: WorkwearOnlyBrandMeta): boolean {
-  if (!isBisleyCatalogProduct(productName, meta)) {
-    return false;
-  }
   const hay = `${productName}\n${meta?.slug ?? ""}\n${meta?.description ?? ""}\n${meta?.category ?? ""}`;
   for (const raw of BISLEY_MENS_PANTS_EXCLUSIVE_STYLE_CODES) {
     const esc = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    if (new RegExp(`\\b${esc}\\b`, "i").test(hay)) {
+    if (!new RegExp(`\\b${esc}\\b`, "i").test(hay)) {
+      continue;
+    }
+    if (isBisleyCatalogProduct(productName, meta)) {
       return true;
     }
+    if (isBizCareOrCollectionListing(productName, meta?.slug ?? null, meta?.category ?? null)) {
+      return true;
+    }
+    return false;
   }
   return false;
 }
@@ -653,7 +660,9 @@ export function isWorkwearJb6962MiscExclusiveListing(productName: string, meta?:
 }
 
 const WORKWEAR_MISC_TO_PANTS_EXCLUSIVE_STYLE_CODES = new Set(
-  ["6MCP", "BPU6110", "BP6474T", "BP6474", "BPL6022"].map((c) => c.toUpperCase()),
+  ["6MCP", "BPU6110", "BP6474T", "BP6474", "BPL6022", "W93", "W83", "W63", "W61", "W88", "W87"].map((c) =>
+    c.toUpperCase(),
+  ),
 );
 
 /** Misc-style codes that must list only under Workwear/Pants (no other main or Workwear sub). */
@@ -2209,12 +2218,12 @@ export function isProductVisibleInCategoryBrowse(
     return mainSlug === WORKWEAR_MAIN_SLUG && subSlug === "miscellaneous";
   }
 
-  // Requested: 6MCP / BPU6110 / BP6474* / BPL6022 — Workwear/Pants only (never other mains or Workwear subs).
+  // Requested: 6MCP / BPU6110 / BP6474* / BPL6022 / Syzmik W93 W83 W63 W61 W88 W87 — Workwear/Pants only (never other mains or Workwear subs).
   if (isWorkwearMiscToPantsExclusiveListing(productName, meta)) {
     return mainSlug === WORKWEAR_MAIN_SLUG && subSlug === "pants";
   }
 
-  // Requested: Bisley BS021M / BS10112R / BS10112S — Men's/Pants only (never Workwear or any other browse grid).
+  // Requested: Bisley / Biz Collection BS021M / BS10112R / BS10112S (men's shorts) — Men's/Pants only (never Shirts / Workwear / other grids).
   if (isBisleyMensPantsExclusiveListing(productName, meta)) {
     return mainSlug === MENS_MAIN_SLUG && subSlug === "pants";
   }

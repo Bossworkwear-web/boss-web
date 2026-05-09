@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { getDiscountPercent } from "@/lib/discounts";
 import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
 import { FASHION_BIZ_STYLE_GENDER } from "@/lib/fashion-biz-gender.generated";
+import { isBizCollectionListing } from "@/lib/fashion-biz-gender-route";
 import {
   activeManualSaleRetail,
   storefrontRetailFromSupplierBaseOrFallback,
@@ -35,6 +36,10 @@ import {
   computePdpDescriptionBodyFromDetailFields,
   productCardDisplayLines,
 } from "@/lib/product-card-copy";
+import {
+  applyBizCollectionP29012ColorDisplayRules,
+  isBizCollectionP29012Listing,
+} from "@/lib/biz-collection-p29012-color-options";
 
 import { TopNav } from "@/app/components/top-nav";
 
@@ -62,6 +67,16 @@ function moveImageUrlToFront(urls: string[], wantSubstringUpper: string): string
     return urls;
   }
   return [urls[idx], ...urls.slice(0, idx), ...urls.slice(idx + 1)];
+}
+
+/** Biz Collection sync sometimes prefixes chip labels with `{STYLE} / ` — strip for storefront readability. */
+function stripBizCollectionStyleSlashColorPrefix(colors: string[], styleBaseUpper: string): string[] {
+  const esc = styleBaseUpper.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^\\s*${esc}\\s*\\/\\s*`, "i");
+  return colors.map((c) => {
+    const t = String(c).replace(re, "").trim();
+    return t.length > 0 ? t : String(c);
+  });
 }
 
 type ProductDetailPageProps = {
@@ -800,6 +815,15 @@ async function getDetailDataInternal(
     })();
 
     const relatedProducts = await (async () => {
+      const styleUpper =
+        fashionBizStyleCodeFromListing(product.name, product.slug ?? null)?.toUpperCase().replace(/-CLEARANCE$/i, "") ??
+        "";
+      if (
+        styleUpper === "S421ML" &&
+        isBizCollectionListing(product.name, product.slug ?? null, product.category ?? null)
+      ) {
+        return [];
+      }
       if (!supplierNameRaw || relatedStyleCodes.length === 0) {
         return [];
       }
@@ -910,6 +934,30 @@ async function getDetailDataInternal(
       }
     }
 
+    const productSlugLower = String(("slug" in product && product.slug ? product.slug : slug) ?? "")
+      .trim()
+      .toLowerCase();
+
+    // JB's Wear 4P: hide second gallery image (requested).
+    {
+      const supplierLcJb = supplierNameRaw.trim().toLowerCase();
+      const isJbWear =
+        supplierLcJb === "jb's wear" ||
+        supplierLcJb === "jbs wear" ||
+        supplierLcJb === "jbswear" ||
+        productSlugLower.startsWith("jb-") ||
+        productSlugLower.includes("jbswear");
+      if (isJbWear && normalizedImageUrls.length >= 2) {
+        const isJb4PStyle =
+          jbStyleCodeUpperFromProductSlug(productSlugLower) === "4P" ||
+          /(^|-)jb-4p(\b|-|$)/i.test(productSlugLower) ||
+          /\(\s*4P\s*\)\s*$/i.test(String(product.name ?? ""));
+        if (isJb4PStyle) {
+          normalizedImageUrls = normalizedImageUrls.filter((_, i) => i !== 1);
+        }
+      }
+    }
+
     let normalizedColorOptions = normalizeDbColors(product.available_colors);
     const derivedFromImages = deriveColorOptionsFromImageUrls(normalizedImageUrls);
     const isBisleyCatalog = isBisleyCatalogProduct(product.name, {
@@ -928,9 +976,6 @@ async function getDetailDataInternal(
     // Prefer derived combo colours (e.g. "Black / Gold") when we can extract them from filenames.
     const derivedHasCombo = derivedFromImages.some(isComboColorLabel);
     const dbHasCombo = normalizedColorOptions.some(isComboColorLabel);
-    const productSlugLower = String(("slug" in product && product.slug ? product.slug : slug) ?? "")
-      .trim()
-      .toLowerCase();
     // Match storefront branding rules: supplier row OR our `ap-…` import slug prefix.
     const isAussiePacificCatalog =
       supplierNameRaw.trim().toLowerCase() === "aussie pacific" || productSlugLower.startsWith("ap-");
@@ -1025,6 +1070,93 @@ async function getDetailDataInternal(
       supplier_name: supplierNameRaw || null,
       description: dbDescription,
     }, colorOptionsEffective);
+
+    // Biz Collection S421ML: sync may emit `Group` as a colour slot (mix-and-match metadata); it is not a garment colour.
+    // When gallery URLs are evenly partitioned per colour, drop the matching image block so chip index ↔ gallery stays aligned.
+    {
+      const fbStyle = fashionBizStyleCodeFromListing(product.name, productSlugLower);
+      const styleBase = fbStyle ? fbStyle.replace(/-CLEARANCE$/i, "") : "";
+      if (
+        styleBase === "S421ML" &&
+        isBizCollectionListing(
+          product.name,
+          productSlugLower,
+          "category" in product ? product.category : null,
+        )
+      ) {
+        const n = colorOptionsEffective.length;
+        const gi = colorOptionsEffective.findIndex((c) => String(c).trim().toLowerCase() === "group");
+        if (gi >= 0) {
+          colorOptionsEffective = colorOptionsEffective.filter(
+            (c) => String(c).trim().toLowerCase() !== "group",
+          );
+          const m = normalizedImageUrls.length;
+          if (n > 1 && m % n === 0) {
+            const stride = m / n;
+            const start = gi * stride;
+            normalizedImageUrls = [
+              ...normalizedImageUrls.slice(0, start),
+              ...normalizedImageUrls.slice(start + stride),
+            ];
+          }
+        }
+      }
+    }
+
+    // Biz Collection (WP10310, BS724M, …): sync may emit `Detail` as a colour slot (metadata); it is not a garment colour.
+    {
+      const fbStyle = fashionBizStyleCodeFromListing(product.name, productSlugLower);
+      const styleBase = fbStyle ? fbStyle.replace(/-CLEARANCE$/i, "") : "";
+      if (
+        ["WP10310", "BS724M"].includes(styleBase) &&
+        isBizCollectionListing(
+          product.name,
+          productSlugLower,
+          "category" in product ? product.category : null,
+        )
+      ) {
+        const n = colorOptionsEffective.length;
+        const gi = colorOptionsEffective.findIndex((c) => String(c).trim().toLowerCase() === "detail");
+        if (gi >= 0) {
+          colorOptionsEffective = colorOptionsEffective.filter(
+            (c) => String(c).trim().toLowerCase() !== "detail",
+          );
+          const m = normalizedImageUrls.length;
+          if (n > 1 && m % n === 0) {
+            const stride = m / n;
+            const start = gi * stride;
+            normalizedImageUrls = [
+              ...normalizedImageUrls.slice(0, start),
+              ...normalizedImageUrls.slice(start + stride),
+            ];
+          }
+        }
+      }
+    }
+
+    // Biz Collection WP6008: colour list uses `{STYLE} / Colour` chip labels — show only the colour name.
+    {
+      const fbStyle = fashionBizStyleCodeFromListing(product.name, productSlugLower);
+      const styleBase = fbStyle ? fbStyle.replace(/-CLEARANCE$/i, "") : "";
+      if (
+        styleBase === "WP6008" &&
+        isBizCollectionListing(
+          product.name,
+          productSlugLower,
+          "category" in product ? product.category : null,
+        )
+      ) {
+        colorOptionsEffective = stripBizCollectionStyleSlashColorPrefix(colorOptionsEffective, styleBase);
+      }
+    }
+
+    // Aussie Pacific: `sync-aussie-pacific-api.mjs` sorts colours alphabetically and concatenates gallery URLs in
+    // that order — match storefront chip order so index ↔ gallery stays aligned even when DB rows drift.
+    if (isAussiePacificCatalog && colorOptionsEffective.length >= 2) {
+      colorOptionsEffective = [...colorOptionsEffective].sort((a, b) =>
+        String(a).localeCompare(String(b)),
+      );
+    }
 
     // Blue Whale: when the first gallery image is clearly Yellow/Navy, make that the default selected colour.
     if ((supplierNameRaw ?? "").trim().toLowerCase() === "blue whale" && colorOptionsEffective.length >= 2) {
@@ -1138,6 +1270,47 @@ async function getDetailDataInternal(
       const bKind = classify(normalizedImageUrls[1] ?? "");
       if (aKind && bKind && aKind !== bKind && aKind !== "yellow") {
         normalizedImageUrls = [normalizedImageUrls[1]!, normalizedImageUrls[0]!];
+      }
+    }
+
+    // Bisley BP6412T: chip + image order must be Navy/Orange first, then Black/Yellow.
+    const treatAsBisleyCatalog =
+      isBisleyCatalog || supplierLc.includes("bisley") || productSlugLower.startsWith("bis-");
+    if ((productSlugLower.includes("bp6412t") || productCodeUpper === "BP6412T") && treatAsBisleyCatalog && normalizedImageUrls.length >= 2) {
+      const canonical = ["Navy/Orange", "Black/Yellow"];
+      colorOptionsEffective = canonical;
+      const classify = (u: string): "navy_orange" | "black_yellow" | null => {
+        const tail = String(u).split("/").pop() ?? String(u);
+        let file = tail;
+        try {
+          file = decodeURIComponent(tail);
+        } catch {
+          file = tail;
+        }
+        const up = (file.split("?")[0] ?? file).toUpperCase();
+        const hasNavy = /\bBPCT\b/.test(up) || /\bNAVY\b/.test(up);
+        const hasBlack = /\bBBLK\b/.test(up) || /\bBLACK\b/.test(up);
+        const hasOrange = /\bBF61\b/.test(up) || /\bORANGE\b/.test(up);
+        const hasYellow = /\bBF51\b/.test(up) || /\bYELLOW\b/.test(up);
+        if (hasNavy && hasOrange) return "navy_orange";
+        if (hasBlack && hasYellow) return "black_yellow";
+        // BP6412T on myadmin.pipanz.com uses TT09 (Navy/Orange) and TT05 (Black/Yellow).
+        if (/\bTT09\b/.test(up)) return "navy_orange";
+        if (/\bTT05\b/.test(up)) return "black_yellow";
+        return null;
+      };
+      const buckets = new Map<"navy_orange" | "black_yellow", string>();
+      for (const u of normalizedImageUrls) {
+        const k = classify(u);
+        if (k && !buckets.has(k)) buckets.set(k, u);
+      }
+      const ordered = [buckets.get("navy_orange"), buckets.get("black_yellow")].filter(
+        (u): u is string => Boolean(u),
+      );
+      if (ordered.length === 2) {
+        const used = new Set(ordered);
+        const rest = normalizedImageUrls.filter((u) => !used.has(u));
+        normalizedImageUrls = [...ordered, ...rest];
       }
     }
 
@@ -1411,6 +1584,16 @@ async function getDetailDataInternal(
           normalizedImageUrls = ordered;
         }
       }
+    }
+
+    if (
+      isBizCollectionP29012Listing({
+        slug: product.slug ?? null,
+        name: product.name,
+        supplierName: supplierNameRaw || null,
+      })
+    ) {
+      colorOptionsEffective = applyBizCollectionP29012ColorDisplayRules(colorOptionsEffective);
     }
 
     const mappedProduct: ProductDetailData = {

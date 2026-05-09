@@ -1,5 +1,5 @@
 import { TopNavClient } from "@/app/components/top-nav-client";
-import { buildNavSubcategoriesByMain } from "@/lib/catalog";
+import { buildNavSubcategoriesByMain, MAIN_CATEGORIES } from "@/lib/catalog";
 
 /**
  * Server wrapper: subcategory lists are computed once per request and passed into the client nav so
@@ -7,5 +7,6 @@ import { buildNavSubcategoriesByMain } from "@/lib/catalog";
  */
 export function TopNav() {
   const navSubsByMain = buildNavSubcategoriesByMain();
-  return <TopNavClient navSubsByMain={navSubsByMain} />;
+  const mainCategories = MAIN_CATEGORIES.map((c) => ({ slug: c.slug, label: c.label }));
+  return <TopNavClient navSubsByMain={navSubsByMain} mainCategories={mainCategories} />;
 }

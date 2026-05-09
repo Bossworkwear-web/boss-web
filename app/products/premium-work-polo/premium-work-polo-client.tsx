@@ -18,6 +18,12 @@ import { storefrontLeadingSupplierBrand } from "@/lib/product-display-name";
 import { restrictBisleyOrangeOnlyProductColorsIfNeeded } from "@/lib/product-visibility";
 import { STORE_MAIN_SHELL_CLASS } from "@/lib/store-main-shell";
 import { SITE_PAGE_INSET_X_CLASS } from "@/lib/site-layout";
+import {
+  applyBizCollectionP29012ColorDisplayRules,
+  isBizCollectionP29012Listing,
+} from "@/lib/biz-collection-p29012-color-options";
+import { isBizCollectionListing } from "@/lib/fashion-biz-gender-route";
+import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
 import { uploadStoreCheckoutReferenceImages } from "@/app/orders/actions";
 import { addCartItem, getCartItems, removeCartItem, updateCartItem, type CartItem } from "@/lib/cart";
 import { productPathSegment } from "@/lib/product-path-slug";
@@ -216,6 +222,36 @@ function effectivePdpColorOptions(product: ProductDetailData): string[] {
   // Syzmik ZJ260: `Product_Multi` gallery assets are not a purchasable colour.
   if (slugLower.includes("zj260")) {
     return restricted.filter((c) => String(c).trim().toLowerCase() !== "multi");
+  }
+  {
+    const fbStyle = fashionBizStyleCodeFromListing(product.name, product.slug ?? null);
+    const styleBase = fbStyle ? fbStyle.replace(/-CLEARANCE$/i, "") : "";
+    if (isBizCollectionListing(product.name, product.slug ?? null, product.category ?? null)) {
+      if (styleBase === "S421ML") {
+        restricted = restricted.filter((c) => String(c).trim().toLowerCase() !== "group");
+      }
+      if (styleBase === "WP10310" || styleBase === "BS724M") {
+        restricted = restricted.filter((c) => String(c).trim().toLowerCase() !== "detail");
+      }
+      if (styleBase === "WP6008") {
+        const esc = styleBase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const re = new RegExp(`^\\s*${esc}\\s*\\/\\s*`, "i");
+        restricted = restricted.map((c) => {
+          const t = String(c).replace(re, "").trim();
+          return t.length > 0 ? t : String(c);
+        });
+      }
+    }
+  }
+  if (isBizCollectionP29012Listing(product)) {
+    return applyBizCollectionP29012ColorDisplayRules(restricted);
+  }
+  const supLc = (product.supplierName ?? "").trim().toLowerCase();
+  if (
+    (supLc === "aussie pacific" || slugLower.startsWith("ap-") || /\baussie\s+pacific\b/i.test(product.supplierName ?? "")) &&
+    restricted.length >= 2
+  ) {
+    return [...restricted].sort((a, b) => String(a).localeCompare(String(b)));
   }
   return restricted;
 }
@@ -853,6 +889,47 @@ function galleryHasStructuredProductShots(urls: readonly string[]): boolean {
   return false;
 }
 
+/** Style `2310` PDP: hero shots sit at gallery indices 2 / 4 / 6 (1-based 3 / 5 / 7), not proportional buckets. */
+function isAp2310ProductSlug(slug: string | null | undefined): boolean {
+  const s = String(slug ?? "")
+    .trim()
+    .toLowerCase();
+  if (!s) return false;
+  if (/(?:^|-)ap-2310(?:$|-)/.test(s)) return true;
+  if (s.startsWith("ap-") && /(?:^|[-_])2310(?:$|[-_])/.test(s)) return true;
+  return false;
+}
+
+function isAussiePacificListingContext(slug?: string | null, supplierName?: string | null): boolean {
+  const sup = String(supplierName ?? "").trim().toLowerCase();
+  const slugLower = String(slug ?? "").trim().toLowerCase();
+  return (
+    sup === "aussie pacific" ||
+    slugLower.startsWith("ap-") ||
+    /\baussie\s+pacific\b/i.test(supplierName ?? "")
+  );
+}
+
+/**
+ * PDP shows `Aussie Pacific / 2310` from `displayProductCode`, but the URL slug may not contain `ap-2310`
+ * (manual rows, redirects, or legacy imports). Match style code on the payload, not only the slug.
+ */
+function isAp2310StorefrontProduct(
+  p: Pick<ProductDetailData, "slug" | "supplierName" | "displayProductCode" | "name" | "description">,
+): boolean {
+  if (isAp2310ProductSlug(p.slug)) return true;
+  if (!isAussiePacificListingContext(p.slug, p.supplierName)) return false;
+  const code = String(p.displayProductCode ?? "")
+    .trim()
+    .replace(/^W(?=[0-9])/i, "")
+    .trim();
+  if (/^2310$/i.test(code)) return true;
+  const head = String(p.name ?? "").trim().split(/\r?\n/)[0]?.trim() ?? "";
+  if (/\s-\s*W?2310\s*$/i.test(head)) return true;
+  if (/^\s*style\s*code\s*:\s*W?2310\b/im.test(String(p.description ?? ""))) return true;
+  return false;
+}
+
 /**
  * Pick the hero image for a colour from gallery URLs (`_Product_` / `_Talent_` tokens).
  * Prefers flat `_Product_` shots so the colour swatch matches the garment, not on-model `_Talent_` marketing.
@@ -868,11 +945,32 @@ function pickPrimaryImageForColor(color: string, urls: string[], opts?: GalleryC
     return list[0]!;
   }
 
-  const pc = opts?.jbPrefixCount ?? 0;
   const colOpts = opts?.colorOptions;
+  // AP 2310: three combo colours — intended flat-lay heroes are at 3rd / 5th / 7th slots in the import gallery.
+  // Map by chip order (Aussie Pacific chips are sorted alphabetically: Black/Green, Black/Orange, Black/Red).
+  if (opts?.isAp2310Listing && colOpts && colOpts.length === 3 && list.length >= 7) {
+    const ci = indexOfColorOption(colOpts, trimmed);
+    if (ci >= 0 && ci < 3) {
+      const heroes: readonly number[] = [2, 4, 6];
+      const hi = heroes[ci]!;
+      if (hi < list.length) {
+        return list[hi]!;
+      }
+    }
+  }
+
+  const pc = opts?.jbPrefixCount ?? 0;
   /** Aussie Pacific: never use filename heuristics — always gallery index × stride vs colour chips. */
   if (opts?.forceOpaqueColorIndex) {
-    const sync = galleryIndexSyncHeroForColor(trimmed, list, colOpts, true);
+    const slugLc = (opts.productSlug ?? "").trim().toLowerCase();
+    if (slugLc === "ap-1111" && colOpts && list.length > 2) {
+      const blackIdx = indexOfColorOption(colOpts, "Black");
+      const selIdx = indexOfColorOption(colOpts, trimmed);
+      if (blackIdx >= 0 && selIdx === blackIdx) {
+        return list[2]!;
+      }
+    }
+    const sync = galleryIndexSyncHeroForColor(trimmed, list, colOpts, true, opts.opaqueProportionalBuckets ?? false);
     if (sync) {
       return sync;
     }
@@ -1016,6 +1114,24 @@ function galleryStrideImagesPerColor(colorCount: number, galleryLength: number):
   return Math.floor(galleryLength / colorCount);
 }
 
+/** Hero row index for colour `colorIdx` when splitting `galleryLength` images across `colorCount` buckets (Aussie Pacific). */
+function opaqueHeroImageIndexForColor(colorIdx: number, colorCount: number, galleryLength: number): number {
+  if (colorCount <= 1 || galleryLength <= 1) {
+    return 0;
+  }
+  const i = Math.min(colorCount - 1, Math.max(0, colorIdx));
+  return Math.min(galleryLength - 1, Math.floor((i * galleryLength) / colorCount));
+}
+
+/** Colour bucket index for a gallery image index (inverse of `opaqueHeroImageIndexForColor`). */
+function opaqueColorIndexForGalleryImage(imageIdx: number, colorCount: number, galleryLength: number): number {
+  if (colorCount <= 1 || galleryLength <= 1) {
+    return 0;
+  }
+  const idx = Math.min(galleryLength - 1, Math.max(0, imageIdx));
+  return Math.min(colorCount - 1, Math.floor((idx * colorCount) / galleryLength));
+}
+
 /**
  * Signed / opaque gallery URLs (e.g. Aussie Pacific S3 keys): filenames do not carry colour tokens, but the
  * import order usually matches `available_colors` / `colorOptions` left-to-right with one hero per colour.
@@ -1025,6 +1141,7 @@ function galleryImageIndexSyncColor(
   colors: readonly string[],
   galleryUrls: readonly string[],
   forceOpaque = false,
+  proportionalBuckets = false,
 ): string | null {
   if (colors.length <= 1 || galleryUrls.length <= 1) {
     return null;
@@ -1034,6 +1151,13 @@ function galleryImageIndexSyncColor(
   }
   const idx = galleryUrls.indexOf(imageUrl);
   if (idx < 0) {
+    return null;
+  }
+  if (proportionalBuckets && forceOpaque) {
+    const ci = opaqueColorIndexForGalleryImage(idx, colors.length, galleryUrls.length);
+    if (ci >= 0 && ci < colors.length) {
+      return colors[ci] ?? null;
+    }
     return null;
   }
   const stride = galleryStrideImagesPerColor(colors.length, galleryUrls.length);
@@ -1050,6 +1174,7 @@ function galleryIndexSyncHeroForColor(
   list: readonly string[],
   colOpts: readonly string[] | undefined,
   forceOpaque = false,
+  proportionalBuckets = false,
 ): string | null {
   const trimmed = color.trim();
   if (!trimmed || !colOpts || colOpts.length <= 1 || list.length <= 1) {
@@ -1060,6 +1185,13 @@ function galleryIndexSyncHeroForColor(
   }
   const idx = indexOfColorOption(colOpts, trimmed);
   if (idx < 0) {
+    return null;
+  }
+  if (proportionalBuckets && forceOpaque) {
+    const base = opaqueHeroImageIndexForColor(idx, colOpts.length, list.length);
+    if (base >= 0 && base < list.length) {
+      return list[base] ?? null;
+    }
     return null;
   }
   const stride = galleryStrideImagesPerColor(colOpts.length, list.length);
@@ -1148,6 +1280,24 @@ function inferBestColorForGalleryImage(
     return colors[0];
   }
 
+  const slugLcAp = (pickOpts?.productSlug ?? "").trim().toLowerCase();
+  if (slugLcAp === "ap-1111" && galleryUrls.length > 2) {
+    const thumbIdx = galleryUrls.indexOf(imageUrl);
+    if (thumbIdx === 2) {
+      const bi = indexOfColorOption(colors, "Black");
+      if (bi >= 0) {
+        return colors[bi] ?? null;
+      }
+    }
+  }
+  if (pickOpts?.isAp2310Listing && galleryUrls.length >= 7 && colors.length === 3) {
+    const thumbIdx = galleryUrls.indexOf(imageUrl);
+    const chipIdx = thumbIdx === 2 ? 0 : thumbIdx === 4 ? 1 : thumbIdx === 6 ? 2 : -1;
+    if (chipIdx >= 0) {
+      return colors[chipIdx] ?? null;
+    }
+  }
+
   const pc = pickOpts?.jbPrefixCount ?? 0;
   if (
     pickOpts?.isJbWear &&
@@ -1192,6 +1342,7 @@ function inferBestColorForGalleryImage(
     colors,
     galleryUrls,
     pickOpts?.forceOpaqueColorIndex,
+    pickOpts?.opaqueProportionalBuckets ?? false,
   );
   if (opaqueSyncColor != null) {
     return opaqueSyncColor;
@@ -1282,6 +1433,18 @@ export type GalleryColorPickOpts = {
    * and skip filename-based “structured” detection that blocks index sync.
    */
   forceOpaqueColorIndex?: boolean;
+  /**
+   * Aussie Pacific: image count per colour may differ — use proportional buckets instead of requiring
+   * `galleryLength % colorCount === 0` (Bisley positional galleries keep uniform stride).
+   */
+  opaqueProportionalBuckets?: boolean;
+  /** For product-specific gallery ↔ chip fixes (e.g. `ap-1111`). */
+  productSlug?: string | null;
+  /**
+   * Aussie Pacific style `2310`: hero URLs are at gallery indices 2 / 4 / 6; set from slug and/or
+   * `displayProductCode` because the storefront slug may omit `ap-2310`.
+   */
+  isAp2310Listing?: boolean;
 };
 
 function parseJbGalleryUrls(raw: readonly string[]): { urls: string[]; prefixCount: number } {
@@ -1665,11 +1828,11 @@ function HeroImageLightbox({
       >
         Close
       </button>
-      <div className="relative z-10 max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-auto">
+      <div className="relative z-10 flex max-h-[min(88dvh,92vh)] max-w-[min(96vw,min(100vw-2rem,56rem))] items-center justify-center">
         <img
           src={src}
           alt={alt}
-          className="block h-auto w-auto max-h-none max-w-none cursor-zoom-out"
+          className="h-auto max-h-[min(88dvh,92vh)] w-auto max-w-full cursor-zoom-out object-contain"
           loading="eager"
           decoding="async"
           onClick={onClose}
@@ -1726,6 +1889,48 @@ function ProductDescriptionFormattedBlock({ block }: { block: string }) {
   );
 }
 
+function bizCollectionFormatFabricBullets(block: string): string {
+  const out: string[] = [];
+  const lines = block.split(/\r?\n/);
+  for (const raw of lines) {
+    const idx = raw.toLowerCase().indexOf("fabric:");
+    if (idx < 0) {
+      out.push(raw);
+      continue;
+    }
+    const before = raw.slice(0, idx);
+    const after = raw.slice(idx + "fabric:".length);
+    const head = `${before}Fabric:`.trimEnd();
+    if (head.trim().length > 0) {
+      out.push(head);
+    } else {
+      out.push("Fabric:");
+    }
+
+    const semi = after.indexOf(";");
+    const fabricPart = (semi >= 0 ? after.slice(0, semi) : after).trim();
+    const tailPart = (semi >= 0 ? after.slice(semi + 1) : "").trim();
+
+    const items = fabricPart
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (items.length === 0 && fabricPart.length > 0) {
+      out.push(`\t- ${fabricPart}`);
+    } else {
+      for (const it of items) {
+        out.push(`\t- ${it}`);
+      }
+    }
+
+    if (tailPart.length > 0) {
+      out.push(tailPart);
+    }
+  }
+  return out.join("\n");
+}
+
 export function PremiumWorkPoloClient({
   product,
   placements,
@@ -1775,6 +1980,14 @@ export function PremiumWorkPoloClient({
       ),
     [product.name, product.slug, product.supplierName, productCode, productName],
   );
+  const slugLowerForBrand = (product.slug ?? "").trim().toLowerCase();
+  const nameLowerForBrand = (product.name ?? "").trim().toLowerCase();
+  const supLowerForBrand = (product.supplierName ?? "").trim().toLowerCase();
+  /** Fashion-Biz slugs use `…-bizcollection-{style}`; supplier row is sometimes not literally "Biz Collection". */
+  const isBizCollection =
+    supLowerForBrand.includes("biz collection") ||
+    slugLowerForBrand.includes("bizcollection") ||
+    nameLowerForBrand.includes("biz collection");
   const brandAndModelLine = useMemo(() => {
     if (product.displayBrandSkuLine && product.displayBrandSkuLine.trim().length > 0) {
       return product.displayBrandSkuLine.trim();
@@ -1865,18 +2078,29 @@ export function PremiumWorkPoloClient({
     const isJb = isJbWearStorefrontProduct(product.slug, product.supplierName);
     const slugLower = (product.slug ?? "").trim().toLowerCase();
     const supLower = (product.supplierName ?? "").trim().toLowerCase();
+    const isAussiePacific =
+      supLower === "aussie pacific" || slugLower.startsWith("ap-") || /\baussie\s+pacific\b/i.test(product.supplierName ?? "");
     const forceOpaqueColorIndex =
-      supLower === "aussie pacific" ||
-      slugLower.startsWith("ap-") ||
-      bisleySlugUsesPositionalColorGallery(slugLower);
+      isAussiePacific || bisleySlugUsesPositionalColorGallery(slugLower);
     return {
       colorOptions,
       jbPrefixCount: galleryParsed.prefixCount,
       isJbWear: isJb,
       jbStyleCodeUpper: jbStyleCodeUpperFromSlug(product.slug),
       forceOpaqueColorIndex,
+      opaqueProportionalBuckets: isAussiePacific,
+      productSlug: product.slug ?? null,
+      isAp2310Listing: isAp2310StorefrontProduct(product),
     };
-  }, [colorOptions, galleryParsed.prefixCount, product.slug, product.supplierName]);
+  }, [
+    colorOptions,
+    galleryParsed.prefixCount,
+    product.description,
+    product.displayProductCode,
+    product.name,
+    product.slug,
+    product.supplierName,
+  ]);
 
   const ppePlainOnly = useMemo(
     () =>
@@ -1964,15 +2188,18 @@ export function PremiumWorkPoloClient({
     const { urls, prefixCount } = parseJbGalleryUrls(urlsForPick);
     const g = galleryForUrls(urls);
     const supLower = (product.supplierName ?? "").trim().toLowerCase();
+    const isAussiePacific =
+      supLower === "aussie pacific" || slugLower.startsWith("ap-") || /\baussie\s+pacific\b/i.test(product.supplierName ?? "");
     const forceOpaqueColorIndex =
-      supLower === "aussie pacific" ||
-      slugLower.startsWith("ap-") ||
-      bisleySlugUsesPositionalColorGallery(slugLower);
+      isAussiePacific || bisleySlugUsesPositionalColorGallery(slugLower);
     return pickPrimaryImageForColor(initialColors[0] ?? "", g, {
       colorOptions: initialColors,
       jbPrefixCount: prefixCount,
       isJbWear: isJbWearStorefrontProduct(product.slug, product.supplierName),
       forceOpaqueColorIndex,
+      opaqueProportionalBuckets: isAussiePacific,
+      productSlug: product.slug ?? null,
+      isAp2310Listing: isAp2310StorefrontProduct(product),
     });
   });
   const [cartMessage, setCartMessage] = useState<string>("");
@@ -2713,7 +2940,10 @@ export function PremiumWorkPoloClient({
                   .map((block) => block.trim())
                   .filter(Boolean)
                   .map((block, i) => (
-                    <ProductDescriptionFormattedBlock key={i} block={block} />
+                    <ProductDescriptionFormattedBlock
+                      key={i}
+                      block={isBizCollection ? bizCollectionFormatFabricBullets(block) : block}
+                    />
                   ))}
               </div>
             </div>
@@ -2860,11 +3090,7 @@ export function PremiumWorkPoloClient({
               }
             >
               <div
-                className={
-                  colourCount >= 12
-                    ? "grid grid-cols-2 gap-1.5 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6"
-                    : "grid grid-cols-2 gap-2 sm:grid-cols-3"
-                }
+                className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 ${colourCount >= 12 ? "gap-1.5" : "gap-2"}`}
               >
                 {colorOptions.map((color) => {
                   const isActive = selectedColor === color;
@@ -2877,7 +3103,7 @@ export function PremiumWorkPoloClient({
                         setActiveImage(pickPrimaryImageForColor(color, galleryImages, galleryPickOpts));
                       }}
                       title={color}
-                      className={`min-h-[2.75rem] rounded-lg border px-2 py-2 text-left text-[1.02rem] font-semibold leading-snug transition sm:min-h-0 sm:px-2.5 sm:py-2 sm:text-[1.08rem] md:text-[1.05rem] ${
+                      className={`min-h-[2.75rem] rounded-lg border px-2 py-2 text-center text-[1.02rem] font-semibold leading-snug transition sm:min-h-0 sm:px-2.5 sm:py-2 sm:text-[1.08rem] md:text-[1.05rem] ${
                         manyColours ? "line-clamp-2 sm:line-clamp-2" : ""
                       } ${
                         isActive

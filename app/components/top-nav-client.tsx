@@ -9,7 +9,7 @@ import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CartIcon, MenuIcon, SearchIcon, UserIcon } from "@/app/components/icons";
 import { LOGO_SRC } from "@/app/generated/logo";
 import { clearCartItems, subscribeCartUpdates, useCartCount } from "@/lib/cart";
-import { MAIN_CATEGORIES, type StorefrontNavSub } from "@/lib/catalog";
+import type { StorefrontNavSub } from "@/lib/catalog";
 import { readSidebarNavClient } from "@/lib/sidebar-nav";
 import { SITE_PAGE_INSET_X_CLASS } from "@/lib/site-layout";
 
@@ -31,6 +31,7 @@ type ProductSidebarNav = {
 };
 
 type CategoryNavListProps = {
+  mainCategories: { slug: string; label: string }[];
   productSidebarNav: ProductSidebarNav | null;
   pathname: string;
   onNavigate?: () => void;
@@ -41,6 +42,7 @@ const SERVICE_HREF = "/service";
 
 /** Vertical list — mobile drawer / overlay menu. */
 function CategoryNavList({
+  mainCategories,
   productSidebarNav,
   pathname,
   onNavigate,
@@ -56,7 +58,7 @@ function CategoryNavList({
       aria-label="Store menu"
       className={`store-ui-sidebar-nav-rail flex flex-col gap-[0.525rem] pt-[20px] ${navClassName.trim().length > 0 ? navClassName : "pb-4"}`}
     >
-      {MAIN_CATEGORIES.map((main) => {
+      {mainCategories.map((main) => {
         const isProductContext = pathname.startsWith("/products/");
         const mainHref = `/categories/${main.slug}`;
         const routeShowsThisMain =
@@ -112,19 +114,21 @@ function CategoryInlineNav({
   pathname,
   productSidebarNav,
   navSubsByMain,
+  mainCategories,
 }: {
   pathname: string;
   productSidebarNav: ProductSidebarNav | null;
   navSubsByMain: Record<string, readonly StorefrontNavSub[]>;
+  mainCategories: { slug: string; label: string }[];
 }) {
   const pillBase =
-    "inline-flex shrink-0 items-center rounded-full px-2 py-1 text-[0.825rem] font-semibold leading-snug transition sm:px-2.5 sm:py-1.5 sm:text-[0.95rem]";
+    "inline-flex shrink-0 items-center rounded-full px-2.5 py-1.5 text-[1.075rem] font-semibold leading-snug transition sm:px-3 sm:py-2 sm:text-[1.235rem]";
   const pillIdle = "text-brand-navy/90 hover:bg-brand-surface hover:text-brand-navy";
   const pillActive = "bg-brand-navy text-white";
 
   return (
     <nav aria-label="Store navigation" className="flex max-w-full flex-wrap items-center justify-center gap-1 sm:gap-1.5">
-      {MAIN_CATEGORIES.map((main) => {
+      {mainCategories.map((main) => {
         const subCategories = navSubsByMain[main.slug] ?? [];
         const hasSubs = subCategories.length > 0;
         const isProductContext = pathname.startsWith("/products/");
@@ -303,7 +307,13 @@ function HeaderSearchToggle({
   );
 }
 
-export function TopNavClient({ navSubsByMain }: { navSubsByMain: Record<string, readonly StorefrontNavSub[]> }) {
+export function TopNavClient({
+  navSubsByMain,
+  mainCategories,
+}: {
+  navSubsByMain: Record<string, readonly StorefrontNavSub[]>;
+  mainCategories: { slug: string; label: string }[];
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const headerShellRef = useRef<HTMLElement | null>(null);
@@ -506,6 +516,7 @@ export function TopNavClient({ navSubsByMain }: { navSubsByMain: Record<string, 
               pathname={pathname}
               productSidebarNav={productSidebarNav}
               navSubsByMain={navSubsByMain}
+              mainCategories={mainCategories}
             />
           </div>
 
@@ -596,6 +607,7 @@ export function TopNavClient({ navSubsByMain }: { navSubsByMain: Record<string, 
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
               <CategoryNavList
+                mainCategories={mainCategories}
                 productSidebarNav={productSidebarNav}
                 pathname={pathname}
                 onNavigate={() => setMobileNavOpen(false)}

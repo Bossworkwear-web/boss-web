@@ -402,6 +402,9 @@ function resolveWorkwearCategoryBrowseSubSlug(
   if (isWorkwearCoverallOverallExclusiveListing(item.name, workwearRowMeta)) {
     return "coverall";
   }
+  if (isWorkwearMiscToPantsExclusiveListing(item.name, workwearRowMeta)) {
+    return "pants";
+  }
   if (resolved == null || resolved === "") {
     return null;
   }
@@ -437,9 +440,6 @@ function resolveWorkwearCategoryBrowseSubSlug(
   }
   if (isJbHiVisOr6dvrlWorkwearJacketsExclusiveListing(item.name, workwearRowMeta)) {
     return "jackets";
-  }
-  if (isWorkwearMiscToPantsExclusiveListing(item.name, workwearRowMeta)) {
-    return "pants";
   }
   if (isJbMensPantsFeaturesToWorkwearPantsExclusiveListing(item.name, workwearRowMeta)) {
     return "pants";

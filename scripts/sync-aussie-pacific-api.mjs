@@ -14,7 +14,8 @@
  *   npm run sync:aussie-pacific -- --limit=250
  */
 import { createClient } from "@supabase/supabase-js";
-import { loadEnvLocal } from "./lib/load-env.mjs";
+import { getBossWebRoot, loadEnvLocal } from "./lib/load-env.mjs";
+import { maybeAppendAp2310BlackRedBackFallback } from "./lib/ap-2310-back-fallback.mjs";
 
 loadEnvLocal();
 
@@ -122,7 +123,8 @@ function apColourNormKey(s) {
     .trim()
     .toLowerCase()
     .normalize("NFKC")
-    .replace(/\s+/g, " ");
+    .replace(/\s+/g, " ")
+    .replace(/\s*\/\s*/g, "/");
 }
 
 /** API examples use `colour`, but some integrations expose `color` or a small object. */
@@ -267,8 +269,14 @@ function buildProductRow(apiProduct) {
    *   would collapse front+back stride).
    */
   const orderedImageUrls = [];
+  /** @type {Map<string, string[]>} */
+  const urlsByColourNorm = new Map();
   for (const colour of colors) {
     const want = apColourNormKey(colour);
+    if (!urlsByColourNorm.has(want)) {
+      urlsByColourNorm.set(want, []);
+    }
+    const colourBucket = urlsByColourNorm.get(want);
     const variantsForColour = list
       .filter((v) => apColourNormKey(variantColourLabel(v)) === want)
       .sort((a, b) =>
@@ -282,6 +290,7 @@ function buildProductRow(apiProduct) {
         if (!url.startsWith("http") || seenThisColour.has(url)) continue;
         seenThisColour.add(url);
         orderedImageUrls.push(url);
+        colourBucket.push(url);
       }
     }
   }
@@ -297,9 +306,21 @@ function buildProductRow(apiProduct) {
     if (ca !== cb) return ca.localeCompare(cb);
     return String(a?.size ?? "").localeCompare(String(b?.size ?? ""), undefined, { numeric: true });
   });
-  const imageUrls =
+  const orderedWith2310Back =
     orderedImageUrls.length > 0
-      ? orderedImageUrls
+      ? maybeAppendAp2310BlackRedBackFallback(
+          orderedImageUrls,
+          urlsByColourNorm,
+          colors,
+          styleCode,
+          getBossWebRoot(),
+          { warn: (msg) => console.warn(msg) },
+        )
+      : orderedImageUrls;
+
+  const imageUrls =
+    orderedWith2310Back.length > 0
+      ? orderedWith2310Back
       : dedupeOrderedHttpUrls(
           variantsSortedForFallback
             .flatMap((v) => (Array.isArray(v?.images?.data) ? v.images.data : []))
