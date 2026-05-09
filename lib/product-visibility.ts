@@ -14,7 +14,6 @@ import { FASHION_BIZ_STYLE_GENDER } from "@/lib/fashion-biz-gender.generated";
 import { FASHION_BIZ_LISTING_SUBSLUG } from "@/lib/fashion-biz-listing-subslug.generated";
 import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
 import { resolveHealthCareBrowseSubSlug } from "@/lib/health-care-browse";
-import { isStorefrontAp2310Slug } from "@/lib/ap-2310-gallery-back";
 
 const WORKWEAR_MAIN_SLUG = "workwear";
 const MENS_MAIN_SLUG = "mens";
@@ -32,11 +31,6 @@ const BIZ_COLLECTION_KIDS_ONLY_PANTS_CODES = new Set(
 const BIZ_COLLECTION_KIDS_ONLY_T_SHIRTS_CODES = new Set(
   (bizCollectionKidsOnlyTShirtsCodes as readonly string[]).map((c) => c.toUpperCase()),
 );
-
-/** Aussie Pacific `ap-2310`: omit from grids/search until gallery ↔ colour chips stay aligned (PDP direct link still works). */
-function isAp2310ExcludedFromStorefrontProductLists(meta?: WorkwearOnlyBrandMeta): boolean {
-  return isStorefrontAp2310Slug(meta?.slug ?? null);
-}
 
 /** Biz Collection SKUs that only appear under Kid's (jackets / pants / t-shirts kids lines). */
 function isBizCollectionKidsExclusiveListing(productName: string, storeSlug?: string | null): boolean {
@@ -2198,9 +2192,6 @@ export function isProductVisibleInCategoryBrowse(
   if (meta?.storefront_hidden) {
     return false;
   }
-  if (isAp2310ExcludedFromStorefrontProductLists(meta)) {
-    return false;
-  }
   if (isBizCorporatesCatalogProduct(productName, meta)) {
     return false;
   }
@@ -2839,9 +2830,6 @@ export function isProductVisibleOnHomeStorefront(productName: string, meta?: Wor
   if (meta?.storefront_hidden) {
     return false;
   }
-  if (isAp2310ExcludedFromStorefrontProductLists(meta)) {
-    return false;
-  }
   if (isBizCorporatesCatalogProduct(productName, meta)) {
     return false;
   }
@@ -2869,9 +2857,6 @@ export function isProductVisibleOnHomeStorefront(productName: string, meta?: Wor
  */
 export function isProductEligibleForSiteSearch(productName: string, meta?: WorkwearOnlyBrandMeta): boolean {
   if (meta?.storefront_hidden) {
-    return false;
-  }
-  if (isAp2310ExcludedFromStorefrontProductLists(meta)) {
     return false;
   }
   return !isBizCorporatesCatalogProduct(productName, meta);
