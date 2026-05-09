@@ -10,6 +10,14 @@ export const AP_2310_BACK_MEDIA_URL = "/api/supplier-media/aussie-pacific/2310_b
 
 export const AP_2310_BACK_REPO_SEGMENTS = ["data", "supplier", "Aussie Pacific", "2310_back.webp"];
 
+/** 0-based: back image is the 8th slot — after the first seven catalogue images. */
+export const AP_2310_BACK_INSERT_INDEX = 7;
+
+function isAp2310BackUrl(u) {
+  const s = String(u).toLowerCase();
+  return s.includes("2310_back.webp") && s.includes("aussie-pacific");
+}
+
 export function normalizeApColourKey(s) {
   return String(s ?? "")
     .trim()
@@ -64,12 +72,14 @@ export function maybeAppendAp2310BlackRedBackFallback(
   if (!existsSync(localPath)) {
     opts.warn?.(
       `[sync-aussie-pacific] Style 2310: Black/Red has ${red.length} image(s) but other colours have up to ${maxOther}; ` +
-        `add ${AP_2310_BACK_REPO_SEGMENTS.join("/")} to append ${AP_2310_BACK_MEDIA_URL}.`,
+        `add ${AP_2310_BACK_REPO_SEGMENTS.join("/")} to insert ${AP_2310_BACK_MEDIA_URL} after image 7.`,
     );
     return orderedImageUrls;
   }
-  if (orderedImageUrls.includes(AP_2310_BACK_MEDIA_URL)) {
-    return orderedImageUrls;
+
+  const base = orderedImageUrls.filter((u) => !isAp2310BackUrl(u));
+  if (base.length >= AP_2310_BACK_INSERT_INDEX) {
+    return [...base.slice(0, AP_2310_BACK_INSERT_INDEX), AP_2310_BACK_MEDIA_URL, ...base.slice(AP_2310_BACK_INSERT_INDEX)];
   }
-  return [...orderedImageUrls, AP_2310_BACK_MEDIA_URL];
+  return [...base, AP_2310_BACK_MEDIA_URL];
 }

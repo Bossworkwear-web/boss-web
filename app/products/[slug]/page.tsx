@@ -40,6 +40,11 @@ import {
   applyBizCollectionP29012ColorDisplayRules,
   isBizCollectionP29012Listing,
 } from "@/lib/biz-collection-p29012-color-options";
+import {
+  repositionAp2310BlackRedBackAfterSeventh,
+  urlLooksLikeAp2310BackAsset,
+  isStorefrontAp2310Slug,
+} from "@/lib/ap-2310-gallery-back";
 
 import { TopNav } from "@/app/components/top-nav";
 
@@ -1594,6 +1599,14 @@ async function getDetailDataInternal(
       })
     ) {
       colorOptionsEffective = applyBizCollectionP29012ColorDisplayRules(colorOptionsEffective);
+    }
+
+    if (
+      isAussiePacificCatalog &&
+      isStorefrontAp2310Slug(productSlugLower) &&
+      normalizedImageUrls.some((u) => urlLooksLikeAp2310BackAsset(String(u)))
+    ) {
+      normalizedImageUrls = repositionAp2310BlackRedBackAfterSeventh(normalizedImageUrls);
     }
 
     const mappedProduct: ProductDetailData = {

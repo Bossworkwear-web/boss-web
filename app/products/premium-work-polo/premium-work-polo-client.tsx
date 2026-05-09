@@ -1290,9 +1290,10 @@ function inferBestColorForGalleryImage(
       }
     }
   }
-  if (pickOpts?.isAp2310Listing && galleryUrls.length >= 7 && colors.length === 3) {
+  if (pickOpts?.isAp2310Listing && colors.length === 3) {
     const thumbIdx = galleryUrls.indexOf(imageUrl);
-    const chipIdx = thumbIdx === 2 ? 0 : thumbIdx === 4 ? 1 : thumbIdx === 6 ? 2 : -1;
+    const chipIdx =
+      thumbIdx === 2 ? 0 : thumbIdx === 4 ? 1 : thumbIdx === 6 || thumbIdx === 7 ? 2 : -1;
     if (chipIdx >= 0) {
       return colors[chipIdx] ?? null;
     }
