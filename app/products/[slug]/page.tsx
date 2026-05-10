@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { getDiscountPercent } from "@/lib/discounts";
 import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
 import { FASHION_BIZ_STYLE_GENDER } from "@/lib/fashion-biz-gender.generated";
-import { isBizCollectionListing } from "@/lib/fashion-biz-gender-route";
+import { isBizCareOrCollectionListing, isBizCollectionListing } from "@/lib/fashion-biz-gender-route";
 import {
   activeManualSaleRetail,
   storefrontRetailFromSupplierBaseOrFallback,
@@ -40,6 +40,23 @@ import {
   applyBizCollectionP29012ColorDisplayRules,
   isBizCollectionP29012Listing,
 } from "@/lib/biz-collection-p29012-color-options";
+import {
+  BIZ_COLLECTION_DETAIL_METADATA_STYLE_BASES,
+  BIZ_COLLECTION_GROUP_METADATA_STYLE_BASES,
+  isBizCareCid940uExcludedColourChip,
+  isBizCollectionDetailMetadataColourChip,
+  isBizCollectionGroupMetadataColourChip,
+} from "@/lib/biz-collection-metadata-colour-chips";
+import {
+  filterAp2211ColorOptions,
+  filterAp2211ImageUrls,
+  isStorefrontAp2211Slug,
+} from "@/lib/ap-2211-storefront";
+import { filterAp3309ColorOptions, isStorefrontAp3309Slug } from "@/lib/ap-3309-storefront";
+import {
+  isStorefrontYesChefCh234mPdp,
+  isYesChefCh234mExcludedColourChip,
+} from "@/lib/yes-chef-ch234m-pdp-colour";
 import {
   repositionAp2310BlackRedBackAfterSeventh,
   urlLooksLikeAp2310BackAsset,
@@ -1076,24 +1093,24 @@ async function getDetailDataInternal(
       description: dbDescription,
     }, colorOptionsEffective);
 
-    // Biz Collection S421ML: sync may emit `Group` as a colour slot (mix-and-match metadata); it is not a garment colour.
+    // Biz Collection S421ML / S421LL: sync may emit `Group` as a colour slot (mix-and-match metadata); it is not a garment colour.
     // When gallery URLs are evenly partitioned per colour, drop the matching image block so chip index ↔ gallery stays aligned.
     {
       const fbStyle = fashionBizStyleCodeFromListing(product.name, productSlugLower);
       const styleBase = fbStyle ? fbStyle.replace(/-CLEARANCE$/i, "") : "";
       if (
-        styleBase === "S421ML" &&
-        isBizCollectionListing(
+        BIZ_COLLECTION_GROUP_METADATA_STYLE_BASES.has(styleBase) &&
+        isBizCareOrCollectionListing(
           product.name,
           productSlugLower,
           "category" in product ? product.category : null,
         )
       ) {
         const n = colorOptionsEffective.length;
-        const gi = colorOptionsEffective.findIndex((c) => String(c).trim().toLowerCase() === "group");
+        const gi = colorOptionsEffective.findIndex((c) => isBizCollectionGroupMetadataColourChip(c));
         if (gi >= 0) {
           colorOptionsEffective = colorOptionsEffective.filter(
-            (c) => String(c).trim().toLowerCase() !== "group",
+            (c) => !isBizCollectionGroupMetadataColourChip(c),
           );
           const m = normalizedImageUrls.length;
           if (n > 1 && m % n === 0) {
@@ -1108,24 +1125,79 @@ async function getDetailDataInternal(
       }
     }
 
-    // Biz Collection (WP10310, BS724M, …): sync may emit `Detail` as a colour slot (metadata); it is not a garment colour.
+    // Biz Care / Biz Collection (WP10310, BS724M, LB8200, CH248L, …): sync may emit `Detail` / `Detail / Multi` (metadata); not a garment colour.
     {
       const fbStyle = fashionBizStyleCodeFromListing(product.name, productSlugLower);
       const styleBase = fbStyle ? fbStyle.replace(/-CLEARANCE$/i, "") : "";
       if (
-        ["WP10310", "BS724M"].includes(styleBase) &&
-        isBizCollectionListing(
+        BIZ_COLLECTION_DETAIL_METADATA_STYLE_BASES.has(styleBase) &&
+        isBizCareOrCollectionListing(
           product.name,
           productSlugLower,
           "category" in product ? product.category : null,
         )
       ) {
         const n = colorOptionsEffective.length;
-        const gi = colorOptionsEffective.findIndex((c) => String(c).trim().toLowerCase() === "detail");
+        const gi = colorOptionsEffective.findIndex((c) => isBizCollectionDetailMetadataColourChip(c));
         if (gi >= 0) {
           colorOptionsEffective = colorOptionsEffective.filter(
-            (c) => String(c).trim().toLowerCase() !== "detail",
+            (c) => !isBizCollectionDetailMetadataColourChip(c),
           );
+          const m = normalizedImageUrls.length;
+          if (n > 1 && m % n === 0) {
+            const stride = m / n;
+            const start = gi * stride;
+            normalizedImageUrls = [
+              ...normalizedImageUrls.slice(0, start),
+              ...normalizedImageUrls.slice(start + stride),
+            ];
+          }
+        }
+      }
+    }
+
+    // Biz Care CID940U: drop placeholder chip `Teal/01` when gallery is evenly split per colour.
+    {
+      const fbStyle = fashionBizStyleCodeFromListing(product.name, productSlugLower);
+      const styleBase = fbStyle ? fbStyle.replace(/-CLEARANCE$/i, "") : "";
+      if (
+        styleBase === "CID940U" &&
+        isBizCareOrCollectionListing(
+          product.name,
+          productSlugLower,
+          "category" in product ? product.category : null,
+        )
+      ) {
+        const n = colorOptionsEffective.length;
+        const gi = colorOptionsEffective.findIndex((c) => isBizCareCid940uExcludedColourChip(c));
+        if (gi >= 0) {
+          colorOptionsEffective = colorOptionsEffective.filter((c) => !isBizCareCid940uExcludedColourChip(c));
+          const m = normalizedImageUrls.length;
+          if (n > 1 && m % n === 0) {
+            const stride = m / n;
+            const start = gi * stride;
+            normalizedImageUrls = [
+              ...normalizedImageUrls.slice(0, start),
+              ...normalizedImageUrls.slice(start + stride),
+            ];
+          }
+        }
+      }
+    }
+
+    // Yes Chef CH234M: drop `Black White Check` chip when gallery is evenly split per colour.
+    {
+      const ch234mMeta = {
+        slug: productSlugLower,
+        category: "category" in product ? product.category : null,
+        description: dbDescription,
+        supplier_name: supplierNameRaw || null,
+      };
+      if (isStorefrontYesChefCh234mPdp(product.name, ch234mMeta)) {
+        const n = colorOptionsEffective.length;
+        const gi = colorOptionsEffective.findIndex((c) => isYesChefCh234mExcludedColourChip(c));
+        if (gi >= 0) {
+          colorOptionsEffective = colorOptionsEffective.filter((c) => !isYesChefCh234mExcludedColourChip(c));
           const m = normalizedImageUrls.length;
           if (n > 1 && m % n === 0) {
             const stride = m / n;
@@ -1599,6 +1671,16 @@ async function getDetailDataInternal(
       })
     ) {
       colorOptionsEffective = applyBizCollectionP29012ColorDisplayRules(colorOptionsEffective);
+    }
+
+    if (isAussiePacificCatalog && isStorefrontAp2211Slug(productSlugLower)) {
+      const colorsSortedFull = [...colorOptionsEffective].sort((a, b) => String(a).localeCompare(String(b)));
+      normalizedImageUrls = filterAp2211ImageUrls(normalizedImageUrls, colorsSortedFull);
+      colorOptionsEffective = filterAp2211ColorOptions(colorOptionsEffective);
+    }
+
+    if (isAussiePacificCatalog && isStorefrontAp3309Slug(productSlugLower)) {
+      colorOptionsEffective = filterAp3309ColorOptions(colorOptionsEffective);
     }
 
     if (

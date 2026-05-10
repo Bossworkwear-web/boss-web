@@ -200,7 +200,7 @@ export function CrmWorkspace({
                     ) : null}
                     {stage === "completion" ? (
                       <Link
-                        href={`/admin/store-orders/internal-order?quote_id=${encodeURIComponent(q.id)}`}
+                        href={`/admin/customer-quote?quote_id=${encodeURIComponent(q.id)}`}
                         className="block w-full rounded-lg border border-emerald-700/30 bg-emerald-50 px-2 py-1.5 text-center text-[11px] font-semibold text-emerald-900 transition hover:border-emerald-700/50 hover:bg-emerald-100/80"
                       >
                         Create order
@@ -843,7 +843,7 @@ function QuoteLeadDetailDialog({ quote, onClose }: { quote: CrmQuoteRow; onClose
             {quote.pipeline_stage === "completion" ? (
               <div className="mt-3 border-t border-slate-100 pt-3">
                 <Link
-                  href={`/admin/store-orders/internal-order?quote_id=${encodeURIComponent(quote.id)}`}
+                  href={`/admin/customer-quote?quote_id=${encodeURIComponent(quote.id)}`}
                   className="inline-flex w-full items-center justify-center rounded-lg border border-emerald-700/35 bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-950 transition hover:bg-emerald-100"
                 >
                   Create order

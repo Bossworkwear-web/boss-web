@@ -406,6 +406,13 @@ pre {
     grid-column: 1 / -1 !important;
   }
 
+  body.click-up-sheet-print-mode .click-up-sheet-print-logo-ref-row {
+    grid-column: 1 / -1 !important;
+    display: grid !important;
+    gap: 1.25rem !important;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) !important;
+  }
+
   body.click-up-sheet-print-mode .click-up-sheet-print-order-4 {
     gap: 0.35rem !important;
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
@@ -468,6 +475,115 @@ pre {
   body.click-up-sheet-print-mode .admin-panel-print-content-row {
     padding: 0 !important;
     max-width: none !important;
+  }
+}
+
+/* Customer quote (admin): print — hide sidebar; full-width table */
+@media print {
+  html:has(body.customer-quote-print-mode) {
+    font-size: 120% !important;
+  }
+
+  body.customer-quote-print-mode {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.customer-quote-print-mode aside.fixed.bottom-0.left-0.top-0 {
+    display: none !important;
+  }
+
+  body.customer-quote-print-mode .admin-panel-print-main {
+    padding-left: 0 !important;
+    overflow: visible !important;
+  }
+
+  body.customer-quote-print-mode .admin-panel-print-zoom {
+    zoom: 1 !important;
+  }
+
+  body.customer-quote-print-mode .admin-panel-print-mobile-banner {
+    display: none !important;
+  }
+
+  body.customer-quote-print-mode .admin-root-print-shell {
+    background: #fff !important;
+  }
+
+  body.customer-quote-print-mode .admin-panel-print-content-row {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  body.customer-quote-print-mode .customer-quote-print-scroll {
+    overflow: visible !important;
+  }
+
+  /* Only the Quote sheet box (#customer-quote-print-only), not page header / Load template */
+  body.customer-quote-print-mode * {
+    visibility: hidden;
+  }
+
+  body.customer-quote-print-mode #customer-quote-print-only,
+  body.customer-quote-print-mode #customer-quote-print-only * {
+    visibility: visible;
+  }
+
+  body.customer-quote-print-mode #customer-quote-print-only {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    /* Outer sheet frame (white border per Customer Quote UI) */
+    border: 2pt solid #ffffff !important;
+  }
+
+  /*
+   * Company / client header grid: keep white rules for print (matches on-screen Quote chrome).
+   */
+  body.customer-quote-print-mode #customer-quote-print-only .customer-quote-header-grid {
+    border: 2pt solid #ffffff !important;
+    border-style: solid !important;
+    border-color: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.customer-quote-print-mode #customer-quote-print-only .customer-quote-header-grid > .grid {
+    border-bottom: 1pt solid #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.customer-quote-print-mode #customer-quote-print-only .customer-quote-header-grid > .grid > div:first-child {
+    border-right: 1pt solid #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /*
+   * Quote line-items table: horizontal rules only (black). Print preview/PDF engines
+   * sometimes keep vertical borders from utility classes — reset all sides then set bottom + table top.
+   */
+  body.customer-quote-print-mode #customer-quote-print-only table.customer-quote-items-table {
+    border: 0 !important;
+    border-top: 1pt solid #0f172a !important;
+    border-collapse: collapse !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.customer-quote-print-mode #customer-quote-print-only table.customer-quote-items-table th,
+  body.customer-quote-print-mode #customer-quote-print-only table.customer-quote-items-table td {
+    border: 0 !important;
+    border-bottom: 1pt solid #0f172a !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
 

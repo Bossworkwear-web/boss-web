@@ -3,73 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { assertAdminSession } from "@/lib/admin-auth";
-import { sendStoreOrderShippedEmail } from "@/lib/store-order-email";
 import { createSupabaseAdminClient } from "@/lib/supabase";
-
-export type MarkShippedResult = { ok: true } | { ok: false; error: string };
-
-export async function markStoreOrderShipped(orderId: string, trackingNumberRaw: string): Promise<MarkShippedResult> {
-  const trackingNumber = trackingNumberRaw.trim();
-  if (!/^[0-9a-f-]{36}$/i.test(orderId)) {
-    return { ok: false, error: "Invalid order." };
-  }
-  if (trackingNumber.length < 6 || trackingNumber.length > 64) {
-    return { ok: false, error: "Enter a valid tracking number (6–64 characters)." };
-  }
-
-  let supabase: ReturnType<typeof createSupabaseAdminClient>;
-  try {
-    supabase = createSupabaseAdminClient();
-  } catch {
-    return { ok: false, error: "Database not configured." };
-  }
-
-  const { data: row, error: fetchErr } = await supabase
-    .from("store_orders")
-    .select(
-      "id, status, customer_email, customer_name, order_number, tracking_token, carrier, tracking_number",
-    )
-    .eq("id", orderId)
-    .maybeSingle();
-
-  if (fetchErr || !row) {
-    return { ok: false, error: "Order not found." };
-  }
-  if (row.status === "cancelled") {
-    return { ok: false, error: "Order is cancelled." };
-  }
-  if (row.status === "shipped" && row.tracking_number) {
-    return { ok: false, error: "This order is already marked shipped. Edit tracking in Supabase if needed." };
-  }
-
-  const shippedAt = new Date().toISOString();
-  const { error: updErr } = await supabase
-    .from("store_orders")
-    .update({
-      status: "shipped",
-      tracking_number: trackingNumber,
-      shipped_at: shippedAt,
-    })
-    .eq("id", orderId);
-
-  if (updErr) {
-    return { ok: false, error: updErr.message };
-  }
-
-  void sendStoreOrderShippedEmail({
-    to: row.customer_email,
-    customerName: row.customer_name,
-    orderNumber: row.order_number,
-    trackingToken: row.tracking_token,
-    trackingNumber,
-    carrier: row.carrier,
-  });
-
-  revalidatePath("/admin/store-orders");
-  revalidatePath(`/admin/store-orders/${orderId}/docket`);
-  revalidatePath(`/orders/track/${row.tracking_token}`);
-  return { ok: true };
-}
 
 export type MoveStoreOrderToWarehouseResult = { ok: true } | { ok: false; error: string };
 
@@ -117,10 +51,51 @@ export async function updateStoreOrderInvoiceReference(
   return { ok: true };
 }
 
+const HOLD_NOTE_MAX = 2000;
+
+/** Admin Store orders list: hold checkbox + optional note. */
+export async function updateStoreOrderHoldFields(formData: FormData): Promise<void> {
+  try {
+    await assertAdminSession();
+  } catch {
+    return;
+  }
+
+  const id = String(formData.get("orderId") ?? "").trim();
+  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    return;
+  }
+
+  const holdRaw = formData.get("hold_process");
+  const holdProcess = holdRaw === "1" || holdRaw === "on" || holdRaw === "true";
+
+  const note = String(formData.get("hold_note") ?? "").trim().slice(0, HOLD_NOTE_MAX);
+  const holdNote = note.length > 0 ? note : null;
+
+  let supabase: ReturnType<typeof createSupabaseAdminClient>;
+  try {
+    supabase = createSupabaseAdminClient();
+  } catch {
+    return;
+  }
+
+  const { error } = await supabase
+    .from("store_orders")
+    .update({ hold_process: holdProcess, hold_note: holdNote })
+    .eq("id", id);
+
+  if (error) {
+    console.error("[updateStoreOrderHoldFields]", error.message);
+    return;
+  }
+
+  revalidatePath("/admin/store-orders");
+}
+
 /**
  * Marks the order shipped with a warehouse handoff timestamp so it appears on
  * Dashboard → Warehouse → Worker → Completed store orders.
- * Does not send customer email (use Mark shipped on Store orders for AusPost + email).
+ * Does not send customer email.
  */
 export async function moveStoreOrderToWarehouseCompleted(orderId: string): Promise<MoveStoreOrderToWarehouseResult> {
   try {

@@ -16,6 +16,19 @@ export type InternalOrderTemplate = {
   currency: string;
   carrier: string;
   deliveryFeeCents: number;
+  /** CRM quote_request company (Customer Quote sheet header). */
+  quoteCompanyName?: string;
+  /** CRM quote_request phone (Client contact). */
+  quoteContactPhone?: string;
+  /** Extra UI state when reopening a saved Customer Quote sheet. */
+  customerQuoteDraft?: {
+    orderDate: string;
+    dueDate: string;
+    setupFeeCents: number;
+    quoteDeliveryFeeCents: number;
+    depositCents: number;
+    status: "unpaid" | "paid" | "processing" | "shipped" | "cancelled";
+  };
   items: Array<{
     productId: string;
     productName: string;
@@ -27,6 +40,41 @@ export type InternalOrderTemplate = {
     size: string | null;
     placementsJson: string;
     notes: string | null;
+    gender?: string | null;
+    quoteGroupId?: number | null;
+  }>;
+};
+
+/** v1 payload stored in `quote_requests.admin_customer_quote_sheet` and posted as `customer_quote_sheet_json`. */
+export type AdminCustomerQuoteSheetV1 = {
+  v: 1;
+  baseOrderNumber: string;
+  customerEmail: string;
+  customerName: string;
+  deliveryAddress: string;
+  companyName: string;
+  clientContact: string;
+  orderDate: string;
+  dueDate: string;
+  setupFeeCents: number;
+  quoteDeliveryFeeCents: number;
+  depositCents: number;
+  currency: string;
+  carrier: string;
+  status: "unpaid" | "paid" | "processing" | "shipped" | "cancelled";
+  items: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    unitPriceCents: number;
+    lineTotalCents: number;
+    serviceType: string | null;
+    color: string | null;
+    size: string | null;
+    placementsJson: string;
+    notes: string | null;
+    gender: string;
+    quoteGroupId: number;
   }>;
 };
 
@@ -95,12 +143,33 @@ export async function loadInternalOrderTemplate(formData: FormData): Promise<voi
   redirect("/admin/store-orders/internal-order?error=missing_lookup_fields");
 }
 
+/** Same as {@link loadInternalOrderTemplate} but redirects into Customer Quote. */
+export async function loadCustomerQuoteTemplate(formData: FormData): Promise<void> {
+  const orderNumber = normalizeText(formData.get("order_number"));
+  const customerId = normalizeText(formData.get("customer_id"));
+  const companyName = normalizeText(formData.get("company_name"));
+
+  if (orderNumber) {
+    redirect(`/admin/customer-quote?from=${encodeURIComponent(orderNumber)}`);
+  }
+  if (customerId && companyName) {
+    redirect(
+      `/admin/customer-quote?customer_id=${encodeURIComponent(customerId)}&company=${encodeURIComponent(companyName)}`,
+    );
+  }
+  redirect("/admin/customer-quote?error=missing_lookup_fields");
+}
+
 export async function createInternalOrderFromTemplate(formData: FormData): Promise<void> {
   try {
     await assertAdminSession();
   } catch {
     redirect("/admin/login");
   }
+
+  const source = normalizeText(formData.get("source"));
+  const returnBase =
+    source === "customer-quote" ? "/admin/customer-quote" : "/admin/store-orders/internal-order";
 
   let baseOrderNumber = normalizeText(formData.get("base_order_number"));
   if (!baseOrderNumber) {
@@ -113,7 +182,7 @@ export async function createInternalOrderFromTemplate(formData: FormData): Promi
   const currency = normalizeText(formData.get("currency")) || "AUD";
   const carrier = normalizeText(formData.get("carrier")) || "Australia Post";
   const status = normalizeText(formData.get("status")) || "paid";
-  const deliveryFeeCents = Math.max(0, safeInt(formData.get("delivery_fee_cents"), 0));
+  let deliveryFeeCents = Math.max(0, safeInt(formData.get("delivery_fee_cents"), 0));
 
   const itemsRaw = normalizeText(formData.get("items_json"));
   let items: InternalOrderTemplate["items"] = [];
@@ -122,6 +191,12 @@ export async function createInternalOrderFromTemplate(formData: FormData): Promi
     if (!Array.isArray(parsed)) throw new Error("items_json must be an array");
     items = parsed.map((r) => {
       const rec = r as Record<string, unknown>;
+      const gender = normalizeNullableText(rec.gender);
+      const baseNotes = normalizeNullableText(rec.notes);
+      const notes =
+        gender === "M" || gender === "F"
+          ? `${gender}${baseNotes ? ` ${baseNotes}` : ""}`.trim() || null
+          : baseNotes;
       return {
         productId: normalizeText(rec.productId),
         productName: normalizeText(rec.productName),
@@ -132,22 +207,34 @@ export async function createInternalOrderFromTemplate(formData: FormData): Promi
         color: normalizeNullableText(rec.color),
         size: normalizeNullableText(rec.size),
         placementsJson: normalizePlacementsJson(rec.placementsJson),
-        notes: normalizeNullableText(rec.notes),
+        notes,
       };
     });
   } catch {
-    redirect("/admin/store-orders/internal-order?error=invalid_items_json");
+    redirect(`${returnBase}?error=invalid_items_json`);
   }
 
   if (!customerEmail || !customerName || !deliveryAddress) {
-    redirect("/admin/store-orders/internal-order?error=missing_fields");
+    redirect(`${returnBase}?error=missing_fields`);
   }
   if (items.length === 0) {
-    redirect("/admin/store-orders/internal-order?error=no_items");
+    redirect(`${returnBase}?error=no_items`);
   }
 
-  const subtotalCents = items.reduce((sum, it) => sum + Math.max(0, safeInt(it.lineTotalCents, 0)), 0);
-  const totalCents = subtotalCents + deliveryFeeCents;
+  const linesSubtotalCents = items.reduce((sum, it) => sum + Math.max(0, safeInt(it.lineTotalCents, 0)), 0);
+  let subtotalCents = linesSubtotalCents;
+  let totalCents = linesSubtotalCents + deliveryFeeCents;
+
+  if (source === "customer-quote") {
+    const setupFeeCents = Math.max(0, safeInt(formData.get("quote_setup_fee_cents"), 0));
+    const quoteDeliveryFeeCents = Math.max(0, safeInt(formData.get("quote_delivery_fee_cents"), 0));
+    const depositCents = Math.max(0, safeInt(formData.get("quote_deposit_cents"), 0));
+    const taxableSubtotalCents = linesSubtotalCents + setupFeeCents + quoteDeliveryFeeCents;
+    const gstCents = Math.round(taxableSubtotalCents * 0.1);
+    subtotalCents = taxableSubtotalCents;
+    deliveryFeeCents = gstCents;
+    totalCents = taxableSubtotalCents + gstCents - depositCents;
+  }
 
   const supabase = createSupabaseAdminClient();
 
@@ -159,7 +246,7 @@ export async function createInternalOrderFromTemplate(formData: FormData): Promi
     .limit(2000);
   if (listErr) {
     const short = listErr.message.length > 700 ? `${listErr.message.slice(0, 700)}…` : listErr.message;
-    redirect(`/admin/store-orders/internal-order?error=${encodeURIComponent(short)}`);
+    redirect(`${returnBase}?error=${encodeURIComponent(short)}`);
   }
 
   const re = new RegExp(`^${escapeRegExp(baseOrderNumber)}_([0-9]+)$`);
@@ -196,7 +283,7 @@ export async function createInternalOrderFromTemplate(formData: FormData): Promi
   if (insErr || !orderRow?.id) {
     const msg = insErr?.message ?? "Could not create order";
     const short = msg.length > 700 ? `${msg.slice(0, 700)}…` : msg;
-    redirect(`/admin/store-orders/internal-order?error=${encodeURIComponent(short)}`);
+    redirect(`${returnBase}?error=${encodeURIComponent(short)}`);
   }
 
   const orderId = orderRow.id as string;
@@ -225,11 +312,201 @@ export async function createInternalOrderFromTemplate(formData: FormData): Promi
   if (itemsErr) {
     await supabase.from("store_orders").delete().eq("id", orderId);
     const short = itemsErr.message.length > 700 ? `${itemsErr.message.slice(0, 700)}…` : itemsErr.message;
-    redirect(`/admin/store-orders/internal-order?error=${encodeURIComponent(short)}`);
+    redirect(`${returnBase}?error=${encodeURIComponent(short)}`);
   }
 
   revalidatePath("/admin/store-orders");
-  redirect(`/admin/store-orders/internal-order?created=${encodeURIComponent(newOrderNumber)}`);
+  revalidatePath("/admin/customer-quote");
+  redirect(`${returnBase}?created=${encodeURIComponent(newOrderNumber)}`);
+}
+
+function parseAdminCustomerQuoteSheetFromForm(formData: FormData): AdminCustomerQuoteSheetV1 {
+  const raw = normalizeText(formData.get("customer_quote_sheet_json"));
+  if (!raw) {
+    throw new Error("missing_sheet");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error("invalid_sheet_json");
+  }
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("invalid_sheet");
+  }
+  const o = parsed as Record<string, unknown>;
+  if (o.v !== 1) {
+    throw new Error("invalid_sheet_version");
+  }
+  const itemsRaw = o.items;
+  if (!Array.isArray(itemsRaw)) {
+    throw new Error("invalid_sheet_items");
+  }
+  const items = itemsRaw.map((row) => {
+    const rec = row as Record<string, unknown>;
+    return {
+      productId: normalizeText(rec.productId),
+      productName: normalizeText(rec.productName),
+      quantity: Math.max(0, safeInt(rec.quantity, 0)),
+      unitPriceCents: Math.max(0, safeInt(rec.unitPriceCents, 0)),
+      lineTotalCents: Math.max(0, safeInt(rec.lineTotalCents, 0)),
+      serviceType: normalizeNullableText(rec.serviceType),
+      color: normalizeNullableText(rec.color),
+      size: normalizeNullableText(rec.size),
+      placementsJson: normalizePlacementsJson(rec.placementsJson),
+      notes: normalizeNullableText(rec.notes),
+      gender: normalizeText(rec.gender),
+      quoteGroupId: Math.max(1, safeInt(rec.quoteGroupId, 1)),
+    };
+  });
+  const statusRaw = normalizeText(o.status) || "unpaid";
+  const status =
+    statusRaw === "paid" ||
+    statusRaw === "unpaid" ||
+    statusRaw === "processing" ||
+    statusRaw === "shipped" ||
+    statusRaw === "cancelled"
+      ? statusRaw
+      : "unpaid";
+  return {
+    v: 1,
+    baseOrderNumber: normalizeText(o.baseOrderNumber),
+    customerEmail: normalizeText(o.customerEmail),
+    customerName: normalizeText(o.customerName),
+    deliveryAddress: normalizeText(o.deliveryAddress),
+    companyName: normalizeText(o.companyName),
+    clientContact: normalizeText(o.clientContact),
+    orderDate: normalizeText(o.orderDate),
+    dueDate: normalizeText(o.dueDate),
+    setupFeeCents: Math.max(0, safeInt(o.setupFeeCents, 0)),
+    quoteDeliveryFeeCents: Math.max(0, safeInt(o.quoteDeliveryFeeCents, 0)),
+    depositCents: Math.max(0, safeInt(o.depositCents, 0)),
+    currency: normalizeText(o.currency) || "AUD",
+    carrier: normalizeText(o.carrier) || "Australia Post",
+    status,
+    items,
+  };
+}
+
+function adminSheetToInternalTemplate(sheet: AdminCustomerQuoteSheetV1): InternalOrderTemplate {
+  return {
+    baseOrderNumber: sheet.baseOrderNumber,
+    customerEmail: sheet.customerEmail,
+    customerName: sheet.customerName,
+    deliveryAddress: sheet.deliveryAddress,
+    currency: sheet.currency,
+    carrier: sheet.carrier,
+    deliveryFeeCents: sheet.quoteDeliveryFeeCents,
+    quoteCompanyName: sheet.companyName || undefined,
+    quoteContactPhone: sheet.clientContact || undefined,
+    customerQuoteDraft: {
+      orderDate: sheet.orderDate,
+      dueDate: sheet.dueDate,
+      setupFeeCents: sheet.setupFeeCents,
+      quoteDeliveryFeeCents: sheet.quoteDeliveryFeeCents,
+      depositCents: sheet.depositCents,
+      status: sheet.status === "paid" || sheet.status === "unpaid" ? sheet.status : "unpaid",
+    },
+    items: sheet.items.map((it) => ({
+      productId: it.productId,
+      productName: it.productName,
+      quantity: it.quantity,
+      unitPriceCents: it.unitPriceCents,
+      lineTotalCents: it.lineTotalCents,
+      serviceType: it.serviceType,
+      color: it.color,
+      size: it.size,
+      placementsJson: it.placementsJson,
+      notes: it.notes,
+      gender: it.gender || null,
+      quoteGroupId: it.quoteGroupId,
+    })),
+  };
+}
+
+/** Save Customer Quote spreadsheet to `quote_requests` (list + reopen). Does not create a store order. */
+export async function saveCustomerQuoteSheet(formData: FormData): Promise<void> {
+  try {
+    await assertAdminSession();
+  } catch {
+    redirect("/admin/login");
+  }
+
+  const returnBase = "/admin/customer-quote";
+  let sheet: AdminCustomerQuoteSheetV1;
+  try {
+    sheet = parseAdminCustomerQuoteSheetFromForm(formData);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "invalid_sheet";
+    redirect(`${returnBase}?error=${encodeURIComponent(msg)}`);
+  }
+
+  if (!sheet.customerEmail || !sheet.customerName || !sheet.deliveryAddress.trim()) {
+    redirect(`${returnBase}?error=missing_fields`);
+  }
+  if (sheet.items.length === 0) {
+    redirect(`${returnBase}?error=no_items`);
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const existingId = normalizeText(formData.get("quote_request_id"));
+
+  const companyName = sheet.companyName.trim() || sheet.customerName.trim() || "Quote draft";
+  const first = sheet.items[0]!;
+  const legacyProductId = isUuid(first.productId) ? first.productId : null;
+  const legacyQty =
+    sheet.items.reduce((s, it) => s + Math.max(0, safeInt(it.quantity, 0)), 0) || null;
+
+  if (existingId && isUuid(existingId)) {
+    const { error: upErr } = await supabase
+      .from("quote_requests")
+      .update({
+        company_name: companyName,
+        contact_name: sheet.customerName,
+        email: sheet.customerEmail,
+        phone: sheet.clientContact.trim() ? sheet.clientContact.trim() : null,
+        product_id: legacyProductId,
+        quantity: legacyQty,
+        service_type: first.serviceType,
+        product_color: first.color,
+        notes: first.notes,
+        admin_customer_quote_sheet: sheet,
+      })
+      .eq("id", existingId);
+    if (upErr) {
+      const short = upErr.message.length > 700 ? `${upErr.message.slice(0, 700)}…` : upErr.message;
+      redirect(`${returnBase}?error=${encodeURIComponent(short)}`);
+    }
+    revalidatePath("/admin/customer-quote");
+    redirect(`${returnBase}?quote_id=${encodeURIComponent(existingId)}&quote_saved=1`);
+  }
+
+  const { data: ins, error: insErr } = await supabase
+    .from("quote_requests")
+    .insert({
+      company_name: companyName,
+      contact_name: sheet.customerName,
+      email: sheet.customerEmail,
+      phone: sheet.clientContact.trim() ? sheet.clientContact.trim() : null,
+      product_id: legacyProductId,
+      quantity: legacyQty,
+      service_type: first.serviceType,
+      product_color: first.color,
+      notes: first.notes,
+      lead_source: "admin_customer_quote",
+      admin_customer_quote_sheet: sheet,
+    })
+    .select("id")
+    .single();
+
+  if (insErr || !ins?.id) {
+    const msg = insErr?.message ?? "Could not save quote";
+    const short = msg.length > 700 ? `${msg.slice(0, 700)}…` : msg;
+    redirect(`${returnBase}?error=${encodeURIComponent(short)}`);
+  }
+
+  revalidatePath("/admin/customer-quote");
+  redirect(`${returnBase}?quote_id=${encodeURIComponent(String(ins.id))}&quote_saved=1`);
 }
 
 /**
@@ -426,6 +703,7 @@ export async function getTemplateFromQuoteRequest(quoteRequestId: string): Promi
       embroidery_position_ids,
       printing_position_id,
       printing_position_ids,
+      admin_customer_quote_sheet,
       products ( name ),
       customer_profiles ( delivery_address, billing_address )
     `,
@@ -440,14 +718,35 @@ export async function getTemplateFromQuoteRequest(quoteRequestId: string): Promi
     throw new Error("Quote request not found");
   }
 
-  const row = qr as unknown as QuoteRequestRowForInternalOrder;
-  const email = normalizeText(row.email);
+  const row = qr as unknown as QuoteRequestRowForInternalOrder & {
+    admin_customer_quote_sheet?: unknown;
+  };
+
+  const sheetRaw = row.admin_customer_quote_sheet;
+  if (sheetRaw && typeof sheetRaw === "object") {
+    const cand = sheetRaw as Record<string, unknown>;
+    if (cand.v === 1 && Array.isArray(cand.items) && cand.items.length > 0) {
+      try {
+        const fd = new FormData();
+        fd.set("customer_quote_sheet_json", JSON.stringify(sheetRaw));
+        const sheet = parseAdminCustomerQuoteSheetFromForm(fd);
+        if (sheet.customerEmail.trim() && sheet.items.length > 0) {
+          return adminSheetToInternalTemplate(sheet);
+        }
+      } catch {
+        // Fall through to CRM-derived template.
+      }
+    }
+  }
+
+  const rowCrm = row as unknown as QuoteRequestRowForInternalOrder;
+  const email = normalizeText(rowCrm.email);
   if (!email) {
     throw new Error("Quote request has no email");
   }
 
-  const embIds = uniqOrderedPositionIds(row.embroidery_position_ids, row.embroidery_position_id);
-  const prtIds = uniqOrderedPositionIds(row.printing_position_ids, row.printing_position_id);
+  const embIds = uniqOrderedPositionIds(rowCrm.embroidery_position_ids, rowCrm.embroidery_position_id);
+  const prtIds = uniqOrderedPositionIds(rowCrm.printing_position_ids, rowCrm.printing_position_id);
   const allPosIds = [...embIds, ...prtIds].filter((id, i, a) => a.indexOf(id) === i);
 
   let posNameById = new Map<string, string>();
@@ -463,44 +762,48 @@ export async function getTemplateFromQuoteRequest(quoteRequestId: string): Promi
   for (const id of prtIds) {
     placementLines.push(`Printing: ${posNameById.get(id) || id}`);
   }
-  for (const raw of row.placement_labels ?? []) {
+  for (const raw of rowCrm.placement_labels ?? []) {
     const t = String(raw).trim();
     if (t) placementLines.push(t);
   }
 
   const productName =
-    row.products?.name?.trim() || "Quoted product — confirm catalog name / SKU";
+    rowCrm.products?.name?.trim() || "Quoted product — confirm catalog name / SKU";
   const qty =
-    typeof row.quantity === "number" && Number.isFinite(row.quantity) && row.quantity > 0 ? row.quantity : 1;
+    typeof rowCrm.quantity === "number" && Number.isFinite(rowCrm.quantity) && rowCrm.quantity > 0
+      ? rowCrm.quantity
+      : 1;
 
   const delivery =
-    row.customer_profiles?.delivery_address?.trim() ||
-    row.customer_profiles?.billing_address?.trim() ||
-    `Address to be confirmed (CRM quote ${row.id.slice(0, 8)}…). Company: ${normalizeText(row.company_name)}. Phone: ${normalizeText(row.phone) || "—"}.`;
+    rowCrm.customer_profiles?.delivery_address?.trim() ||
+    rowCrm.customer_profiles?.billing_address?.trim() ||
+    `Address to be confirmed (CRM quote ${rowCrm.id.slice(0, 8)}…). Company: ${normalizeText(rowCrm.company_name)}. Phone: ${normalizeText(rowCrm.phone) || "—"}.`;
 
   const notesLines = [
-    `CRM quote request: ${row.id}`,
-    row.notes?.trim() || null,
-    `Quote company: ${normalizeText(row.company_name)}`,
+    `CRM quote request: ${rowCrm.id}`,
+    rowCrm.notes?.trim() || null,
+    `Quote company: ${normalizeText(rowCrm.company_name)}`,
   ].filter(Boolean) as string[];
 
   return {
     baseOrderNumber: "",
     customerEmail: email,
-    customerName: normalizeText(row.contact_name) || normalizeText(row.company_name) || "Quote contact",
+    customerName: normalizeText(rowCrm.contact_name) || normalizeText(rowCrm.company_name) || "Quote contact",
+    quoteCompanyName: normalizeText(rowCrm.company_name) || undefined,
+    quoteContactPhone: normalizeText(rowCrm.phone) || undefined,
     deliveryAddress: delivery,
     currency: "AUD",
     carrier: "Australia Post",
     deliveryFeeCents: 0,
     items: [
       {
-        productId: row.product_id?.trim() ?? "",
+        productId: rowCrm.product_id?.trim() ?? "",
         productName,
         quantity: qty,
         unitPriceCents: 0,
         lineTotalCents: 0,
-        serviceType: row.service_type?.trim() ? row.service_type.trim() : null,
-        color: row.product_color?.trim() ? row.product_color.trim() : null,
+        serviceType: rowCrm.service_type?.trim() ? rowCrm.service_type.trim() : null,
+        color: rowCrm.product_color?.trim() ? rowCrm.product_color.trim() : null,
         size: null,
         placementsJson: JSON.stringify(placementLines),
         notes: notesLines.join("\n\n"),

@@ -4,8 +4,10 @@ import { qualityCheckSheetHref } from "@/lib/quality-check-sheet-href";
 import { storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
 
 import { completeDispatchQueueRow, listClickUpDispatchQueue, type ClickUpDispatchQueueRowDto } from "./actions";
+import { DispatchCarrierLabelsCell } from "./dispatch-carrier-labels";
 import { DispatchExpandableBarcode } from "./dispatch-expandable-barcode";
 import { PrintDocketButton } from "./print-docket-button";
+import { PrintOrderDetailButton } from "./print-order-detail-button";
 
 export const dynamic = "force-dynamic";
 
@@ -91,17 +93,18 @@ export default async function AdminDispatchPage({ searchParams }: PageProps) {
               <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
                 <th className="px-4 py-3">Order</th>
                 <th className="min-w-[9rem] px-2 py-3">Order barcode</th>
+                <th className="min-w-[11rem] px-2 py-3">Carrier labels</th>
                 <th className="px-4 py-3">Perth sheet date</th>
                 <th className="px-4 py-3">Sent to dispatch</th>
                 <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="min-w-[22.5rem] px-4 py-3"></th>
+                <th className="min-w-[28rem] px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && !loadError ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
                     아직 목록이 없습니다.{" "}
                     <Link href="/admin/quality-control" className="font-semibold text-brand-orange hover:underline">
                       Quality Control
@@ -121,6 +124,13 @@ export default async function AdminDispatchPage({ searchParams }: PageProps) {
                       orderNumber={r.orderNumber}
                     />
                   </td>
+                  <td className="px-2 py-2 align-top">
+                    <DispatchCarrierLabelsCell
+                      queueId={r.queueId}
+                      orderNumber={r.orderNumber}
+                      carrierLabelImageUrls={r.carrierLabelImageUrls}
+                    />
+                  </td>
                   <td className="px-4 py-3 font-mono text-slate-800">{r.listDate || "—"}</td>
                   <td className="px-4 py-3 text-xs text-slate-500">
                     {new Date(r.movedAt).toLocaleString("en-AU", { dateStyle: "short", timeStyle: "short" })}
@@ -131,25 +141,29 @@ export default async function AdminDispatchPage({ searchParams }: PageProps) {
                   </td>
                   <td className="px-4 py-3 capitalize">{r.status}</td>
                   <td className="px-4 py-3">
-                    <div className="mx-auto flex w-4/5 min-w-0 max-w-full flex-nowrap items-stretch gap-2">
+                    <div className="mx-auto flex w-4/5 min-w-0 max-w-full flex-wrap items-stretch gap-2">
                       <Link
                         href={qualityCheckSheetHref(r.listDate, r.orderNumber)}
                         className="inline-flex min-h-[2.25rem] min-w-0 flex-1 basis-0 items-center justify-center rounded-xl bg-slate-100 px-2 py-2 text-center text-xs font-semibold leading-tight text-brand-navy transition hover:bg-slate-200"
                       >
                         Quality sheet →
                       </Link>
+                      <PrintOrderDetailButton
+                        storeOrderId={r.storeOrderId}
+                        className="inline-flex min-h-[2.25rem] min-w-0 flex-1 basis-0 cursor-pointer items-center justify-center rounded-xl border border-slate-300 bg-white px-2 py-2 text-center text-xs font-semibold leading-tight text-brand-navy transition hover:bg-slate-50"
+                      />
                       <PrintDocketButton
                         storeOrderId={r.storeOrderId}
                         className="inline-flex min-h-[2.25rem] min-w-0 flex-1 basis-0 cursor-pointer items-center justify-center rounded-xl bg-brand-orange px-2 py-2 text-center text-xs font-semibold leading-tight text-brand-navy transition hover:brightness-95"
                       />
                       <form
                         action={completeDispatchQueueRow}
-                        className="flex min-w-0 flex-1 basis-0 flex-col justify-center"
+                        className="flex min-h-[2.25rem] min-w-0 flex-1 basis-0 items-stretch"
                       >
                         <input type="hidden" name="queue_id" value={r.queueId} />
                         <button
                           type="submit"
-                          className="inline-flex min-h-[2.25rem] w-full cursor-pointer items-center justify-center rounded-xl bg-emerald-700 px-2 py-2 text-xs font-semibold text-white transition hover:bg-emerald-800"
+                          className="inline-flex min-h-[2.25rem] w-full flex-1 cursor-pointer items-center justify-center rounded-xl bg-emerald-700 px-2 py-2 text-center text-xs font-semibold leading-tight text-white transition hover:bg-emerald-800"
                         >
                           Complete
                         </button>

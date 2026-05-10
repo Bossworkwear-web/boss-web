@@ -23,9 +23,25 @@ function rowSearchBlob(row: ClickUpOrderFormRow): string {
     row.organisationName,
     row.customerName,
     row.customerOrderId,
+    row.processingStageLabel,
   ]
     .join(" ")
     .toLowerCase();
+}
+
+function processingStageCellClass(label: string): string {
+  switch (label) {
+    case "Dispatch":
+      return "font-semibold text-amber-900";
+    case "Quality control":
+      return "font-semibold text-violet-900";
+    case "Production":
+      return "font-semibold text-sky-900";
+    case "Click up":
+      return "font-medium text-slate-800";
+    default:
+      return "text-slate-400";
+  }
 }
 
 function rowMatchesQuery(row: ClickUpOrderFormRow, raw: string): boolean {
@@ -85,10 +101,10 @@ export function ClickUpOrderFormTableClient({ rows }: { rows: ClickUpOrderFormRo
                 <th className="px-4 py-3">Company Name</th>
                 <th className="px-4 py-3">Customer name</th>
                 <th
-                  className="w-px whitespace-nowrap px-4 py-3 text-center"
-                  title="Click up sheet에서 Move to Production을 누르면 빨간 체크 표시가 나타납니다."
+                  className="min-w-[10rem] whitespace-nowrap px-4 py-3"
+                  title="Click up → Production → Quality control → Dispatch pipeline (read-only)."
                 >
-                  Move to Production
+                  Processing Stage
                 </th>
                 <th className="px-4 py-3 text-right">Action</th>
               </tr>
@@ -105,31 +121,8 @@ export function ClickUpOrderFormTableClient({ rows }: { rows: ClickUpOrderFormRo
                   <td className="max-w-[200px] truncate px-4 py-3 text-slate-700" title={row.customerName}>
                     {row.customerName}
                   </td>
-                  <td className="px-4 py-3 text-center align-middle">
-                    {row.movedToProduction ? (
-                      <span
-                        className="inline-flex items-center justify-center text-red-600"
-                        role="img"
-                        aria-label="Move to Production, completed"
-                      >
-                        <svg
-                          className="h-5 w-5"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden
-                        >
-                          <path d="M5 13l4 4L19 7" />
-                        </svg>
-                      </span>
-                    ) : (
-                      <span className="text-sm text-slate-300 tabular-nums" aria-label="Move to Production, not started">
-                        —
-                      </span>
-                    )}
+                  <td className={`whitespace-nowrap px-4 py-3 ${processingStageCellClass(row.processingStageLabel)}`}>
+                    {row.processingStageLabel}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right">
                     <Link

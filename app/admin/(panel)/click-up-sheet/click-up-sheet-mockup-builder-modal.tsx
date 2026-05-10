@@ -41,6 +41,21 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
 }
 
+/** Prefer DB-marked master (sheet or order assets); else first reference in pool. */
+function pickDefaultLogoUrl(rows: CustomerReferenceVisualDto[]): string | null {
+  const master = rows.find((x) => x.is_master_logo);
+  if (master) {
+    return master.public_url;
+  }
+  return rows[0]?.public_url ?? null;
+}
+
+function logosOrderedMasterFirst(rows: CustomerReferenceVisualDto[]): CustomerReferenceVisualDto[] {
+  const masters = rows.filter((x) => x.is_master_logo);
+  const others = rows.filter((x) => !x.is_master_logo);
+  return [...masters, ...others];
+}
+
 /** Word-wrap for canvas export; respects newlines. */
 function wrapCaptionForCanvas(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const paragraphs = text.replace(/\r\n/g, "\n").split("\n");
@@ -438,26 +453,33 @@ export function ClickUpSheetMockupBuilderModal({
             .filter((img) => !isPdfUrl(img.public_url))
             .map((img) => {
               const tail = img.storage_path.split("/").pop() ?? img.id;
+              const master = Boolean(img.is_master_logo);
               return {
                 key: `sheet-ref:${img.id}`,
                 public_url: img.public_url,
-                caption: `Click Up sheet · reference · ${tail}`,
+                caption: master
+                  ? `Click Up sheet · reference · ${tail} (Master)`
+                  : `Click Up sheet · reference · ${tail}`,
+                is_master_logo: master,
               };
             })
         : [];
 
-      const seen = new Set<string>();
-      const merged: CustomerReferenceVisualDto[] = [];
+      const byUrl = new Map<string, CustomerReferenceVisualDto>();
       for (const row of [...sheetRows, ...customerRows]) {
         const u = row.public_url;
-        if (seen.has(u)) {
+        const prev = byUrl.get(u);
+        if (!prev) {
+          byUrl.set(u, row);
           continue;
         }
-        seen.add(u);
-        merged.push(row);
+        byUrl.set(u, {
+          ...prev,
+          is_master_logo: Boolean(prev.is_master_logo || row.is_master_logo),
+        });
       }
 
-      setLogos(merged);
+      setLogos(logosOrderedMasterFirst([...byUrl.values()]));
       setLogosLoading(false);
     })();
 
@@ -507,12 +529,13 @@ export function ClickUpSheetMockupBuilderModal({
       return;
     }
     const id = newLayerId();
+    const defaultLogoUrl = logoLayerCount === 0 ? pickDefaultLogoUrl(logos) : null;
     setLayers((prev) => [
       ...prev,
       {
         id,
         kind: "logo",
-        logoUrl: null,
+        logoUrl: defaultLogoUrl,
         u: DEFAULT_LOGO_U,
         v: DEFAULT_LOGO_V,
         widthFrac: 0.22,
@@ -993,6 +1016,7 @@ export function ClickUpSheetMockupBuilderModal({
                           <li key={row.key}>
                             <button
                               type="button"
+                              title={row.is_master_logo ? "Master logo" : row.caption}
                               onClick={() =>
                                 setLayers((prev) =>
                                   prev.map((p) =>
@@ -1002,12 +1026,17 @@ export function ClickUpSheetMockupBuilderModal({
                                   ),
                                 )
                               }
-                              className={`overflow-hidden rounded-lg border-2 bg-white p-0.5 ${
+                              className={`relative overflow-hidden rounded-lg border-2 bg-white p-0.5 ${
                                 activeLayer.logoUrl === row.public_url
                                   ? "border-brand-orange"
                                   : "border-slate-200 hover:border-slate-300"
                               }`}
                             >
+                              {row.is_master_logo ? (
+                                <span className="absolute left-0.5 top-0.5 z-[1] rounded bg-brand-orange/90 px-1 py-0.5 text-[0.55rem] font-bold leading-none text-white shadow-sm">
+                                  Master
+                                </span>
+                              ) : null}
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={row.public_url} alt="" className="h-14 w-14 object-contain" />
                             </button>

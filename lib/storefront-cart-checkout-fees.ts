@@ -4,8 +4,8 @@ import {
 } from "@/lib/customer-delivery-estimate";
 import { STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 
-/** Product subtotal (excl. delivery & logo setup) must be at or above this for promos. */
-export const STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD = 400;
+/** Product subtotal (excl. delivery & logo setup) must be at or above this for logo-setup waiver promo. */
+export const STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD = 500;
 
 export const STOREFRONT_LOGO_SETUP_BEFORE_GST_AUD = 60;
 
@@ -16,20 +16,6 @@ function roundAudMoney(n: number): number {
 /** One-off logo setup: $60 + GST (10%). */
 export function logoSetupFeeInclGstAud(): number {
   return roundAudMoney(STOREFRONT_LOGO_SETUP_BEFORE_GST_AUD * (1 + STOREFRONT_RETAIL_GST_RATE));
-}
-
-/**
- * Perth metro delivery postcodes (WA 6000–6199): free delivery when cart subtotal ≥ minimum.
- */
-export function isPerthMetroDeliveryPostcode(postcode: string | null): boolean {
-  if (postcode == null || postcode.length !== 4) {
-    return false;
-  }
-  const n = Number.parseInt(postcode, 10);
-  if (!Number.isFinite(n)) {
-    return false;
-  }
-  return n >= 6000 && n <= 6199;
 }
 
 export function cartHasEmbroideryService(items: { serviceType: string }[]): boolean {
@@ -66,7 +52,6 @@ export type StorefrontCheckoutFeesResult = {
   deliveryFeeAud: number;
   logoSetupFeeAud: number;
   logoSetupApplies: boolean;
-  perthMetroDeliveryFree: boolean;
   totalAud: number;
 };
 
@@ -77,17 +62,10 @@ export function computeStorefrontCheckoutFees(input: StorefrontCheckoutFeesInput
   const distanceKm = distanceKmFromCompanyBase(deliveryPostcode);
   const baseDelivery = calculateDeliveryFee(distanceKm, estimatedWeightKg);
 
-  let perthMetroDeliveryFree = false;
   let deliveryFeeAud = 0;
 
   if (!isCustomerSignedIn) {
     deliveryFeeAud = 0;
-  } else if (
-    subtotalAud >= STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD &&
-    isPerthMetroDeliveryPostcode(deliveryPostcode)
-  ) {
-    deliveryFeeAud = 0;
-    perthMetroDeliveryFree = true;
   } else {
     deliveryFeeAud = baseDelivery;
   }
@@ -118,7 +96,6 @@ export function computeStorefrontCheckoutFees(input: StorefrontCheckoutFeesInput
     deliveryFeeAud,
     logoSetupFeeAud,
     logoSetupApplies,
-    perthMetroDeliveryFree,
     totalAud,
   };
 }

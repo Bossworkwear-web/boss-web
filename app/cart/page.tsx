@@ -213,8 +213,7 @@ export default function CartPage() {
       }),
     [productNetSubtotal, items, deliveryPostcode, estimatedWeightKg, isCustomerSignedIn, hasPriorEmbroideryOrder],
   );
-  const { deliveryFeeAud, logoSetupFeeAud, logoSetupApplies, perthMetroDeliveryFree, totalAud: payableTotal } =
-    checkoutFees;
+  const { deliveryFeeAud, logoSetupFeeAud, logoSetupApplies, totalAud: payableTotal } = checkoutFees;
   const canCheckOut = termsAgreed && isCustomerSignedIn;
 
   const detailItem = detailItemId ? items.find((i) => i.id === detailItemId) : undefined;
@@ -408,9 +407,8 @@ export default function CartPage() {
                   </li>
                   <li>
                     Product subtotal {toCurrency(STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD)} or more: Logo setup is{" "}
-                    <strong className="font-medium text-slate-200">waived</strong>, and{" "}
-                    <strong className="font-medium text-slate-200">Perth Metro delivery is free</strong> (WA postcodes
-                    6000–6199).
+                    <strong className="font-medium text-slate-200">waived</strong>. Delivery fees apply Australia-wide
+                    (estimated from your postcode and chargeable weight).
                   </li>
                 </ul>
               </div>
@@ -469,27 +467,14 @@ export default function CartPage() {
                       <Link href="/log-in" className="font-semibold text-brand-orange underline hover:text-brand-orange/90">
                         Sign in
                       </Link>{" "}
-                      to estimate delivery, Logo setup, and Perth Metro free delivery from your saved address. Until
-                      then, delivery is shown as {toCurrency(0)}.
+                      to estimate delivery and Logo setup from your saved address. Until then, delivery is shown as{" "}
+                      {toCurrency(0)}.
                     </>
                   ) : (
                     <>
-                      {perthMetroDeliveryFree ? (
-                        <>
-                          Perth Metro free delivery applies (subtotal{" "}
-                          {toCurrency(STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD)}+). Otherwise estimated from your
-                          postcode and total{" "}
-                          <strong className="font-medium text-slate-300">chargeable</strong> weight.
-                        </>
-                      ) : (
-                        <>
-                          Estimated from your postcode and total{" "}
-                          <strong className="font-medium text-slate-300">chargeable</strong> weight (per item: the
-                          higher of packed weight or cubic weight, by product type). At{" "}
-                          {toCurrency(STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD)}+ subtotal, Perth Metro (6000–6199) is
-                          free.
-                        </>
-                      )}
+                      Estimated for all areas from your postcode and total{" "}
+                      <strong className="font-medium text-slate-300">chargeable</strong> weight (per item: the higher of
+                      packed weight or cubic weight, by product type).
                     </>
                   )}
                 </p>

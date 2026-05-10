@@ -305,6 +305,7 @@ export type Database = {
           quote_customer_accepted_at: string | null;
           quote_customer_accept_payload: unknown | null;
           quote_customer_accept_comment: string | null;
+          admin_customer_quote_sheet: unknown | null;
         };
         Insert: {
           id?: string;
@@ -348,6 +349,7 @@ export type Database = {
           quote_customer_accepted_at?: string | null;
           quote_customer_accept_payload?: unknown | null;
           quote_customer_accept_comment?: string | null;
+          admin_customer_quote_sheet?: unknown | null;
         };
         Update: {
           id?: string;
@@ -391,6 +393,7 @@ export type Database = {
           quote_customer_accepted_at?: string | null;
           quote_customer_accept_payload?: unknown | null;
           quote_customer_accept_comment?: string | null;
+          admin_customer_quote_sheet?: unknown | null;
         };
         Relationships: [];
       };
@@ -763,6 +766,8 @@ export type Database = {
           shipped_at: string | null;
           created_at: string;
           invoice_reference: string | null;
+          hold_process: boolean;
+          hold_note: string | null;
           reordered_from_store_order_id: string | null;
         };
         Insert: {
@@ -783,6 +788,8 @@ export type Database = {
           shipped_at?: string | null;
           created_at?: string;
           invoice_reference?: string | null;
+          hold_process?: boolean;
+          hold_note?: string | null;
           reordered_from_store_order_id?: string | null;
         };
         Update: {
@@ -803,6 +810,8 @@ export type Database = {
           shipped_at?: string | null;
           created_at?: string;
           invoice_reference?: string | null;
+          hold_process?: boolean;
+          hold_note?: string | null;
           reordered_from_store_order_id?: string | null;
         };
         Relationships: [

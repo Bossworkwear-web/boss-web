@@ -719,8 +719,9 @@ export type CustomerReferenceVisualDto = {
 };
 
 /**
- * Logos / artwork the customer supplied: all `production_order_assets` rows for this store order (any kind),
- * plus any image/PDF URLs embedded in `store_order_items.placements` or `store_order_items.notes`.
+ * Order visuals for Click Up: saved **customer master logo** is listed first when configured; additional production and
+ * checkout-line URLs follow in sequence (`production_order_assets` by `created_at` ascending, then extracted image URLs).
+ * If the master file is also attached on the order, it appears only once (as the lead tile).
  */
 export async function listCustomerReferenceVisualsForStoreOrderNumber(
   orderNumber: string,
@@ -774,7 +775,7 @@ export async function listCustomerReferenceVisualsForStoreOrderNumber(
       .from("production_order_assets")
       .select("id, kind, label, storage_bucket, storage_path, created_at")
       .eq("order_id", orderUuid)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: true });
 
     if (!aErr && assets?.length) {
       for (const r of assets) {
@@ -853,6 +854,27 @@ export async function listCustomerReferenceVisualsForStoreOrderNumber(
             });
           }
         }
+      }
+    }
+
+    /** Always show saved master first; same file linked on the order appears only once (here). */
+    if (masterPath) {
+      const bucketForMaster = masterBucket || PRODUCTION_ORDER_ASSETS_BUCKET;
+      const masterPublicUrl = publicStorageObjectUrl(bucketForMaster, masterPath);
+      if (masterPublicUrl) {
+        const rest = items.filter((row) => row.public_url !== masterPublicUrl);
+        items.length = 0;
+        items.push(
+          {
+            key: "customer-master:lead",
+            public_url: masterPublicUrl,
+            caption: "Master logo",
+            storage_bucket: bucketForMaster,
+            storage_path: masterPath,
+            is_master_logo: true,
+          },
+          ...rest,
+        );
       }
     }
 

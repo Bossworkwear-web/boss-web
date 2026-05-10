@@ -116,15 +116,22 @@ export default async function DeliveryDocketPage({ params, searchParams }: Props
             max-width: none !important;
           }
           .no-print { display: none !important; }
-          /* Full-size print (was scale(0.5); 2× larger on paper). */
+          /* Half-scale docket vs prior full-size layout (zoom 0.5). */
           .docket-page {
+            zoom: 0.5 !important;
             margin: 0 auto !important;
             padding: 6mm !important;
             box-sizing: border-box !important;
             max-width: 210mm !important;
           }
         }
-        .docket-page { max-width: 210mm; margin: 0 auto; font-family: system-ui, sans-serif; color: #0f172a; }
+        .docket-page {
+          max-width: 210mm;
+          margin: 0 auto;
+          zoom: 0.5;
+          font-family: system-ui, sans-serif;
+          color: #0f172a;
+        }
         .docket-box { border: 2px solid #0f172a; padding: 14px; margin-bottom: 14px; }
         .docket-label { font-size: 15px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b; }
         .docket-h1 { font-size: 30px; font-weight: 700; margin: 4px 0 0; }

@@ -9,6 +9,7 @@ import {
   isBagKeywordProduct,
   isBisleyCatalogProduct,
   isBizCollectionWomensChefPantsChefPantsExclusiveListing,
+  isChefCh329msTopsExclusiveCategoryBrowseListing,
   isChefMiscellaneousExclusiveJbStyleListing,
   isHeadWearKeywordProduct,
   isJbWearSixSeriesListing,
@@ -171,6 +172,14 @@ export function syncSidebarNavFromProductIfNeeded(
       return;
     }
     persistSidebarNavClient("chef", "miscellaneous");
+    return;
+  }
+
+  if (isChefCh329msTopsExclusiveCategoryBrowseListing(productName, chefMiscExclusiveMeta)) {
+    if (stored?.mainSlug === "chef" && stored?.subSlug === "jackets") {
+      return;
+    }
+    persistSidebarNavClient("chef", "jackets");
     return;
   }
 

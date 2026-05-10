@@ -12,6 +12,8 @@ import {
   bisleySlugUsesPositionalColorGallery,
   bisleySortedPositionalImageUrlsIfComplete,
 } from "@/lib/bisley-positional-color-gallery";
+import { filterAp2211ColorOptions, isStorefrontAp2211Slug } from "@/lib/ap-2211-storefront";
+import { filterAp3309ColorOptions, isStorefrontAp3309Slug } from "@/lib/ap-3309-storefront";
 import { isPpeStorefrontProduct } from "@/lib/catalog";
 import { STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { storefrontLeadingSupplierBrand } from "@/lib/product-display-name";
@@ -22,8 +24,15 @@ import {
   applyBizCollectionP29012ColorDisplayRules,
   isBizCollectionP29012Listing,
 } from "@/lib/biz-collection-p29012-color-options";
-import { isBizCollectionListing } from "@/lib/fashion-biz-gender-route";
+import { isBizCareOrCollectionListing, isBizCollectionListing } from "@/lib/fashion-biz-gender-route";
 import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
+import {
+  BIZ_COLLECTION_DETAIL_METADATA_STYLE_BASES,
+  BIZ_COLLECTION_GROUP_METADATA_STYLE_BASES,
+  isBizCareCid940uExcludedColourChip,
+  isBizCollectionDetailMetadataColourChip,
+  isBizCollectionGroupMetadataColourChip,
+} from "@/lib/biz-collection-metadata-colour-chips";
 import { uploadStoreCheckoutReferenceImages } from "@/app/orders/actions";
 import { addCartItem, getCartItems, removeCartItem, updateCartItem, type CartItem } from "@/lib/cart";
 import { productPathSegment } from "@/lib/product-path-slug";
@@ -35,6 +44,7 @@ import {
 import {
   getSizeGuideBundle,
   inferSizeGuideKind,
+  SIZE_GUIDE_SUPPLIER_WEBSITE_FOOTNOTE,
   sizeGuideToPlainText,
   type SizeGuideBundle,
 } from "@/lib/product-size-guide";
@@ -46,6 +56,10 @@ import {
 import { placementLogoLocationSrc } from "@/lib/placement-logo-location";
 import { storefrontVolumeDiscountRateFromSubtotalAud } from "@/lib/storefront-volume-discount";
 import { syncSidebarNavFromProductIfNeeded } from "@/lib/sidebar-nav";
+import {
+  isStorefrontYesChefCh234mPdp,
+  isYesChefCh234mExcludedColourChip,
+} from "@/lib/yes-chef-ch234m-pdp-colour";
 import type { ProductGoogleRating } from "@/lib/product-google-rating";
 
 type ServiceType = "Plain" | "Embroidery" | "Printing";
@@ -226,21 +240,42 @@ function effectivePdpColorOptions(product: ProductDetailData): string[] {
   {
     const fbStyle = fashionBizStyleCodeFromListing(product.name, product.slug ?? null);
     const styleBase = fbStyle ? fbStyle.replace(/-CLEARANCE$/i, "") : "";
-    if (isBizCollectionListing(product.name, product.slug ?? null, product.category ?? null)) {
-      if (styleBase === "S421ML") {
-        restricted = restricted.filter((c) => String(c).trim().toLowerCase() !== "group");
+    const bizCareOrColl = isBizCareOrCollectionListing(
+      product.name,
+      product.slug ?? null,
+      product.category ?? null,
+    );
+    if (bizCareOrColl) {
+      if (BIZ_COLLECTION_GROUP_METADATA_STYLE_BASES.has(styleBase)) {
+        restricted = restricted.filter((c) => !isBizCollectionGroupMetadataColourChip(c));
       }
-      if (styleBase === "WP10310" || styleBase === "BS724M") {
-        restricted = restricted.filter((c) => String(c).trim().toLowerCase() !== "detail");
+      if (BIZ_COLLECTION_DETAIL_METADATA_STYLE_BASES.has(styleBase)) {
+        restricted = restricted.filter((c) => !isBizCollectionDetailMetadataColourChip(c));
       }
-      if (styleBase === "WP6008") {
-        const esc = styleBase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const re = new RegExp(`^\\s*${esc}\\s*\\/\\s*`, "i");
-        restricted = restricted.map((c) => {
-          const t = String(c).replace(re, "").trim();
-          return t.length > 0 ? t : String(c);
-        });
+      if (styleBase === "CID940U") {
+        restricted = restricted.filter((c) => !isBizCareCid940uExcludedColourChip(c));
       }
+    }
+    if (
+      styleBase === "WP6008" &&
+      isBizCollectionListing(product.name, product.slug ?? null, product.category ?? null)
+    ) {
+      const esc = styleBase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(`^\\s*${esc}\\s*\\/\\s*`, "i");
+      restricted = restricted.map((c) => {
+        const t = String(c).replace(re, "").trim();
+        return t.length > 0 ? t : String(c);
+      });
+    }
+    if (
+      isStorefrontYesChefCh234mPdp(product.name, {
+        slug: product.slug ?? null,
+        category: product.category ?? null,
+        description: product.description ?? null,
+        supplier_name: product.supplierName ?? null,
+      })
+    ) {
+      restricted = restricted.filter((c) => !isYesChefCh234mExcludedColourChip(c));
     }
   }
   if (isBizCollectionP29012Listing(product)) {
@@ -251,7 +286,13 @@ function effectivePdpColorOptions(product: ProductDetailData): string[] {
     (supLc === "aussie pacific" || slugLower.startsWith("ap-") || /\baussie\s+pacific\b/i.test(product.supplierName ?? "")) &&
     restricted.length >= 2
   ) {
-    return [...restricted].sort((a, b) => String(a).localeCompare(String(b)));
+    restricted = [...restricted].sort((a, b) => String(a).localeCompare(String(b)));
+  }
+  if (isStorefrontAp2211Slug(product.slug ?? null)) {
+    restricted = filterAp2211ColorOptions(restricted);
+  }
+  if (isStorefrontAp3309Slug(product.slug ?? null)) {
+    restricted = filterAp3309ColorOptions(restricted);
   }
   return restricted;
 }
@@ -1677,7 +1718,7 @@ function SizeGuideDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="size-guide-title"
-        className="relative z-10 flex max-h-[min(85vh,640px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-brand-navy/15 bg-white shadow-2xl sm:m-4 sm:rounded-2xl"
+        className="relative z-10 flex max-h-[min(85vh,640px)] w-full max-w-[46.08rem] flex-col overflow-hidden rounded-t-2xl border border-brand-navy/15 bg-white shadow-2xl sm:m-4 sm:rounded-2xl"
       >
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-brand-navy/10 px-4 py-3 sm:px-5 sm:py-4">
           <h2 id="size-guide-title" className="text-[1.62rem] font-medium text-brand-navy">
@@ -1748,6 +1789,10 @@ function SizeGuideDialog({
               </div>
             ))}
           </div>
+          {/* 정확한 사이즈는 공급자 웹사이트 기준 — 문구는 SIZE_GUIDE_SUPPLIER_WEBSITE_FOOTNOTE와 동기화 */}
+          <p className="mt-5 text-[1.08rem] leading-relaxed text-red-700">
+            * {SIZE_GUIDE_SUPPLIER_WEBSITE_FOOTNOTE}
+          </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2 border-t border-brand-navy/10 px-4 py-3 sm:px-5 sm:py-4">
           <button

@@ -268,6 +268,8 @@ create unique index if not exists quote_requests_quote_portal_token_uidx
 
 alter table public.quote_requests add column if not exists quote_customer_accept_comment text;
 
+alter table public.quote_requests add column if not exists admin_customer_quote_sheet jsonb;
+
 alter table public.quote_requests add column if not exists printing_position_id uuid references public.embroidery_positions(id) on delete set null;
 
 alter table public.quote_requests add column if not exists embroidery_position_ids uuid[];

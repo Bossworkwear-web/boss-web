@@ -7,7 +7,8 @@ import { usePathname, useRouter } from "next/navigation";
 const LINKS = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/customer-info", label: "Customer Info" },
-  { href: "/admin/store-orders", label: "Store orders" },
+  { href: "/admin/customer-quote", label: "Customer Quote" },
+  { href: "/admin/store-orders", label: "Online orders" },
   { href: "/admin/supplier-orders", label: "Supplier orders" },
   { href: "/admin/work-process", label: "Click Up" },
   { href: "/admin/incoming-goods", label: "Incoming goods" },

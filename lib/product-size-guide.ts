@@ -21,6 +21,11 @@ function isPlainIntegerSize(s: string): boolean {
   return /^\d+$/.test(s.trim());
 }
 
+/** AU workwear pants: leading digits = waist (cm); trailing S / R / L = leg (Short / Regular / Long). */
+function isWorkwearWaistLegCode(s: string): boolean {
+  return /^\d{2,3}\s*[SRL]$/i.test(s.trim());
+}
+
 /** Waist / leg sizing used on overalls & some pants (e.g. Syzmik-style numeric blocks). */
 function looksLikeWorkwearNumeric(nums: number[]): boolean {
   if (nums.length < 2) {
@@ -36,6 +41,10 @@ export function inferSizeGuideKind(sizes: string[], productName = ""): SizeGuide
   const nameLower = productName.toLowerCase();
   if (!trimmed.length) {
     return "mens-alpha";
+  }
+
+  if (trimmed.some(isWorkwearWaistLegCode)) {
+    return "numeric-workwear";
   }
 
   const plainNums = trimmed.filter(isPlainIntegerSize);
@@ -77,6 +86,27 @@ export function inferSizeGuideKind(sizes: string[], productName = ""): SizeGuide
 const DISCLAIMER =
   "This is a general fitting guide only. For the exact garment spec, please refer to the supplier’s latest size chart or contact us.";
 
+/** Footer for the size-guide panel and plain-text download — authoritative sizing is on the supplier’s site. */
+export const SIZE_GUIDE_SUPPLIER_WEBSITE_FOOTNOTE =
+  "For accurate sizing, follow the information on the supplier’s official website.";
+
+/** AU workwear trouser codes: number ≈ waist (cm); S/R/L = leg length (exact inseam varies by brand). */
+const WORKWEAR_WAIST_LEG_LETTER_TABLE: SizeGuideTable = {
+  caption: "Workwear pants — waist × leg letter (e.g. 77R, 82R)",
+  headers: ["Typical codes", "Waist (cm)", "Leg letter"],
+  rows: [
+    ["67S, 67R, 67L", "67", "S = Short · R = Regular · L = Long"],
+    ["72S, 72R, 72L", "72", "Same waist; letter = leg / inseam length"],
+    ["77S, 77R, 77L", "77", "S = Short · R = Regular · L = Long"],
+    ["82S, 82R, 82L", "82", "Same waist; letter = leg / inseam length"],
+    ["87S, 87R, 87L", "87", "S = Short · R = Regular · L = Long"],
+    ["92S, 92R, 92L", "92", "Same waist; letter = leg / inseam length"],
+    ["97S, 97R, 97L", "97", "S = Short · R = Regular · L = Long"],
+    ["102S, 102R, 102L", "102", "Same waist; letter = leg / inseam length"],
+    ["107S, 107R, 107L", "107", "S = Short · R = Regular · L = Long"],
+  ],
+};
+
 export function getSizeGuideBundle(kind: SizeGuideKind, productName: string): SizeGuideBundle {
   const title = "Size guide";
   const nameLine = productName.trim() ? `Product: ${productName.trim()}\n\n` : "";
@@ -117,6 +147,7 @@ export function getSizeGuideBundle(kind: SizeGuideKind, productName: string): Si
               ["5XL", "113–118", "128–133"],
             ],
           },
+          WORKWEAR_WAIST_LEG_LETTER_TABLE,
         ],
       };
     case "womens-numeric":
@@ -181,11 +212,12 @@ export function getSizeGuideBundle(kind: SizeGuideKind, productName: string): Si
     case "numeric-workwear":
       return {
         title,
-        intro: `${nameLine}${DISCLAIMER}\n\nNumeric workwear sizing (e.g. overalls / pants) — block numbers usually combine waist / length; always check the product label.`,
+        intro: `${nameLine}${DISCLAIMER}\n\nNumeric workwear sizing — pants often use a waist number with S/R/L (e.g. 77R, 82R); overalls may use waist–length block numbers. Always check the supplier chart for inseam.`,
         tables: [
+          WORKWEAR_WAIST_LEG_LETTER_TABLE,
           {
-            caption: "Common block numbers (example mapping)",
-            headers: ["Label", "Notes"],
+            caption: "Overalls / some pants — waist–length block numbers (examples)",
+            headers: ["Label range", "Notes"],
             rows: [
               ["72 – 87", "Smaller waist / shorter leg blocks — see supplier chart."],
               ["92 – 107", "Mid range — see supplier chart for inseam."],
@@ -245,6 +277,7 @@ export function getSizeGuideBundle(kind: SizeGuideKind, productName: string): Si
               ["18", "93", "118"],
             ],
           },
+          WORKWEAR_WAIST_LEG_LETTER_TABLE,
         ],
       };
   }
@@ -255,5 +288,6 @@ export function sizeGuideToPlainText(bundle: SizeGuideBundle): string {
   for (const t of bundle.tables) {
     lines.push(t.caption, t.headers.join("\t"), ...t.rows.map((r) => r.join("\t")), "");
   }
+  lines.push("", SIZE_GUIDE_SUPPLIER_WEBSITE_FOOTNOTE);
   return lines.join("\n").trim();
 }

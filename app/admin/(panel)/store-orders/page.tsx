@@ -1,7 +1,6 @@
 import Link from "next/link";
 
-import { DeleteStoreOrderButton } from "@/app/admin/(panel)/store-orders/delete-store-order-button";
-import { ShipOrderForm } from "@/app/admin/(panel)/store-orders/ship-order-form";
+import { StoreOrderHoldForm } from "@/app/admin/(panel)/store-orders/store-order-hold-form";
 import { StoreOrderInvoiceReferenceForm } from "@/app/admin/(panel)/store-orders/store-order-invoice-reference-form";
 import {
   buildStoreOrdersListHref,
@@ -30,6 +29,8 @@ type StoreOrderRow = {
   tracking_number: string | null;
   created_at: string;
   invoice_reference: string | null;
+  hold_process: boolean;
+  hold_note: string | null;
 };
 
 function parseOrderDate(iso: string): Date | null {
@@ -115,6 +116,7 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
   try {
     const supabase = createSupabaseAdminClient();
     const selectCandidates = [
+      "id, order_number, status, customer_email, customer_name, total_cents, currency, tracking_number, created_at, invoice_reference, hold_process, hold_note",
       "id, order_number, status, customer_email, customer_name, total_cents, currency, tracking_number, created_at, invoice_reference",
       "id, order_number, status, customer_email, customer_name, total_cents, currency, tracking_number, created_at",
     ] as const;
@@ -165,13 +167,22 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
     if (error) {
       loadError =
         error.message?.includes("invoice_reference") || error.code === "42703"
-          ? `${error.message} — Supabase에 마이그레이션 supabase/migrations/20260452_store_orders_invoice_reference.sql 을 적용한 뒤 API 스키마를 새로고침하세요.`
+          ? `${error.message} — Supabase에 마이그레이션 supabase/migrations/20260452_store_orders_invoice_reference.sql (및 hold: 20260512_store_orders_hold_process.sql) 을 적용한 뒤 API 스키마를 새로고침하세요.`
           : error.message ?? "Load failed";
     } else {
-      rows = (data ?? []).map((r) => ({
-        ...r,
-        invoice_reference: (r as { invoice_reference?: string | null }).invoice_reference ?? null,
-      })) as StoreOrderRow[];
+      rows = (data ?? []).map((r) => {
+        const rec = r as {
+          invoice_reference?: string | null;
+          hold_process?: boolean | null;
+          hold_note?: string | null;
+        };
+        return {
+          ...r,
+          invoice_reference: rec.invoice_reference ?? null,
+          hold_process: Boolean(rec.hold_process),
+          hold_note: rec.hold_note != null && String(rec.hold_note).trim() !== "" ? String(rec.hold_note) : null,
+        };
+      }) as StoreOrderRow[];
       totalCount = count;
     }
   } catch {
@@ -200,9 +211,12 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
           </Link>
         </div>
         <p className="mt-2 max-w-2xl text-sm text-slate-600">
-          After payment, orders appear here. Enter an Australia Post tracking number and mark shipped — the customer
-          receives an email and can follow delivery on the public tracking page. Print a{" "}
-          <strong>delivery docket</strong> for the Post Office or to tape on the box.
+          After payment, orders appear here. Print a <strong>delivery docket</strong> for the Post Office or to tape on
+          the box. Shipped status is set when you complete an order from{" "}
+          <Link href="/admin/dispatch" className="font-semibold text-brand-orange hover:underline">
+            Dispatch
+          </Link>
+          ; tracking on file (if any) is shown below.
         </p>
         <p className="mt-2 text-xs text-slate-500">
           Orders are grouped by calendar day (Australia / Perth). Use filters below when the list grows.
@@ -323,15 +337,15 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
               </p>
             </div>
             <div className="overflow-x-auto">
-              <table className="min-w-[900px] w-full border-collapse text-left text-sm">
+              <table className="min-w-[1040px] w-full border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
                     <th className="px-4 py-3">Customer order ID</th>
                     <th className="px-4 py-3">Customer</th>
                     <th className="px-4 py-3">Total</th>
                     <th className="px-4 py-3">Status</th>
+                    <th className="min-w-[12rem] px-4 py-3">Hold / note</th>
                     <th className="px-4 py-3">Ship / docket</th>
-                    <th className="px-4 py-3 w-[5.5rem]">Delete</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -356,23 +370,30 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
                       </td>
                       <td className="px-4 py-3 tabular-nums">{formatMoneyFromCents(r.total_cents, r.currency)}</td>
                       <td className="px-4 py-3 capitalize">{r.status}</td>
+                      <td className="px-4 py-3 align-top">
+                        <StoreOrderHoldForm
+                          orderId={r.id}
+                          initialHoldProcess={r.hold_process}
+                          initialHoldNote={r.hold_note}
+                        />
+                      </td>
                       <td className="px-4 py-3">
                         <div className="space-y-3">
-                          <ShipOrderForm
-                            orderId={r.id}
-                            alreadyShipped={r.status === "shipped"}
-                            existingTracking={r.tracking_number}
-                          />
+                          {r.tracking_number ? (
+                            <p className="text-sm">
+                              <span className="text-slate-500">Tracking: </span>
+                              <span className="font-mono font-semibold">{r.tracking_number}</span>
+                            </p>
+                          ) : (
+                            <p className="text-xs text-slate-500">No tracking on file</p>
+                          )}
                           <a
                             href={`/admin/store-orders/${r.id}/docket`}
-                            className="inline-block py-2 text-[1.4rem] font-semibold leading-tight text-brand-orange hover:underline"
+                            className="inline-block py-[0.4rem] text-[1.12rem] font-semibold leading-tight text-brand-orange hover:underline"
                           >
                             Print delivery docket
                           </a>
                         </div>
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <DeleteStoreOrderButton orderId={r.id} orderNumber={r.order_number} />
                       </td>
                     </tr>
                   ))}

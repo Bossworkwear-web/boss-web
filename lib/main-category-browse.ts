@@ -1,8 +1,13 @@
+import {
+  blueWhaleWorkwearExclusiveExpectedSubSlug,
+  isBlueWhaleF81F82WorkwearJumperExclusiveListing,
+} from "@/lib/blue-whale-category-browse";
 import { getSubCategoriesForMain, HEALTH_CARE_MAIN_SLUG } from "@/lib/catalog";
 import { getDiscountPercent } from "@/lib/discounts";
 import {
   hasStorefrontListNameAndPrice,
   isBizCollectionWomensShirtsExclusiveListing,
+  isJb4OsMensShirtsExclusiveListing,
   isFashionBizMensJacketsToWomensShirtsExclusiveListing,
   isFashionBizMensJumperToWomensJumperExclusiveListing,
   isWomensBrowseJacketOrVestMisfiledAsShirts,
@@ -14,10 +19,13 @@ import {
   isMensPantsS3fszMensJumperExclusiveListing,
   isWv619mMensJumperExclusiveListing,
   isTp3160bKidsPantsExclusiveListing,
+  isFashionBiz7kbs7kssKidsPantsExclusiveListing,
   isKidsLinePolosExclusiveCategoryBrowseListing,
+  isKidsPolosMisfiledTshirtsStyleSkuListing,
   isKidsLineJacketsExclusiveCategoryBrowseListing,
   isKidsJacketsJ307kJ3150bJ740kExclusiveListing,
   isWomensJacketsJ236ml3wsj1ExclusiveListing,
+  isBizCollectionWomensChefPantsChefPantsExclusiveListing,
   isChefLineJacketsExclusiveCategoryBrowseListing,
   isChefMiscellaneousExclusiveJbStyleListing,
   isJbHiVisOr6daqf6darfWorkwearJumperExclusiveListing,
@@ -34,7 +42,11 @@ import {
   isProductEligibleForSiteSearch,
   isProductVisibleInCategoryBrowse,
   isWomensJacketsForceWomensJumperStyleCode,
+  isWomensPantsMisfiledJumperStyleSkuListing,
+  isWomensPantsMisfiledPolosStyleSkuListing,
+  isWomensPantsMisfiledTshirtsStyleSkuListing,
   isYesChefCatalogProduct,
+  womensBrowseRemapPantsSubSlugIfMisfiledWomensTop,
 } from "@/lib/product-visibility";
 import { storefrontStripSupplierBranding } from "@/lib/product-display-name";
 import {
@@ -107,6 +119,9 @@ export function resolveChefCategoryBrowseSubSlug(item: CategoryBrowseProductRow)
   };
   if (isChefMiscellaneousExclusiveJbStyleListing(item.name, browseMeta)) {
     return "miscellaneous";
+  }
+  if (isBizCollectionWomensChefPantsChefPantsExclusiveListing(item.name, browseMeta)) {
+    return "pants";
   }
   if (isChefLineJacketsExclusiveCategoryBrowseListing(item.name, browseMeta)) {
     return "jackets";
@@ -390,6 +405,9 @@ function resolveWorkwearCategoryBrowseSubSlug(
     audience: item.audience ?? null,
     storefront_hidden: item.storefront_hidden ?? null,
   };
+  if (isBlueWhaleF81F82WorkwearJumperExclusiveListing(item.name, workwearRowMeta)) {
+    return "jumper";
+  }
   if (isJbSixSpplWorkwearPolosExclusiveListing(item.name, workwearRowMeta)) {
     return "polos";
   }
@@ -534,6 +552,12 @@ function resolveKidsCategoryBrowseSubSlug(resolved: string | null, item: Categor
   if (isTp3160bKidsPantsExclusiveListing(item.name, kidsMeta)) {
     return "pants";
   }
+  if (isFashionBiz7kbs7kssKidsPantsExclusiveListing(item.name, kidsMeta)) {
+    return "pants";
+  }
+  if (isKidsPolosMisfiledTshirtsStyleSkuListing(item.name, kidsMeta)) {
+    return "t-shirts";
+  }
   if (isKidsLinePolosExclusiveCategoryBrowseListing(item.name, kidsMeta)) {
     return "polos";
   }
@@ -585,6 +609,30 @@ function resolveWomensCategoryBrowseSubSlug(resolved: string | null, item: Categ
     audience: item.audience ?? null,
     storefront_hidden: item.storefront_hidden ?? null,
   };
+  // JB's Wear 4OS — Men's/Shirts only (never any Women's sub-grid).
+  if (isJb4OsMensShirtsExclusiveListing(item.name, womensExclusiveMeta)) {
+    return null;
+  }
+  // Blue Whale — Workwear only (sub from `resolveProductSubSlug`: Polos / Jumper / Pants / Shirts / …).
+  if (blueWhaleWorkwearExclusiveExpectedSubSlug(item.name, womensExclusiveMeta) != null) {
+    return null;
+  }
+  // CH234L / CH432L / CH433L / JB's Wear 5CCP / 5CCP1 — Chef/Pants only (never any Women's sub-grid).
+  if (isBizCollectionWomensChefPantsChefPantsExclusiveListing(item.name, womensExclusiveMeta)) {
+    return null;
+  }
+  if (isFashionBiz7kbs7kssKidsPantsExclusiveListing(item.name, womensExclusiveMeta)) {
+    return null;
+  }
+  if (isWomensPantsMisfiledPolosStyleSkuListing(item.name, womensExclusiveMeta)) {
+    return "polos";
+  }
+  if (isWomensPantsMisfiledTshirtsStyleSkuListing(item.name, womensExclusiveMeta)) {
+    return "t-shirts";
+  }
+  if (isWomensPantsMisfiledJumperStyleSkuListing(item.name, womensExclusiveMeta)) {
+    return "jumper";
+  }
   if (isWomensJacketsJ236ml3wsj1ExclusiveListing(item.name, womensExclusiveMeta)) {
     return "jackets";
   }
@@ -605,6 +653,12 @@ function resolveWomensCategoryBrowseSubSlug(resolved: string | null, item: Categ
   }
   if (isFashionBizPolosWomensExclusiveListing(item.name, womensExclusiveMeta)) {
     return "polos";
+  }
+  if (resolved === "pants") {
+    const remapped = womensBrowseRemapPantsSubSlugIfMisfiledWomensTop(item.name, womensExclusiveMeta);
+    if (remapped != null) {
+      return remapped;
+    }
   }
   if (isBisleyWomensPantsExclusiveListing(item.name, womensExclusiveMeta)) {
     return "pants";

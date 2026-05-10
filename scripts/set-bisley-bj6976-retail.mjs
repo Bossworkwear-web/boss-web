@@ -2,7 +2,7 @@
  * Force Bisley BJ6976 storefront retail to a target by adjusting `products.base_price`.
  *
  * Current store pricing:
- * - Retail (GST incl.) = base_price × (markup × (1 + GST))
+ * - Retail = base_price × 1.7 × (1 + GST) × 1.02 (card fee)
  * - Rounded to 1 decimal place in `lib/product-price.ts`
  *
  * Usage:
@@ -18,34 +18,13 @@ import { loadEnvLocal } from "./lib/load-env.mjs";
 loadEnvLocal();
 
 // Keep in sync with `lib/product-price.ts` for now (Node scripts don't load TS path aliases).
-const MARKUP_TIER1_THRESHOLD_SUPPLIER = 35; // inclusive (<=)
-const MARKUP_TIER2_THRESHOLD_SUPPLIER = 80; // inclusive (>=)
-
-const MARKUP_BEFORE_GST_TIER1 = 1.8;
-const MARKUP_BEFORE_GST_TIER2 = 1.7;
-const MARKUP_BEFORE_GST_TIER3 = 1.6;
+const MARKUP_BEFORE_GST = 1.7;
 const GST_RATE = 0.1;
 const GST_MULT = 1 + GST_RATE;
-
-function markupBeforeGstFromSupplierBase(base) {
-  if (base <= MARKUP_TIER1_THRESHOLD_SUPPLIER) return MARKUP_BEFORE_GST_TIER1;
-  if (base >= MARKUP_TIER2_THRESHOLD_SUPPLIER) return MARKUP_BEFORE_GST_TIER3;
-  return MARKUP_BEFORE_GST_TIER2;
-}
+const CARD_SURCHARGE_MULT = 1.02;
 
 function retailFromBasePrice(base) {
-  const retail = base * markupBeforeGstFromSupplierBase(base) * GST_MULT;
-  const rounded = roundToStorePrice(retail);
-  // Monotonic floors at tier boundaries where multiplier decreases.
-  if (base > MARKUP_TIER1_THRESHOLD_SUPPLIER) {
-    const floor35 = roundToStorePrice(MARKUP_TIER1_THRESHOLD_SUPPLIER * MARKUP_BEFORE_GST_TIER1 * GST_MULT);
-    if (rounded < floor35) return floor35;
-  }
-  if (base >= MARKUP_TIER2_THRESHOLD_SUPPLIER) {
-    const floor80 = roundToStorePrice(MARKUP_TIER2_THRESHOLD_SUPPLIER * MARKUP_BEFORE_GST_TIER2 * GST_MULT);
-    return Math.max(rounded, floor80);
-  }
-  return rounded;
+  return roundToStorePrice(base * MARKUP_BEFORE_GST * GST_MULT * CARD_SURCHARGE_MULT);
 }
 
 function roundToStorePrice(n) {
@@ -71,12 +50,11 @@ function candidateBasePrices(target) {
   // We round retail to 1 dp, so pick a base that lands exactly on target after rounding.
   const out = [];
   const t = roundToStorePrice(target);
-  const idealLow = target / (MARKUP_BEFORE_GST_LOW * GST_MULT);
-  const idealHigh = target / (MARKUP_BEFORE_GST_HIGH * GST_MULT);
+  const ideal = target / (MARKUP_BEFORE_GST * GST_MULT * CARD_SURCHARGE_MULT);
 
-  const scan = (ideal) => {
+  const scan = (idealBase) => {
     for (let i = -200; i <= 200; i += 1) {
-      const base = Math.round((ideal + i * 0.01) * 100) / 100;
+      const base = Math.round((idealBase + i * 0.01) * 100) / 100;
       if (base <= 0) continue;
       if (retailFromBasePrice(base) === t) {
         out.push(base);
@@ -85,8 +63,7 @@ function candidateBasePrices(target) {
     }
   };
 
-  scan(idealLow);
-  if (out.length < 10) scan(idealHigh);
+  scan(ideal);
   return out;
 }
 
@@ -129,7 +106,7 @@ async function main() {
 
   const row = rows[0];
   const candidates = candidateBasePrices(args.target);
-  const fallbackIdeal = args.target / (MARKUP_BEFORE_GST_LOW * GST_MULT);
+  const fallbackIdeal = args.target / (MARKUP_BEFORE_GST * GST_MULT * CARD_SURCHARGE_MULT);
   const chosen = candidates[0] ?? Math.round(fallbackIdeal * 100) / 100;
   const retail = retailFromBasePrice(chosen);
 
@@ -153,4 +130,3 @@ main().catch((e) => {
   console.error(e);
   process.exit(1);
 });
-

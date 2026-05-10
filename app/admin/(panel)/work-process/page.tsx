@@ -18,6 +18,19 @@ function formatSheetTitle(ymd: string) {
   }).format(new Date(Date.UTC(y, m - 1, d)));
 }
 
+function processingStageLabelFromQueues(
+  storeOrderId: string | null,
+  dispatchIds: Set<string>,
+  qcIds: Set<string>,
+  productionIds: Set<string>,
+): string {
+  if (!storeOrderId) return "—";
+  if (dispatchIds.has(storeOrderId)) return "Dispatch";
+  if (qcIds.has(storeOrderId)) return "Quality control";
+  if (productionIds.has(storeOrderId)) return "Production";
+  return "Click up";
+}
+
 export default async function AdminWorkProcessPage() {
   const now = new Date();
   const { ymd: todayPerthYmd, year, month, day } = getPerthYmd(now);
@@ -214,32 +227,48 @@ export default async function AdminWorkProcessPage() {
             storeOrderDateDisplay,
             organisationName,
             customerName,
-            movedToProduction: false,
+            processingStageLabel: "—",
           };
         });
 
-        const storeIdsForProduction = [
+        const storeIdsForQueues = [
           ...new Set(
-            clickUpOrderFormRows
-              .map((r) => r.storeOrderId)
-              .filter((id): id is string => Boolean(id)),
+            clickUpOrderFormRows.map((r) => r.storeOrderId).filter((id): id is string => Boolean(id)),
           ),
         ];
         const storeIdsInProductionQueue = new Set<string>();
-        if (storeIdsForProduction.length > 0) {
-          const { data: prodQ, error: prodQErr } = await supabase
-            .from("click_up_production_queue")
-            .select("store_order_id")
-            .in("store_order_id", storeIdsForProduction);
-          if (!prodQErr && prodQ?.length) {
-            for (const row of prodQ) {
+        const storeIdsInQcQueue = new Set<string>();
+        const storeIdsInDispatchQueue = new Set<string>();
+        if (storeIdsForQueues.length > 0) {
+          const [prodRes, qcRes, dispRes] = await Promise.all([
+            supabase.from("click_up_production_queue").select("store_order_id").in("store_order_id", storeIdsForQueues),
+            supabase.from("click_up_qc_queue").select("store_order_id").in("store_order_id", storeIdsForQueues),
+            supabase.from("click_up_dispatch_queue").select("store_order_id").in("store_order_id", storeIdsForQueues),
+          ]);
+          if (!prodRes.error && prodRes.data?.length) {
+            for (const row of prodRes.data) {
               storeIdsInProductionQueue.add(row.store_order_id);
+            }
+          }
+          if (!qcRes.error && qcRes.data?.length) {
+            for (const row of qcRes.data) {
+              storeIdsInQcQueue.add(row.store_order_id);
+            }
+          }
+          if (!dispRes.error && dispRes.data?.length) {
+            for (const row of dispRes.data) {
+              storeIdsInDispatchQueue.add(row.store_order_id);
             }
           }
         }
         clickUpOrderFormRows = clickUpOrderFormRows.map((r) => ({
           ...r,
-          movedToProduction: Boolean(r.storeOrderId && storeIdsInProductionQueue.has(r.storeOrderId)),
+          processingStageLabel: processingStageLabelFromQueues(
+            r.storeOrderId,
+            storeIdsInDispatchQueue,
+            storeIdsInQcQueue,
+            storeIdsInProductionQueue,
+          ),
         }));
       }
     }
@@ -270,42 +299,6 @@ export default async function AdminWorkProcessPage() {
       </p>
 
       <div className="space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-brand-navy">Ready supplier worksheets</h2>
-          <p className="mt-1 max-w-3xl text-xs text-slate-600">
-            주문별 <strong>Move to Production</strong> 여부는 아래 <strong>Click up Order Form</strong> 표의{" "}
-            <strong>Move to Production</strong> 열(빨간 ✓)에서 확인합니다.
-          </p>
-        </div>
-        {readySupplierSheets.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
-            체크된 시트가 없습니다.{" "}
-            <Link href="/admin/supplier-orders" className="font-semibold text-brand-orange hover:underline">
-              Supplier orders
-            </Link>
-            에서 해당 날짜 표 하단의 <strong>Ready for Processing</strong>를 켜 주세요.
-          </div>
-        ) : (
-          <ul className="space-y-3">
-            {readySupplierSheets.map((s) => (
-              <li key={s.listDate}>
-                <Link
-                  href={`/admin/supplier-orders#supplier-sheet-${s.listDate}`}
-                  className="block rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-brand-orange/40 hover:shadow-md"
-                >
-                  <p className="font-semibold text-brand-navy">{s.title}</p>
-                  <p className="mt-0.5 font-mono text-xs text-slate-500">{s.listDate}</p>
-                  <p className="mt-3 text-2xl font-medium text-brand-navy">
-                    {s.lineCount}{" "}
-                    <span className="text-base font-normal text-slate-500">lines</span>
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-brand-orange">Open worksheet →</p>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-
         <ClickUpOrderFormSection rows={clickUpOrderFormRows} sheetsReady={clickUpSheetListItems.length > 0} />
       </div>
     </div>

@@ -292,13 +292,13 @@ export default function PaymentPage() {
             Logo setup (60 + GST) applies to your <strong>first</strong> embroidery order under{" "}
             {toCurrency(STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD)} subtotal, and again whenever an embroidery line
             includes <strong>new logo files</strong> you upload. At or above{" "}
-            {toCurrency(STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD)} subtotal: logo setup is waived; Perth Metro (6000–6199)
-            delivery free.
+            {toCurrency(STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD)} subtotal: logo setup is waived. Delivery fees apply
+            Australia-wide based on postcode and chargeable weight.
           </p>
           <div className="mt-3 space-y-1 text-sm">
             <p className="flex justify-between">
               <span>Products</span>
-              <span className="font-semibold">{toCurrency(grandTotal)}</span>
+              <span className="font-semibold">{toCurrency(productNetSubtotal)}</span>
             </p>
             <p className="flex justify-between">
               <span>Logo setup</span>

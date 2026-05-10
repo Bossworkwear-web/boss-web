@@ -17,6 +17,8 @@ export type ClickUpDispatchQueueRowDto = {
   status: string;
   customerName: string;
   customerEmail: string;
+  /** Public URLs of carrier label images (AusPost etc.) attached on Dispatch. */
+  carrierLabelImageUrls: string[];
 };
 
 /** Orders sent to Dispatch from Quality Check sheet (Move to Dispatch). */
@@ -33,7 +35,7 @@ export async function listClickUpDispatchQueue(): Promise<
     const supabase = createSupabaseAdminClient();
     const { data: qrows, error: qErr } = await supabase
       .from("click_up_dispatch_queue")
-      .select("id, store_order_id, list_date, moved_at")
+      .select("id, store_order_id, list_date, moved_at, carrier_label_image_urls")
       .order("moved_at", { ascending: false });
 
     if (qErr) {
@@ -59,6 +61,11 @@ export async function listClickUpDispatchQueue(): Promise<
 
     const rows: ClickUpDispatchQueueRowDto[] = queue.map((q) => {
       const o = orderMap.get(q.store_order_id);
+      const labelUrlsRaw = (q as { carrier_label_image_urls?: unknown }).carrier_label_image_urls;
+      const carrierLabelImageUrls = Array.isArray(labelUrlsRaw)
+        ? labelUrlsRaw.filter((u): u is string => typeof u === "string" && u.trim().length > 0)
+        : [];
+
       return {
         queueId: q.id,
         storeOrderId: q.store_order_id,
@@ -68,6 +75,7 @@ export async function listClickUpDispatchQueue(): Promise<
         status: o?.status ?? "—",
         customerName: o?.customer_name ?? "",
         customerEmail: o?.customer_email ?? "",
+        carrierLabelImageUrls,
       };
     });
 

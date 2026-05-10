@@ -363,6 +363,28 @@ export function resolveProductSubSlug(
     return "jackets";
   }
 
+  /** JB's Wear 4OS: Men's → Shirts (storefront routing override). */
+  const jb4osHay = `${name} ${storeSlug ?? ""}`.toUpperCase();
+  if (
+    /\b4OS\b/.test(jb4osHay) &&
+    (/\bjb'?s\s+wear\b/i.test(name) || /\bjbs\s*wear\b/i.test(name) || /(?:^|-)jb-/i.test(String(storeSlug ?? "").trim()))
+  ) {
+    return "shirts";
+  }
+
+  /** Blue Whale F81 / F82: Workwear → Jumper (storefront routing override). */
+  {
+    const slugLc = String(storeSlug ?? "").toLowerCase();
+    if (/\bBLUE\s+WHALE\b/i.test(name)) {
+      if (/\(F81\)\s*$/i.test(name.trim()) || /\(F82\)\s*$/i.test(name.trim())) {
+        return "jumper";
+      }
+    }
+    if (slugLc.includes("blue-whale") && (/(?:^|-)f81(?:-|$)/.test(slugLc) || /(?:^|-)f82(?:-|$)/.test(slugLc))) {
+      return "jumper";
+    }
+  }
+
   /** Syzmik ZP521 / ZP521S: pants, not jackets (storefront routing override). */
   const zp521Hay = `${name} ${storeSlug ?? ""}`.toUpperCase();
   if (/\bZP521S?\b/.test(zp521Hay)) {

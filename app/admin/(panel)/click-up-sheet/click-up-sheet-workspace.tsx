@@ -577,6 +577,7 @@ export function ClickUpSheetWorkspace({
           </div>
         </section>
 
+        <div className="click-up-sheet-print-logo-ref-row grid min-w-0 grid-cols-1 gap-6 lg:col-span-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Logo &amp; artwork</h2>
           <div className="mt-4">
@@ -621,6 +622,7 @@ export function ClickUpSheetWorkspace({
           customerOrderId={orderId}
           initialItems={initialCustomerReferenceItems}
         />
+        </div>
 
         <div className="click-up-sheet-print-span-2 min-w-0 lg:col-span-2">
           <ClickUpSheetImagesSection
