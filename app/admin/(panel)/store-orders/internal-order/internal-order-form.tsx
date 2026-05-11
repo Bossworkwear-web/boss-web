@@ -143,14 +143,21 @@ export function InternalOrderForm({
   isBlankStarter,
   variant = "internal",
   quoteRequestId = null,
+  quoteSubmitContext = "customer-quote",
 }: {
   template: Template;
   isBlankStarter: boolean;
   variant?: "internal" | "customer-quote";
   /** When set, Save Quote updates this `quote_requests` row. */
   quoteRequestId?: string | null;
+  /**
+   * Where quote-sheet submits return after save / which `source` value is sent for Make Store order.
+   * `internal-order` → same sheet as Customer Quote but redirects stay on Internal order.
+   */
+  quoteSubmitContext?: "customer-quote" | "internal-order";
 }) {
   const isQuote = variant === "customer-quote";
+  const isInternalOrderQuote = isQuote && quoteSubmitContext === "internal-order";
 
   const [baseOrderNumber, setBaseOrderNumber] = useState(template.baseOrderNumber);
   const [customerEmail, setCustomerEmail] = useState(template.customerEmail);
@@ -1062,7 +1069,11 @@ export function InternalOrderForm({
           action={createInternalOrderFromTemplate}
           className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-4 print:hidden"
         >
-          <input type="hidden" name="source" value="customer-quote" />
+          <input
+            type="hidden"
+            name="source"
+            value={isInternalOrderQuote ? "internal-quote" : "customer-quote"}
+          />
           <input type="hidden" name="quote_request_id" value={quoteRequestId ?? ""} />
           <input type="hidden" name="customer_quote_sheet_json" value={JSON.stringify(customerQuoteSheetPayload)} />
           <input type="hidden" name="base_order_number" value={baseOrderNumber} />
@@ -1077,17 +1088,27 @@ export function InternalOrderForm({
           <input type="hidden" name="quote_deposit_cents" value={String(depositCents)} />
           <input type="hidden" name="items_json" value={JSON.stringify(itemsPayload)} />
           <p className="mr-auto max-w-xl text-xs text-slate-600">
-            <strong>Save Quote</strong>는 CRM 견적 목록에만 저장합니다. 주문을 만들려면 <strong>Make Store order</strong>를 누르세요. M/F는 스토어
-            품목 메모 앞에 붙어 저장됩니다.
+            {isInternalOrderQuote ? (
+              <>
+                <strong>Make Store order</strong>로 스토어 주문을 생성합니다. M/F는 스토어 품목 메모 앞에 붙어 저장됩니다.
+              </>
+            ) : (
+              <>
+                <strong>Save Quote</strong>는 CRM 견적 목록에만 저장합니다. 주문을 만들려면 <strong>Make Store order</strong>를 누르세요. M/F는 스토어
+                품목 메모 앞에 붙어 저장됩니다.
+              </>
+            )}
           </p>
-          <button
-            type="submit"
-            formAction={saveCustomerQuoteSheet}
-            className="rounded-xl border border-emerald-800 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 disabled:opacity-60"
-            disabled={items.length === 0}
-          >
-            Save Quote
-          </button>
+          {!isInternalOrderQuote ? (
+            <button
+              type="submit"
+              formAction={saveCustomerQuoteSheet}
+              className="rounded-xl border border-emerald-800 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 disabled:opacity-60"
+              disabled={items.length === 0}
+            >
+              Save Quote
+            </button>
+          ) : null}
           <button
             type="submit"
             className="rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-60"

@@ -7,6 +7,7 @@ import { ImageUrlLightbox } from "@/app/components/image-url-lightbox";
 import { ArrowLeftIcon, CartIcon } from "@/app/components/icons";
 import { TopNav } from "@/app/components/top-nav";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
+import { STORE_GOOGLE_MAPS_QUERY, storeGoogleMapsSearchHref } from "@/lib/store-google-maps-url";
 import { extractAustralianPostcodeFromAddress } from "@/lib/customer-delivery-estimate";
 import {
   STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD,
@@ -42,6 +43,63 @@ function toCurrency(amount: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+function PricingDeliveryNotesCollapsible() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-4 rounded-xl border border-white/15 bg-white/5 p-3 text-[0.95rem] leading-snug text-slate-200">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 rounded-lg py-0.5 text-left font-semibold text-slate-100 transition hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange/60"
+      >
+        <span>Pricing &amp; delivery notes</span>
+        <svg
+          className={`h-5 w-5 shrink-0 text-slate-300 transition-transform duration-300 ease-out motion-reduce:transition-none ${open ? "rotate-180" : ""}`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          aria-hidden
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+      <div
+        className="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none"
+        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <ul className="mt-2 list-inside list-disc space-y-1.5 pb-0.5 text-slate-300">
+            <li>
+              Product subtotal under {toCurrency(STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD)}: your{" "}
+              <strong className="font-medium text-slate-200">first</strong> embroidery order includes a one-off Logo
+              setup fee ({toCurrency(STOREFRONT_LOGO_SETUP_BEFORE_GST_AUD)} + GST,{" "}
+              {toCurrency(logoSetupFeeInclGstAud())} incl. GST).
+            </li>
+            <li>
+              <strong className="font-medium text-slate-200">New logo files</strong> on an embroidery line (same fee)
+              apply even if you have ordered embroidery before — upload artwork at add-to-cart.
+            </li>
+            <li>
+              Product subtotal {toCurrency(STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD)} or more: Logo setup is{" "}
+              <strong className="font-medium text-slate-200">waived</strong>. Delivery fees apply Australia-wide
+              (estimated from your postcode and chargeable weight).
+            </li>
+            <li>
+              Estimated for all areas from your postcode and total{" "}
+              <strong className="font-medium text-slate-200">chargeable</strong> weight (per item: the higher of packed
+              weight or cubic weight, by product type).
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function isCartMockupRenderableImageUrl(url: string) {
@@ -106,6 +164,7 @@ export default function CartPage() {
   const [isCustomerSignedIn, setIsCustomerSignedIn] = useState(false);
   const [hasPriorEmbroideryOrder, setHasPriorEmbroideryOrder] = useState<boolean | null>(null);
   const [termsAgreed, setTermsAgreed] = useState(false);
+  const [pickUp, setPickUp] = useState(false);
   const [detailItemId, setDetailItemId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -153,6 +212,10 @@ export default function CartPage() {
     return () => {
       cancelled = true;
     };
+  }, [isCustomerSignedIn]);
+
+  useEffect(() => {
+    if (!isCustomerSignedIn) setPickUp(false);
   }, [isCustomerSignedIn]);
 
   useEffect(() => {
@@ -213,7 +276,13 @@ export default function CartPage() {
       }),
     [productNetSubtotal, items, deliveryPostcode, estimatedWeightKg, isCustomerSignedIn, hasPriorEmbroideryOrder],
   );
-  const { deliveryFeeAud, logoSetupFeeAud, logoSetupApplies, totalAud: payableTotal } = checkoutFees;
+  const { deliveryFeeAud, logoSetupFeeAud, logoSetupApplies } = checkoutFees;
+  const effectiveDeliveryFeeAud = isCustomerSignedIn && pickUp ? 0 : deliveryFeeAud;
+  const payableTotal = useMemo(
+    () =>
+      Math.round((productNetSubtotal + effectiveDeliveryFeeAud + logoSetupFeeAud + Number.EPSILON) * 100) / 100,
+    [productNetSubtotal, effectiveDeliveryFeeAud, logoSetupFeeAud],
+  );
   const canCheckOut = termsAgreed && isCustomerSignedIn;
 
   const detailItem = detailItemId ? items.find((i) => i.id === detailItemId) : undefined;
@@ -392,26 +461,7 @@ export default function CartPage() {
               <h2 className="text-[1.3125rem] font-medium uppercase tracking-[0.1em] text-slate-200">
                 Cart Summary
               </h2>
-              <div className="mt-4 rounded-xl border border-white/15 bg-white/5 p-3 text-[0.95rem] leading-snug text-slate-200">
-                <p className="font-semibold text-slate-100">Pricing &amp; delivery notes</p>
-                <ul className="mt-2 list-inside list-disc space-y-1.5 text-slate-300">
-                  <li>
-                    Product subtotal under {toCurrency(STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD)}: your{" "}
-                    <strong className="font-medium text-slate-200">first</strong> embroidery order includes a one-off
-                    Logo setup fee ({toCurrency(STOREFRONT_LOGO_SETUP_BEFORE_GST_AUD)} + GST,{" "}
-                    {toCurrency(logoSetupFeeInclGstAud())} incl. GST).
-                  </li>
-                  <li>
-                    <strong className="font-medium text-slate-200">New logo files</strong> on an embroidery line (same
-                    fee) apply even if you have ordered embroidery before — upload artwork at add-to-cart.
-                  </li>
-                  <li>
-                    Product subtotal {toCurrency(STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD)} or more: Logo setup is{" "}
-                    <strong className="font-medium text-slate-200">waived</strong>. Delivery fees apply Australia-wide
-                    (estimated from your postcode and chargeable weight).
-                  </li>
-                </ul>
-              </div>
+              <PricingDeliveryNotesCollapsible />
               <div className="mt-4 space-y-2 text-[1.3125rem]">
                 <p className="flex items-center justify-between">
                   <span>Total items</span>
@@ -456,28 +506,46 @@ export default function CartPage() {
                   <span className="font-semibold">
                     {!isCustomerSignedIn
                       ? toCurrency(0)
-                      : deliveryFeeAud === 0
+                      : effectiveDeliveryFeeAud === 0
                         ? "Free"
-                        : toCurrency(deliveryFeeAud)}
+                        : toCurrency(effectiveDeliveryFeeAud)}
                   </span>
                 </p>
-                <p className="text-[0.95rem] leading-snug text-slate-400">
-                  {!isCustomerSignedIn ? (
-                    <>
-                      <Link href="/log-in" className="font-semibold text-brand-orange underline hover:text-brand-orange/90">
-                        Sign in
-                      </Link>{" "}
-                      to estimate delivery and Logo setup from your saved address. Until then, delivery is shown as{" "}
-                      {toCurrency(0)}.
-                    </>
-                  ) : (
-                    <>
-                      Estimated for all areas from your postcode and total{" "}
-                      <strong className="font-medium text-slate-300">chargeable</strong> weight (per item: the higher of
-                      packed weight or cubic weight, by product type).
-                    </>
-                  )}
-                </p>
+                {isCustomerSignedIn ? (
+                  <div className="space-y-2">
+                    <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[0.95rem] text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={pickUp}
+                        onChange={(e) => setPickUp(e.target.checked)}
+                        className="h-4 w-4 shrink-0 rounded border-white/30 bg-white/10 text-brand-orange focus:ring-brand-orange"
+                      />
+                      <span className="font-semibold text-slate-100">Pick up</span>
+                    </label>
+                    {pickUp ? (
+                      <p className="px-1 text-[0.9rem] leading-snug text-slate-300">
+                        <a
+                          href={storeGoogleMapsSearchHref()}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-semibold text-brand-orange underline hover:text-brand-orange/90"
+                          title={STORE_GOOGLE_MAPS_QUERY}
+                        >
+                          Click to view on Google Maps
+                        </a>
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+                {!isCustomerSignedIn ? (
+                  <p className="text-[0.95rem] leading-snug text-slate-400">
+                    <Link href="/log-in" className="font-semibold text-brand-orange underline hover:text-brand-orange/90">
+                      Sign in
+                    </Link>{" "}
+                    to estimate delivery and Logo setup from your saved address. Until then, delivery is shown as{" "}
+                    {toCurrency(0)}.
+                  </p>
+                ) : null}
               </div>
               <div className="mt-4 border-t border-white/15 pt-4">
                 <p className="text-[1.3125rem] text-slate-300">Total payable</p>

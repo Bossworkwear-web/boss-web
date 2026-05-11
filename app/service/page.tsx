@@ -7,6 +7,7 @@ import { NeedleIcon, PlacementIcon, PrinterIcon } from "@/app/components/icons";
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
 import { TopNav } from "@/app/components/top-nav";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
+import { STORE_GOOGLE_MAPS_QUERY, storeGoogleMapsSearchHref } from "@/lib/store-google-maps-url";
 
 const boldonse = Boldonse({
   subsets: ["latin"],
@@ -26,7 +27,7 @@ export default function ServicePage() {
             <div className="relative aspect-[16/9] min-h-[12.5rem] w-full sm:min-h-[17.5rem] sm:max-h-[min(58vh,36rem)]">
               <Image
                 src="/service_main.png"
-                alt="In-store service at Boss Workwear — bring your garments for embroidery and printing."
+                alt="In-Store Service at Boss Workwear — bring your garments for embroidery and printing."
                 fill
                 priority
                 className="object-cover object-center"
@@ -40,7 +41,7 @@ export default function ServicePage() {
                 <h1
                   className={`${boldonse.className} flex flex-col items-center gap-2 text-[clamp(1.96875rem,calc(7.875vw_+_1.2375rem),10.4175rem)] font-normal leading-[1.08] text-white drop-shadow-[0_2px_24px_rgba(0,31,63,0.45)] sm:gap-3`}
                 >
-                  <span className="whitespace-nowrap">In store</span>
+                  <span className="whitespace-nowrap">In-Store</span>
                   <span className="whitespace-nowrap">Service</span>
                 </h1>
               </div>
@@ -202,13 +203,13 @@ export default function ServicePage() {
               <p>
                 For opening hours and location, please{" "}
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent("Shop 152, Coventry Village, shop 42c/253 Walter Rd W, Morley WA 6062")}`}
+                  href={storeGoogleMapsSearchHref()}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-semibold text-brand-navy underline-offset-2 hover:underline"
-                  title="Shop 152, Coventry Village, shop 42c/253 Walter Rd W, Morley WA 6062"
+                  title={STORE_GOOGLE_MAPS_QUERY}
                 >
-                  click for visiting Google map
+                  Click to view on Google Maps
                 </a>
                 .
               </p>

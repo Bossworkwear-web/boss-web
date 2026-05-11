@@ -14,6 +14,7 @@ import { sendStoreOrderConfirmationEmail } from "@/lib/store-order-email";
 import { allocateNextBossStoreOrderNumber } from "@/lib/boss-customer-order-id";
 import { getPerthYmd } from "@/lib/perth-calendar";
 import { insertSupplierOrderLinesFromStoreCheckout } from "@/lib/supplier-order-lines-from-store-order";
+import { ensureClickUpSheetListForSupplierListDate } from "@/lib/supplier-sheet-click-up-bootstrap";
 import { formatMoneyFromCents, siteBaseUrl } from "@/lib/store-order-utils";
 import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
 import { createSupabaseAdminClient } from "@/lib/supabase";
@@ -369,7 +370,7 @@ export async function placeStoreOrder(
     sort_order: idx,
   }));
 
-  const { error: itemsErr } = await supabase.from("store_order_items").insert(itemRows);
+  const { data: insertedItems, error: itemsErr } = await supabase.from("store_order_items").insert(itemRows).select("id");
   if (itemsErr) {
     await supabase.from("store_orders").delete().eq("id", orderId);
     const imsg = itemsErr.message;
@@ -383,11 +384,29 @@ export async function placeStoreOrder(
     return { ok: false, error: imsg };
   }
 
+  const insertedIds = (insertedItems ?? []).map((r) => String((r as { id?: string }).id ?? "").trim());
+  const storeOrderItemIds =
+    insertedIds.length === normalizedItems.length && insertedIds.every((id) => /^[0-9a-f-]{36}$/i.test(id))
+      ? insertedIds
+      : null;
+
   const { ymd: supplierListDate } = getPerthYmd(new Date());
-  await insertSupplierOrderLinesFromStoreCheckout(supabase, orderNumber, supplierListDate, normalizedItems);
+  await insertSupplierOrderLinesFromStoreCheckout(
+    supabase,
+    orderNumber,
+    supplierListDate,
+    normalizedItems,
+    storeOrderItemIds,
+  );
+  const clickUpRes = await ensureClickUpSheetListForSupplierListDate(supabase, supplierListDate);
+  if (!clickUpRes.ok) {
+    console.error("[placeStoreOrder] click_up_sheet_list:", clickUpRes.error);
+  }
   revalidatePath("/admin/supplier-orders");
   revalidatePath("/admin/store-orders");
   revalidatePath("/admin/reports");
+  revalidatePath("/admin/work-process");
+  revalidatePath("/admin/click-up-sheet");
 
   const totalFormatted = formatMoneyFromCents(totalCents, "AUD");
   void sendStoreOrderConfirmationEmail({

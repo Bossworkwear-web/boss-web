@@ -4,6 +4,7 @@ import {
   backfillEmptySupplierFromCatalog,
   resolveProductImageUrlsByProductKeys,
 } from "@/lib/supplier-line-catalog-supplier";
+import { fetchIncomingReceivedYmdByStoreItemIds } from "@/lib/incoming-goods-received-lookup";
 import { supplierOrderLinesLoadErrorMessage } from "@/lib/supplier-order-lines-db-error";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -37,6 +38,8 @@ export type LoadedAdminSupplierOrderSheets = {
   sheetDates: string[];
   linesByDate: Record<string, SupplierOrderLine[]>;
   productImageByProductKey: Record<string, string | null>;
+  /** Perth YMD when Incoming goods marks the linked store line fully received; `null` = not complete / no receipt. */
+  incomingReceivedYmdByStoreItemId: Record<string, string | null>;
   loadError: string | null;
   generatedAt: Date;
 };
@@ -51,6 +54,7 @@ export async function loadAdminSupplierOrderSheets(opts?: { at?: Date }): Promis
   let loadError: string | null = null;
   let lines: SupplierOrderLine[] = [];
   let productImageByProductKey: Record<string, string | null> = {};
+  let incomingReceivedYmdByStoreItemId: Record<string, string | null> = {};
 
   try {
     const result = await fetchSupplierOrderLines(oldestYmd, newestYmd);
@@ -64,6 +68,10 @@ export async function loadAdminSupplierOrderSheets(opts?: { at?: Date }): Promis
         const imgMap = await resolveProductImageUrlsByProductKeys(supabase, keys);
         productImageByProductKey = Object.fromEntries(keys.map((k) => [k, imgMap.get(k) ?? null]));
       }
+      const itemLinkIds = lines
+        .map((l) => (l.store_order_item_id ?? "").trim())
+        .filter((id) => /^[0-9a-f-]{36}$/i.test(id));
+      incomingReceivedYmdByStoreItemId = await fetchIncomingReceivedYmdByStoreItemIds(supabase, itemLinkIds);
     }
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
@@ -90,5 +98,5 @@ export async function loadAdminSupplierOrderSheets(opts?: { at?: Date }): Promis
     });
   }
 
-  return { sheetDates, linesByDate, productImageByProductKey, loadError, generatedAt };
+  return { sheetDates, linesByDate, productImageByProductKey, incomingReceivedYmdByStoreItemId, loadError, generatedAt };
 }

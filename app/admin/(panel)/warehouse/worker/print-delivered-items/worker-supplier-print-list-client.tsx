@@ -17,6 +17,7 @@ type Props = {
   sheetDates: string[];
   linesByDate: Record<string, SupplierOrderLineRow[]>;
   productImageByProductKey: Record<string, string | null>;
+  incomingReceivedYmdByStoreItemId: Record<string, string | null>;
   migrationHint: string | null;
   pageOpenedLabel: string;
   pageOpenedIso: string;
@@ -68,6 +69,7 @@ export function WorkerSupplierPrintListClient({
   sheetDates,
   linesByDate,
   productImageByProductKey,
+  incomingReceivedYmdByStoreItemId,
   migrationHint,
   pageOpenedLabel,
   pageOpenedIso,
@@ -185,7 +187,9 @@ export function WorkerSupplierPrintListClient({
                   </div>
                   <button
                     type="button"
-                    onClick={() => printSupplierOrderDaySheet(ymd, lines, productImageByProductKey)}
+                    onClick={() =>
+                      printSupplierOrderDaySheet(ymd, lines, productImageByProductKey, incomingReceivedYmdByStoreItemId)
+                    }
                     className="shrink-0 rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-brand-navy transition hover:bg-slate-50"
                   >
                     Print sheet

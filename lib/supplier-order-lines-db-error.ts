@@ -127,7 +127,7 @@ export function supplierOrderLinesMutationErrorMessage(error: { message: string;
     const detail = formatSupplierOrderLinesErrorDetail(error);
     return (
       "Supabase cannot see public.click_up_sheet_list (table missing or PostgREST schema cache is stale). " +
-      "This table stores rows for Click Up → Click up sheet list when you check Ready for Processing on Supplier orders. " +
+      "This table stores rows for Click Up → Click up sheet list (dates are added when web checkout creates supplier lines, or via admin tooling). " +
       "In Supabase → SQL Editor, run supabase/sql-editor/click_up_sheet_list_full_setup.sql (or migration 20260439). " +
       "It ends with NOTIFY pgrst, 'reload schema';." +
       detail

@@ -3,6 +3,7 @@
 import { refresh, revalidatePath } from "next/cache";
 
 import { assertAdminSession } from "@/lib/admin-auth";
+import { syncSupplierOrderLinesReceivedDateFromIncomingGoods } from "@/lib/supplier-order-line-received-from-incoming";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 export type IncomingGoodsRowDto = {
@@ -20,6 +21,8 @@ export type IncomingGoodsRowDto = {
   serviceType: string | null;
   qtyReceived: number;
   updatedAt: string | null;
+  /** `store_order_items.sort_order` — line order within the order. */
+  sortOrder: number;
 };
 
 type IncomingGoodsResult =
@@ -40,7 +43,7 @@ export async function listIncomingGoodsRows(): Promise<IncomingGoodsResult> {
     const { data: items, error: itemsErr } = await supabase
       .from("store_order_items")
       .select(
-        "id, order_id, product_name, quantity, color, size, service_type, store_orders ( id, order_number, created_at, status, customer_name )",
+        "id, order_id, product_name, quantity, color, size, service_type, sort_order, store_orders ( id, order_number, created_at, status, customer_name )",
       )
       .order("created_at", { referencedTable: "store_orders", ascending: false })
       .order("sort_order", { ascending: true })
@@ -65,6 +68,7 @@ export async function listIncomingGoodsRows(): Promise<IncomingGoodsResult> {
           color: ((r as any).color ?? null) ? String((r as any).color) : null,
           size: ((r as any).size ?? null) ? String((r as any).size) : null,
           serviceType: ((r as any).service_type ?? null) ? String((r as any).service_type) : null,
+          sortOrder: Math.max(0, Math.floor(Number((r as any).sort_order) || 0)),
         };
       })
       .filter((x) => x.storeOrderId && x.orderNumber && x.itemId);
@@ -154,8 +158,11 @@ export async function setIncomingGoodsReceivedQty(args: {
       );
     if (error) return { ok: false, error: error.message };
 
+    await syncSupplierOrderLinesReceivedDateFromIncomingGoods(supabase, itemId, qty);
+
     refresh();
     revalidatePath("/admin/incoming-goods");
+    revalidatePath("/admin/supplier-orders");
     return { ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Save failed";

@@ -22,7 +22,7 @@ export function ClickUpOrderFormSection({
   sheetsReady,
 }: {
   rows: ClickUpOrderFormRow[];
-  /** True when at least one worksheet is on the Click up list (Ready for Processing). */
+  /** True when `click_up_sheet_list` has at least one worksheet date (e.g. after web checkout). */
   sheetsReady: boolean;
 }) {
   return (
@@ -42,11 +42,12 @@ export function ClickUpOrderFormSection({
 
         {!sheetsReady ? (
           <p className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-4 py-6 text-center text-sm text-slate-600">
-            아직 Ready for Processing인 워크시트가 없습니다.{" "}
+            아직 Click up sheet 목록에 등록된 워크시트 날짜가 없습니다. 스토어에서 결제가 완료되면 해당 Perth 날짜가
+            자동으로 추가됩니다.{" "}
             <Link href="/admin/supplier-orders" className="font-semibold text-brand-orange hover:underline">
               Supplier orders
             </Link>
-            에서 먼저 시트를 준비해 주세요.
+            에서 시트를 확인할 수 있습니다.
           </p>
         ) : rows.length === 0 ? (
           <p className="mt-4 rounded-lg border border-dashed border-amber-200 bg-amber-50/80 px-4 py-6 text-center text-sm text-amber-950">

@@ -135,7 +135,7 @@ export default async function CompleteOrderDocumentsPage({
           <li>
             <Link href={appendCompleteOrdersDocQuery("/admin/supplier-orders")} className={docLinkClass}>
               <span className="text-sm font-semibold text-brand-navy">Supplier orders</span>
-              <span className="mt-1 block text-xs text-slate-600">시트·Ready for Processing</span>
+              <span className="mt-1 block text-xs text-slate-600">일별 Supplier 시트</span>
             </Link>
           </li>
           <li>

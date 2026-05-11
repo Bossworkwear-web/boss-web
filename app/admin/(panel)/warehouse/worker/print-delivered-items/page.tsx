@@ -19,7 +19,7 @@ function formatOpenedAt(date: Date) {
 
 export default async function WarehouseWorkerPrintDeliveredItemsPage() {
   const generatedAt = new Date();
-  const { sheetDates, linesByDate, productImageByProductKey, loadError } =
+  const { sheetDates, linesByDate, productImageByProductKey, incomingReceivedYmdByStoreItemId, loadError } =
     await loadAdminSupplierOrderSheets({ at: generatedAt });
 
   return (
@@ -60,6 +60,7 @@ export default async function WarehouseWorkerPrintDeliveredItemsPage() {
         sheetDates={sheetDates}
         linesByDate={linesByDate}
         productImageByProductKey={productImageByProductKey}
+        incomingReceivedYmdByStoreItemId={incomingReceivedYmdByStoreItemId}
         migrationHint={loadError}
         pageOpenedLabel={formatOpenedAt(generatedAt)}
         pageOpenedIso={generatedAt.toISOString()}

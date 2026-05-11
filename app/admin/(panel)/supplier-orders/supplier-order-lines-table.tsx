@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import type { Database } from "@/lib/database.types";
+import { supplierLineDisplayReceivedYmd } from "@/lib/incoming-goods-received-lookup";
+import { getPerthYmd } from "@/lib/perth-calendar";
 import { supplierOrderProductIdHeadTail } from "@/lib/supplier-order-product-id-parts";
 import { normalizeSupplierOrderLineSupplierValue } from "@/lib/supplier-order-supplier-normalize";
 
@@ -11,11 +13,7 @@ import {
   applyCatalogSupplierNameIfEmpty,
   createSupplierOrderLine,
   deleteSupplierOrderLine,
-  getClickUpSheetHrefAfterSupplierReady,
-  saveSupplierOrdersDaySheetSnapshot,
-  setSupplierDailySheetReadyForProcessing,
   updateSupplierOrderLine,
-  type SupplierDaySheetLineSnapshot,
 } from "./actions";
 
 type SupplierOrderLineRow = Database["public"]["Tables"]["supplier_order_lines"]["Row"];
@@ -27,23 +25,51 @@ export type SupplierDayOrderTableProps = {
   listDateTitle: string;
   lines: SupplierOrderLineRow[];
   migrationHint: string | null;
-  /** Completed Order pre-process doc hub: no edits, ready toggle, or row changes. */
+  /** Completed Order → Pre-process documents links (read-only sheet). */
   completeOrdersDocumentsView?: boolean;
   /** Warehouse Manager link: print / view only (same edit lock as documents view). */
   warehouseManagerView?: boolean;
-  /** When true, this Perth worksheet appears on Click Up. */
-  readyForProcessing: boolean;
   /** Recent `store_orders.order_number` values (Customer order ID) for datalist suggestions. */
   storeOrderNumberOptions?: string[];
   /** Distinct `products.supplier_name` for Supplier column datalist. */
   productSupplierNameOptions?: string[];
   /** Trimmed `product_id` → first catalog image URL (`products.image_urls[0]`). */
   productImageByProductKey?: Record<string, string | null>;
+  /** Incoming goods: fully-received Perth date per `store_order_items.id` (same as Admin → Incoming goods). */
+  incomingReceivedYmdByStoreItemId?: Record<string, string | null>;
   onPrint: () => void;
 };
 
 function lineTotalCents(row: SupplierOrderLineRow) {
   return Math.max(0, row.quantity) * Math.max(0, row.unit_price_cents);
+}
+
+/** OK toggle: sync `sheet_row_ok` and optionally set `ordered_date` to Perth today when checking and date is empty. */
+function computeLineAckRowUpdate(
+  prev: SupplierOrderLineRow[],
+  rowId: string,
+  checked: boolean,
+):
+  | { next: SupplierOrderLineRow[]; patch: { sheet_row_ok: boolean; ordered_date?: string | null } }
+  | null {
+  const row = prev.find((r) => r.id === rowId);
+  if (!row) return null;
+  if (!checked) {
+    return {
+      next: prev.map((r) => (r.id === rowId ? { ...r, sheet_row_ok: false } : r)),
+      patch: { sheet_row_ok: false },
+    };
+  }
+  const todayYmd = getPerthYmd().ymd;
+  const hadOrdered = Boolean(row.ordered_date?.trim());
+  return {
+    next: prev.map((r) =>
+      r.id === rowId
+        ? { ...r, sheet_row_ok: true, ordered_date: hadOrdered ? r.ordered_date : todayYmd }
+        : r,
+    ),
+    patch: hadOrdered ? { sheet_row_ok: true } : { sheet_row_ok: true, ordered_date: todayYmd },
+  };
 }
 
 export function SupplierDayOrderTable({
@@ -53,18 +79,16 @@ export function SupplierDayOrderTable({
   migrationHint,
   completeOrdersDocumentsView = false,
   warehouseManagerView = false,
-  readyForProcessing: readyForProcessingProp,
   storeOrderNumberOptions = [],
   productSupplierNameOptions = [],
   productImageByProductKey = {},
+  incomingReceivedYmdByStoreItemId = {},
   onPrint,
 }: SupplierDayOrderTableProps) {
   const editLocked = Boolean(migrationHint) || completeOrdersDocumentsView || warehouseManagerView;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [pendingReady, startReadyTransition] = useTransition();
-  const [readyForProcessing, setReadyForProcessing] = useState(readyForProcessingProp);
-  /** Per–order-line OK flag (optional; Ready for Processing does not require every row checked). */
+  /** Per–order-line OK flag (optional acknowledgment). */
   const [lineAck, setLineAck] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(initialLines.map((r) => [r.id, Boolean(r.sheet_row_ok)])),
   );
@@ -95,156 +119,20 @@ export function SupplierDayOrderTable({
     });
   }, [initialLines]);
 
-  useEffect(() => {
-    setReadyForProcessing(readyForProcessingProp);
-  }, [readyForProcessingProp]);
-
-  const lineIdsKey = rows
-    .map((r) => r.id)
-    .sort()
-    .join("|");
-  const prevReadyPropRef = useRef<boolean | null>(null);
-  const prevLineIdsKeyRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const readyPropChanged = prevReadyPropRef.current !== readyForProcessingProp;
-    const idsKeyChanged = prevLineIdsKeyRef.current !== lineIdsKey;
-    prevReadyPropRef.current = readyForProcessingProp;
-    prevLineIdsKeyRef.current = lineIdsKey;
-
-    if (readyPropChanged) {
-      setLineAck((prev) => {
-        const next: Record<string, boolean> = {};
-        for (const r of rows) {
-          if (readyForProcessingProp) {
-            next[r.id] = prev[r.id] ?? Boolean(r.sheet_row_ok);
-          } else {
-            next[r.id] = false;
-          }
-        }
-        return next;
-      });
-      return;
-    }
-
-    if (idsKeyChanged) {
-      setLineAck((prev) => {
-        const next: Record<string, boolean> = {};
-        for (const r of rows) {
-          next[r.id] = prev[r.id] ?? false;
-        }
-        return next;
-      });
-    }
-  }, [readyForProcessingProp, lineIdsKey, rows]);
-
-  const prevRowIdSetRef = useRef<Set<string>>(new Set());
-  const rowIdSyncPrimedRef = useRef(false);
-  useEffect(() => {
-    const nextSet = new Set(rows.map((r) => r.id));
-    const prevSet = prevRowIdSetRef.current;
-
-    if (!rowIdSyncPrimedRef.current) {
-      rowIdSyncPrimedRef.current = true;
-      prevRowIdSetRef.current = nextSet;
-      return;
-    }
-
-    const added = rows.filter((r) => !prevSet.has(r.id));
-    prevRowIdSetRef.current = nextSet;
-
-    if (migrationHint || completeOrdersDocumentsView) return;
-    if (!readyForProcessing || added.length === 0) return;
-
-    setErrorText(null);
-    setReadyForProcessing(false);
-    startReadyTransition(async () => {
-      const result = await setSupplierDailySheetReadyForProcessing(listDateYmd, false);
-      if (!result.ok) {
-        setErrorText(result.error);
-        return;
-      }
-      router.refresh();
-    });
-  }, [rows, readyForProcessing, listDateYmd, router, migrationHint, completeOrdersDocumentsView]);
-
-  useEffect(() => {
-    if (migrationHint || completeOrdersDocumentsView || !readyForProcessing || rows.length > 0) return;
-    setErrorText(null);
-    setReadyForProcessing(false);
-    startReadyTransition(async () => {
-      const result = await setSupplierDailySheetReadyForProcessing(listDateYmd, false);
-      if (!result.ok) {
-        setErrorText(result.error);
-        return;
-      }
-      router.refresh();
-    });
-  }, [migrationHint, completeOrdersDocumentsView, rows.length, readyForProcessing, listDateYmd, router]);
-
   function setLineAckForRow(rowId: string, checked: boolean) {
     setLineAck((prev) => ({ ...prev, [rowId]: checked }));
-    if (readyForProcessing && !checked) {
-      setErrorText(null);
-      setReadyForProcessing(false);
-      startReadyTransition(async () => {
-        const result = await setSupplierDailySheetReadyForProcessing(listDateYmd, false);
-        if (!result.ok) {
-          setErrorText(result.error);
-          return;
-        }
-        router.refresh();
-      });
-    }
-  }
 
-  /** Reads current cell values from the table (including un‑blurred edits) plus dates from React state. */
-  function collectDaySheetSnapshot(sheetRowOkById: Record<string, boolean>): SupplierDaySheetLineSnapshot[] | null {
-    if (rows.length === 0) return [];
-    const root = tbodyRef.current;
-    if (!root) return null;
-    const out: SupplierDaySheetLineSnapshot[] = [];
-    for (const row of rows) {
-      const tr = root.querySelector(`tr[data-so-line-id="${row.id}"]`);
-      if (!tr) return null;
-      const g = (name: string) =>
-        (tr.querySelector(`[data-so-field="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | null)?.value;
-      const supplier = normalizeSupplierOrderLineSupplierValue(g("supplier") ?? "");
-      const customer_order_id = (g("customer_order_id") ?? "").trim();
-      const productInp = tr.querySelector('[data-so-field="product_id"]') as HTMLInputElement | null;
-      const product_id = (productInp?.value ?? row.product_id).trim();
-      const colour = (g("colour") ?? "").trim();
-      const size = (g("size") ?? "").trim();
-      const qtyRaw =
-        (tr.querySelector('[data-so-field="quantity"]') as HTMLInputElement | null)?.value ?? String(row.quantity);
-      const n = Number(qtyRaw);
-      const quantity = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
-      const unitRaw =
-        (tr.querySelector('[data-so-field="unit_price_aud"]') as HTMLInputElement | null)?.value ?? "";
-      const unitParsed = Number.parseFloat(unitRaw.replace(/,/g, ""));
-      const unit_price_cents =
-        Number.isFinite(unitParsed) && unitParsed >= 0
-          ? Math.round(unitParsed * 100)
-          : row.unit_price_cents;
-      out.push({
-        id: row.id,
-        supplier,
-        customer_order_id,
-        product_id: product_id.toUpperCase(),
-        colour,
-        size,
-        quantity,
-        ordered_date: row.ordered_date,
-        received_date: row.received_date,
-        notes: row.notes,
-        unit_price_cents,
-        sheet_row_ok: Boolean(sheetRowOkById[row.id]),
-      });
-    }
-    return out;
-  }
+    if (editLocked) return;
 
-  const readyMasterDisabled = editLocked || pendingReady || rows.length === 0;
+    setRows((prev) => {
+      const u = computeLineAckRowUpdate(prev, rowId, checked);
+      if (!u) return prev;
+      queueMicrotask(() => {
+        void runSave(() => updateSupplierOrderLine(rowId, u.patch));
+      });
+      return u.next;
+    });
+  }
 
   function refresh() {
     router.refresh();
@@ -299,7 +187,10 @@ export function SupplierDayOrderTable({
           </p>
           <p className="mt-0.5 font-mono text-xs text-slate-500">{listDateYmd} · Australia/Perth worksheet</p>
           <p className="mt-2 text-xs text-slate-600">
-            <strong>Unit (AUD)</strong> per unit; line = qty × unit. Edits save on blur / date change.
+            <strong>Unit (AUD)</strong> per unit; line = qty × unit. Edits save on blur / date change (Ordered only).{" "}
+            <strong>Received</strong> is read-only: linked store lines match{" "}
+            <strong className="text-brand-navy">Admin → Incoming goods</strong>; other lines show the saved worksheet
+            date.
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -328,12 +219,12 @@ export function SupplierDayOrderTable({
       )}
       {completeOrdersDocumentsView && !migrationHint ? (
         <p className="border-b border-slate-200 bg-slate-100 px-4 py-3 text-sm text-slate-800">
-          Completed Order 문서 보기 모드: 시트를 수정하거나 Ready for Processing을 바꿀 수 없습니다.
+          Completed Order 문서 보기 모드: 시트를 수정할 수 없습니다.
         </p>
       ) : null}
       {warehouseManagerView && !migrationHint && !completeOrdersDocumentsView ? (
         <p className="border-b border-slate-200 bg-slate-100 px-4 py-3 text-sm text-slate-800">
-          창고 매니저 보기: 인쇄·열람만 가능합니다. 수정·삭제·행 추가·Ready for Processing은 사용할 수 없습니다.
+          창고 매니저 보기: 인쇄·열람만 가능합니다. 수정·삭제·행 추가는 사용할 수 없습니다.
         </p>
       ) : null}
 
@@ -357,7 +248,10 @@ export function SupplierDayOrderTable({
         <table className="w-full min-w-[1180px] text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-500">
             <tr>
-              <th className="w-10 px-1 py-2 text-center" title="Optional line acknowledgment (not required for Ready for Processing)">
+              <th
+                className="w-10 px-1 py-2 text-center"
+                title="Line OK. Web-linked rows (store item) also update Admin → Incoming goods received qty."
+              >
                 OK
               </th>
               <th className="px-2 py-2" title="Matches products.supplier_name in catalog">
@@ -372,7 +266,9 @@ export function SupplierDayOrderTable({
               <th className="px-2 py-2">Size</th>
               <th className="px-2 py-2 w-24">Qty</th>
               <th className="px-2 py-2 w-36">Ordered</th>
-              <th className="px-2 py-2 w-36">Received</th>
+              <th className="px-2 py-2 w-36" title="Store-linked lines: from Admin → Incoming goods (read-only). Otherwise legacy saved date.">
+                Received
+              </th>
               <th className="px-2 py-2 w-28">Unit (AUD)</th>
               <th className="px-2 py-2 w-28">Line</th>
               <th className="w-20 px-2 py-2" />
@@ -610,17 +506,16 @@ export function SupplierDayOrderTable({
                     />
                   </td>
                   <td className="px-2 py-2 align-top">
-                    <input
-                      type="date"
-                      className="w-full rounded border border-slate-200 px-1 py-1 text-xs"
-                      value={row.received_date ?? ""}
-                      disabled={editLocked}
-                      onChange={(e) => {
-                        const v = e.target.value || null;
-                        setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, received_date: v } : r)));
-                        void runSave(() => updateSupplierOrderLine(row.id, { received_date: v }));
-                      }}
-                    />
+                    <div
+                      className="min-h-[2rem] rounded border border-slate-100 bg-slate-50/80 px-2 py-1 font-mono text-xs text-slate-800 tabular-nums"
+                      title={
+                        row.store_order_item_id
+                          ? "Synced from Incoming goods when this line is linked to a store order item."
+                          : "Legacy worksheet date (no store item link)."
+                      }
+                    >
+                      {supplierLineDisplayReceivedYmd(row, incomingReceivedYmdByStoreItemId) ?? "—"}
+                    </div>
                   </td>
                   <td className="px-2 py-2 align-top">
                     <input
@@ -666,82 +561,6 @@ export function SupplierDayOrderTable({
             )}
           </tbody>
         </table>
-      </div>
-
-      <div className="border-t border-slate-200 bg-slate-50 px-4 py-3">
-        <label
-          className={`flex items-start gap-3 text-sm text-slate-800 ${readyMasterDisabled && !readyForProcessing ? "cursor-not-allowed opacity-80" : "cursor-pointer"}`}
-        >
-          <input
-            type="checkbox"
-            className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 disabled:cursor-not-allowed"
-            checked={readyForProcessing}
-            disabled={readyMasterDisabled}
-            onChange={(e) => {
-              setErrorText(null);
-              const checked = e.target.checked;
-              if (!checked) {
-                setReadyForProcessing(false);
-                startReadyTransition(async () => {
-                  const result = await setSupplierDailySheetReadyForProcessing(listDateYmd, false);
-                  if (!result.ok) {
-                    setReadyForProcessing(true);
-                    setErrorText(result.error);
-                    return;
-                  }
-                  router.refresh();
-                });
-                return;
-              }
-              const prevAck = { ...lineAck };
-              setReadyForProcessing(true);
-              startReadyTransition(async () => {
-                const snap = collectDaySheetSnapshot(lineAck);
-                if (snap === null) {
-                  setReadyForProcessing(false);
-                  setLineAck(prevAck);
-                  setErrorText("Could not read the table. Refresh the page and try again.");
-                  return;
-                }
-                const saved = await saveSupplierOrdersDaySheetSnapshot(listDateYmd, snap);
-                if (!saved.ok) {
-                  setReadyForProcessing(false);
-                  setLineAck(prevAck);
-                  setErrorText(saved.error);
-                  return;
-                }
-                const readyRes = await setSupplierDailySheetReadyForProcessing(listDateYmd, true);
-                if (!readyRes.ok) {
-                  setReadyForProcessing(false);
-                  setLineAck(prevAck);
-                  setErrorText(readyRes.error);
-                  return;
-                }
-                const nav = await getClickUpSheetHrefAfterSupplierReady(listDateYmd);
-                if (!nav.ok) {
-                  setReadyForProcessing(false);
-                  setLineAck(prevAck);
-                  setErrorText(nav.error);
-                  return;
-                }
-                if (nav.navigateHref) {
-                  router.push(nav.navigateHref);
-                } else {
-                  router.refresh();
-                }
-              });
-            }}
-          />
-          <span>
-            <span className="font-semibold">Ready for Processing</span>
-            <span className="mt-0.5 block text-xs text-slate-600">
-              Turning this on saves the whole worksheet (all fields and dates), adds this date to{" "}
-              <strong className="text-brand-navy">Click Up</strong>, and opens the Click Up sheet for the first order
-              on this date that is not completed and not already in Production/QC/Dispatch (otherwise this page
-              refreshes). Uncheck to remove from that list.
-            </span>
-          </span>
-        </label>
       </div>
     </div>
   );

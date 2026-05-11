@@ -23,14 +23,14 @@ type Props = {
   completeOrdersDocumentsView?: boolean;
   /** From Dashboard → Warehouse → Manager → Supplier orders (print / view only). */
   warehouseManagerView?: boolean;
-  /** Perth worksheet dates marked “Ready for Processing” (Click Up). */
-  readyByDate: Record<string, boolean>;
   /** Recent store checkout IDs (`store_orders.order_number`) for supplier-line datalist. */
   storeOrderNumberOptions: string[];
   /** Distinct `products.supplier_name` values for Supplier column datalist. */
   productSupplierNameOptions: string[];
   /** Trimmed `product_id` → first catalog image URL (from `products.image_urls`). */
   productImageByProductKey: Record<string, string | null>;
+  /** Perth YMD from Incoming goods for linked store lines (read-only Received column). */
+  incomingReceivedYmdByStoreItemId: Record<string, string | null>;
   pageOpenedLabel: string;
   pageOpenedIso: string;
 };
@@ -83,10 +83,10 @@ export function SupplierOrdersByDayClient({
   migrationHint,
   completeOrdersDocumentsView = false,
   warehouseManagerView = false,
-  readyByDate,
   storeOrderNumberOptions,
   productSupplierNameOptions,
   productImageByProductKey,
+  incomingReceivedYmdByStoreItemId,
   pageOpenedLabel,
   pageOpenedIso,
 }: Props) {
@@ -249,11 +249,13 @@ export function SupplierOrdersByDayClient({
                     migrationHint={migrationHint}
                     completeOrdersDocumentsView={completeOrdersDocumentsView}
                     warehouseManagerView={warehouseManagerView}
-                    readyForProcessing={Boolean(readyByDate[ymd])}
                     storeOrderNumberOptions={storeOrderNumberOptions}
                     productSupplierNameOptions={productSupplierNameOptions}
                     productImageByProductKey={productImageByProductKey}
-                    onPrint={() => printSupplierOrderDaySheet(ymd, lines, productImageByProductKey)}
+                    incomingReceivedYmdByStoreItemId={incomingReceivedYmdByStoreItemId}
+                    onPrint={() =>
+                      printSupplierOrderDaySheet(ymd, lines, productImageByProductKey, incomingReceivedYmdByStoreItemId)
+                    }
                   />
                 </section>
               );

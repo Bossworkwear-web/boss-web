@@ -1,4 +1,5 @@
 import type { Database } from "@/lib/database.types";
+import { supplierLineDisplayReceivedYmd } from "@/lib/incoming-goods-received-lookup";
 import { supplierOrderProductIdHeadTail } from "@/lib/supplier-order-product-id-parts";
 import { normalizeSupplierOrderLineSupplierValue } from "@/lib/supplier-order-supplier-normalize";
 
@@ -44,6 +45,7 @@ export function printSupplierOrderDaySheet(
   ymd: string,
   lines: SupplierOrderLineRow[],
   productImageByProductKey: Record<string, string | null>,
+  incomingReceivedYmdByStoreItemId?: Record<string, string | null>,
 ) {
   if (typeof document === "undefined") return;
 
@@ -67,6 +69,7 @@ export function printSupplierOrderDaySheet(
           .map((r) => {
             const line = aud.format(lineTotalCents(r) / 100);
             const unit = aud.format(Math.max(0, r.unit_price_cents) / 100);
+            const receivedYmd = supplierLineDisplayReceivedYmd(r, incomingReceivedYmdByStoreItemId);
             const imgUrl = productImageByProductKey[r.product_id.trim()] ?? null;
             const imgCell = imgUrl
               ? `<td class="num"><img src="${escHtml(imgUrl)}" alt="" style="max-height:84px;max-width:120px;object-fit:contain;vertical-align:middle;display:block"/></td>`
@@ -80,7 +83,7 @@ export function printSupplierOrderDaySheet(
             <td>${escHtml(r.size)}</td>
             <td class="num">${r.quantity}</td>
             <td class="num">${r.ordered_date ? escHtml(r.ordered_date) : "—"}</td>
-            <td class="num">${r.received_date ? escHtml(r.received_date) : "—"}</td>
+            <td class="num">${receivedYmd ? escHtml(receivedYmd) : "—"}</td>
             <td class="num">${escHtml(unit)}</td>
             <td class="num">${escHtml(line)}</td>
           </tr>`;

@@ -168,6 +168,7 @@ export async function createInternalOrderFromTemplate(formData: FormData): Promi
   }
 
   const source = normalizeText(formData.get("source"));
+  const useQuotePricing = source === "customer-quote" || source === "internal-quote";
   const returnBase =
     source === "customer-quote" ? "/admin/customer-quote" : "/admin/store-orders/internal-order";
 
@@ -225,7 +226,7 @@ export async function createInternalOrderFromTemplate(formData: FormData): Promi
   let subtotalCents = linesSubtotalCents;
   let totalCents = linesSubtotalCents + deliveryFeeCents;
 
-  if (source === "customer-quote") {
+  if (useQuotePricing) {
     const setupFeeCents = Math.max(0, safeInt(formData.get("quote_setup_fee_cents"), 0));
     const quoteDeliveryFeeCents = Math.max(0, safeInt(formData.get("quote_delivery_fee_cents"), 0));
     const depositCents = Math.max(0, safeInt(formData.get("quote_deposit_cents"), 0));
@@ -432,7 +433,9 @@ export async function saveCustomerQuoteSheet(formData: FormData): Promise<void> 
     redirect("/admin/login");
   }
 
-  const returnBase = "/admin/customer-quote";
+  const allowedReturn = new Set(["/admin/customer-quote", "/admin/store-orders/internal-order"]);
+  const returnBaseRaw = normalizeText(formData.get("return_after_quote_save"));
+  const returnBase = allowedReturn.has(returnBaseRaw) ? returnBaseRaw : "/admin/customer-quote";
   let sheet: AdminCustomerQuoteSheetV1;
   try {
     sheet = parseAdminCustomerQuoteSheetFromForm(formData);
@@ -478,6 +481,7 @@ export async function saveCustomerQuoteSheet(formData: FormData): Promise<void> 
       redirect(`${returnBase}?error=${encodeURIComponent(short)}`);
     }
     revalidatePath("/admin/customer-quote");
+    revalidatePath("/admin/store-orders/internal-order");
     redirect(`${returnBase}?quote_id=${encodeURIComponent(existingId)}&quote_saved=1`);
   }
 
@@ -506,6 +510,7 @@ export async function saveCustomerQuoteSheet(formData: FormData): Promise<void> 
   }
 
   revalidatePath("/admin/customer-quote");
+  revalidatePath("/admin/store-orders/internal-order");
   redirect(`${returnBase}?quote_id=${encodeURIComponent(String(ins.id))}&quote_saved=1`);
 }
 

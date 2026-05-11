@@ -52,6 +52,13 @@ create index if not exists supplier_order_lines_list_date_idx on public.supplier
 alter table public.supplier_order_lines
   add column if not exists sheet_row_ok boolean not null default false;
 
+alter table public.supplier_order_lines
+  add column if not exists store_order_item_id uuid null references public.store_order_items (id) on delete set null;
+
+create index if not exists supplier_order_lines_store_order_item_id_idx
+  on public.supplier_order_lines (store_order_item_id)
+  where store_order_item_id is not null;
+
 alter table public.supplier_order_lines enable row level security;
 
 NOTIFY pgrst, 'reload schema';

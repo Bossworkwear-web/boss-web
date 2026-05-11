@@ -29,12 +29,11 @@ export default async function AdminSupplierOrdersPage({
   const listDateLabel = formatGeneratedAt(generatedAt);
   const listDateIso = generatedAt.toISOString();
 
-  const { sheetDates, linesByDate, productImageByProductKey, loadError } =
+  const { sheetDates, linesByDate, productImageByProductKey, incomingReceivedYmdByStoreItemId, loadError } =
     await loadAdminSupplierOrderSheets({ at: generatedAt });
 
   const storeOrderNumberOptions = await fetchRecentStoreOrderNumbers();
   const productSupplierNameOptions = await fetchDistinctProductSupplierNames();
-  const readyByDate = await fetchDailySheetReadyFlags(sheetDates);
 
   return (
     <div className="space-y-6">
@@ -51,7 +50,17 @@ export default async function AdminSupplierOrdersPage({
           only. <strong>Order date</strong> is for supplier PO dates; the monthly report (25th) uses that field.{" "}
           <strong>Supplier name</strong> uses the same values as catalog <span className="font-mono">supplier_name</span>{" "}
           (suggestions from your products). <strong>Customer order ID</strong> should match{" "}
-          <strong>Store orders → Customer order ID</strong> (e.g. <span className="font-mono">BOS_…</span>).
+          <strong>Store orders → Customer order ID</strong> (e.g. <span className="font-mono">BOS_…</span>).{" "}
+          New <strong>web checkout</strong> lines also add that Perth day to{" "}
+          <Link href="/admin/work-process" className="font-semibold text-brand-orange hover:underline">
+            Click Up
+          </Link>{" "}
+          automatically.{" "}
+          <strong>Received</strong> for web-order lines is read-only and matches{" "}
+          <Link href="/admin/incoming-goods" className="font-semibold text-brand-orange hover:underline">
+            Incoming goods
+          </Link>
+          .
         </p>
       </header>
 
@@ -61,38 +70,15 @@ export default async function AdminSupplierOrdersPage({
         migrationHint={loadError}
         completeOrdersDocumentsView={completeOrdersDocumentsView}
         warehouseManagerView={warehouseManagerView}
-        readyByDate={readyByDate}
         storeOrderNumberOptions={storeOrderNumberOptions}
         productSupplierNameOptions={productSupplierNameOptions}
         productImageByProductKey={productImageByProductKey}
+        incomingReceivedYmdByStoreItemId={incomingReceivedYmdByStoreItemId}
         pageOpenedLabel={listDateLabel}
         pageOpenedIso={listDateIso}
       />
     </div>
   );
-}
-
-/** Ready-for-processing flags for Click Up (optional table `supplier_daily_sheets`). */
-async function fetchDailySheetReadyFlags(ymds: string[]): Promise<Record<string, boolean>> {
-  const init: Record<string, boolean> = {};
-  for (const d of ymds) init[d] = false;
-  if (ymds.length === 0) return init;
-  try {
-    const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("supplier_daily_sheets")
-      .select("list_date, ready_for_processing")
-      .in("list_date", ymds);
-    if (error || !data) return init;
-    for (const row of data) {
-      if (row.list_date in init) {
-        init[row.list_date] = row.ready_for_processing;
-      }
-    }
-    return init;
-  } catch {
-    return init;
-  }
 }
 
 /** Distinct non-empty `products.supplier_name` values for Supplier column datalist. */

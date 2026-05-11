@@ -44,7 +44,7 @@ export default async function AdminWorkProcessPage() {
 
   type ReadySheet = { listDate: string; title: string; lineCount: number };
   let readySupplierSheets: ReadySheet[] = [];
-  /** Created when Supplier orders → Ready for Processing is checked (`click_up_sheet_list`). */
+  /** Supplier worksheet dates that have lines on the Click up sheet list (`click_up_sheet_list`). */
   let clickUpSheetListItems: ReadySheet[] = [];
   let clickUpOrderFormRows: ClickUpOrderFormRow[] = [];
 
@@ -287,8 +287,8 @@ export default async function AdminWorkProcessPage() {
         </p>
         <h1 className="mt-1 text-3xl font-medium text-brand-navy">Click Up</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
-          <strong>Supplier orders</strong>에서 일별 시트 하단의 <strong>Ready for Processing</strong>를 체크하면 같은
-          날짜가 Click up sheet 목록에 생성됩니다. 날짜는 <strong>Australia / Perth</strong> 기준입니다. ({todayLabel})
+          <strong>Web checkout</strong>가 해당 Perth 날짜의 Supplier 라인을 만들 때 같은 날짜가 Click up sheet 목록에
+          자동으로 추가됩니다. 날짜는 <strong>Australia / Perth</strong> 기준입니다. ({todayLabel})
         </p>
       </header>
 

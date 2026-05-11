@@ -11,6 +11,8 @@ import type { Database } from "@/lib/database.types";
 import { resolveSupplierNamesByProductKeys } from "@/lib/supplier-line-catalog-supplier";
 import { supplierPrefixFromSheetProductId } from "@/lib/supplier-prefix-from-product-id";
 import { normalizeSupplierOrderLineSupplierValue } from "@/lib/supplier-order-supplier-normalize";
+import { ensureClickUpSheetListForSupplierListDate } from "@/lib/supplier-sheet-click-up-bootstrap";
+import { applyIncomingGoodsReceiptForSupplierLineOk } from "@/lib/incoming-goods-receipt-from-supplier-ok";
 import {
   classifySupplierOrderLinesError,
   supplierOrderLinesMutationErrorMessage,
@@ -106,8 +108,15 @@ export async function createSupplierOrderLine(
       return { ok: false, error: "No row returned" };
     }
 
+    const clickUp = await ensureClickUpSheetListForSupplierListDate(supabase, listDateYmd);
+    if (!clickUp.ok) {
+      console.error("[createSupplierOrderLine] click_up_sheet_list:", clickUp.error);
+    }
+
     revalidatePath("/admin/supplier-orders");
     revalidatePath("/admin/reports");
+    revalidatePath("/admin/work-process");
+    revalidatePath("/admin/click-up-sheet");
     return { ok: true, row: data as Row };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Insert failed";
@@ -130,7 +139,7 @@ export type SupplierOrderLinePatch = Partial<{
   sheet_row_ok: boolean;
 }>;
 
-/** One line’s full worksheet fields + OK flag (used when saving the whole day before Ready). */
+/** One line’s full worksheet fields + OK flag (used for batch snapshot saves). */
 export type SupplierDaySheetLineSnapshot = {
   id: string;
   supplier: string;
@@ -189,7 +198,7 @@ export async function updateSupplierOrderLine(
     const supabase = createSupabaseAdminClient();
     const { data: prior, error: priorErr } = await supabase
       .from("supplier_order_lines")
-      .select("customer_order_id")
+      .select("customer_order_id, store_order_item_id")
       .eq("id", uuid)
       .maybeSingle();
     if (priorErr || !prior) {
@@ -209,6 +218,14 @@ export async function updateSupplierOrderLine(
 
     if (error) {
       return { ok: false, error: supplierOrderLinesMutationErrorMessage(error) };
+    }
+
+    if (patch.sheet_row_ok !== undefined) {
+      const sid = (prior.store_order_item_id ?? "").trim();
+      if (sid && /^[0-9a-f-]{36}$/i.test(sid)) {
+        await applyIncomingGoodsReceiptForSupplierLineOk(supabase, sid, Boolean(patch.sheet_row_ok));
+        revalidatePath("/admin/incoming-goods");
+      }
     }
 
     revalidatePath("/admin/supplier-orders");
@@ -377,69 +394,6 @@ export async function applyCatalogSupplierNameIfEmpty(
   }
 }
 
-type SupplierAdminSupabase = ReturnType<typeof createSupabaseAdminClient>;
-
-/** When turning Ready on, bump supplier lines for orders already in Production/QC/Dispatch (not Completed). */
-async function touchSupplierOrderLinesForProcessingStoreOrders(
-  supabase: SupplierAdminSupabase,
-  listDate: string,
-): Promise<void> {
-  const { data: lineRows } = await supabase
-    .from("supplier_order_lines")
-    .select("customer_order_id")
-    .eq("list_date", listDate);
-
-  const distinctOrderNumbers: string[] = [];
-  const seen = new Set<string>();
-  for (const lr of lineRows ?? []) {
-    const o = (lr.customer_order_id ?? "").trim();
-    if (!o || seen.has(o)) continue;
-    seen.add(o);
-    distinctOrderNumbers.push(o);
-  }
-  if (distinctOrderNumbers.length === 0) return;
-
-  const { data: storeRows } = await supabase
-    .from("store_orders")
-    .select("id, order_number")
-    .in("order_number", distinctOrderNumbers);
-
-  const idByNumber = new Map<string, string>();
-  for (const r of storeRows ?? []) {
-    idByNumber.set(r.order_number, r.id);
-  }
-  const storeIds = [...new Set([...idByNumber.values()])];
-  if (storeIds.length === 0) return;
-
-  const { data: completeRows } = await supabase
-    .from("click_up_complete_orders_queue")
-    .select("store_order_id")
-    .in("store_order_id", storeIds);
-  const completeSet = new Set((completeRows ?? []).map((r) => r.store_order_id));
-
-  const processingIds = new Set<string>();
-  for (const table of ["click_up_production_queue", "click_up_qc_queue", "click_up_dispatch_queue"] as const) {
-    const { data: qRows } = await supabase.from(table).select("store_order_id").in("store_order_id", storeIds);
-    for (const r of qRows ?? []) {
-      if (!completeSet.has(r.store_order_id)) {
-        processingIds.add(r.store_order_id);
-      }
-    }
-  }
-  if (processingIds.size === 0) return;
-
-  const nowIso = new Date().toISOString();
-  for (const on of distinctOrderNumbers) {
-    const sid = idByNumber.get(on);
-    if (!sid || !processingIds.has(sid)) continue;
-    await supabase
-      .from("supplier_order_lines")
-      .update({ updated_at: nowIso })
-      .eq("list_date", listDate)
-      .eq("customer_order_id", on);
-  }
-}
-
 export async function setSupplierDailySheetReadyForProcessing(
   listDateYmd: string,
   ready: boolean,
@@ -457,39 +411,25 @@ export async function setSupplierDailySheetReadyForProcessing(
 
   try {
     const supabase = createSupabaseAdminClient();
-
-    const payload: Database["public"]["Tables"]["supplier_daily_sheets"]["Insert"] = {
-      list_date: listDate,
-      ready_for_processing: ready,
-      updated_at: new Date().toISOString(),
-    };
-    const { error } = await supabase.from("supplier_daily_sheets").upsert(payload, { onConflict: "list_date" });
-
-    if (error) {
-      return { ok: false, error: supplierOrderLinesMutationErrorMessage(error) };
-    }
-
     const nowIso = new Date().toISOString();
+
     if (ready) {
-      const listPayload: Database["public"]["Tables"]["click_up_sheet_list"]["Insert"] = {
-        list_date: listDate,
-        created_at: nowIso,
-      };
-      const { error: listErr } = await supabase
-        .from("click_up_sheet_list")
-        .upsert(listPayload, { onConflict: "list_date" });
-      if (listErr) {
-        if (classifySupplierOrderLinesError(listErr) !== "missing_click_up_sheet_list_table") {
-          await supabase
-            .from("supplier_daily_sheets")
-            .update({ ready_for_processing: false, updated_at: nowIso })
-            .eq("list_date", listDate);
-          return { ok: false, error: supplierOrderLinesMutationErrorMessage(listErr) };
-        }
-        // Table missing or PostgREST cache stale: keep Ready=true; list sync is best-effort.
+      const ensured = await ensureClickUpSheetListForSupplierListDate(supabase, listDateYmd);
+      if (!ensured.ok) {
+        return ensured;
       }
-      await touchSupplierOrderLinesForProcessingStoreOrders(supabase, listDate);
     } else {
+      const payload: Database["public"]["Tables"]["supplier_daily_sheets"]["Insert"] = {
+        list_date: listDate,
+        ready_for_processing: false,
+        updated_at: nowIso,
+      };
+      const { error } = await supabase.from("supplier_daily_sheets").upsert(payload, { onConflict: "list_date" });
+
+      if (error) {
+        return { ok: false, error: supplierOrderLinesMutationErrorMessage(error) };
+      }
+
       const { error: delErr } = await supabase.from("click_up_sheet_list").delete().eq("list_date", listDate);
       if (delErr && classifySupplierOrderLinesError(delErr) !== "missing_click_up_sheet_list_table") {
         return { ok: false, error: supplierOrderLinesMutationErrorMessage(delErr) };
@@ -511,8 +451,8 @@ export type ClickUpNavigateAfterSupplierReadyResult =
   | { ok: false; error: string };
 
 /**
- * After Ready for Processing, open Click Up only for the first order that is not Completed and not already
- * in Production/QC/Dispatch. Completed / in‑pipeline orders are skipped for navigation.
+ * Resolve a Click Up sheet URL for a worksheet date (first eligible store order on that sheet).
+ * Used by legacy flows; web checkout now adds the date to `click_up_sheet_list` automatically.
  */
 export async function getClickUpSheetHrefAfterSupplierReady(
   listDateYmd: string,

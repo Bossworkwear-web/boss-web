@@ -205,7 +205,7 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
           <h1 className="text-3xl font-medium text-brand-navy">Store orders</h1>
           <Link
             href="/admin/store-orders/internal-order"
-            className="inline-flex items-center justify-center rounded-xl bg-brand-orange px-4 py-2 text-sm font-semibold text-brand-navy shadow-sm transition hover:brightness-95"
+            className="inline-flex items-center justify-center rounded-xl bg-brand-orange px-[1.3rem] py-[0.65rem] text-[1.1375rem] font-semibold leading-tight text-brand-navy shadow-sm transition hover:brightness-95"
           >
             Create internal order →
           </Link>

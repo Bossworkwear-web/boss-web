@@ -87,9 +87,13 @@ export default async function AdminInternalOrderPage({ searchParams }: { searchP
         </p>
         <h1 className="mt-1 text-3xl font-medium text-brand-navy">Create internal order</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
-          고객 주문이 아닌 내부·현장·메시지·이메일 접수 등으로 주문을 만듭니다. 아래에서 템플릿 없이 바로 입력하거나, 기존 주문을
-          불러와 수정한 뒤 저장하면 새 Customer Order ID가 <span className="font-mono">접두어_count</span> 형태로 생성됩니다.
-          (접두어를 비우면 서버가 <span className="font-mono">INT_YYYYMMDD_…</span> 형식으로 자동 부여합니다.)
+          Customer Quote와 동일한 견적 시트를 사용합니다. 템플릿 없이 입력하거나 기존 주문·CRM 견적을 불러온 뒤{" "}
+          <strong>Make Store order</strong>로 스토어 주문을 만듭니다. CRM에만 견적을 저장하려면{" "}
+          <Link href="/admin/customer-quote" className="font-semibold text-brand-orange hover:underline">
+            Customer Quote
+          </Link>
+          를 이용하세요. 새 Customer Order ID는 <span className="font-mono">접두어_count</span> 형태이며, 접두어를 비우면{" "}
+          <span className="font-mono">INT_YYYYMMDD_…</span>가 부여됩니다.
         </p>
       </header>
 
@@ -107,11 +111,13 @@ export default async function AdminInternalOrderPage({ searchParams }: { searchP
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-brand-navy">Load template</h2>
-        <p className="mt-2 text-sm text-slate-600">
-          선택 사항입니다. <strong>Customer Order ID</strong>(order_number)로 불러오거나, <strong>Customer ID</strong>(고객 프로필 UUID)와{" "}
-          <strong>Company name</strong>(customer_profiles.organisation, 대소문자 무시 일치)로 해당 고객의{" "}
-          <strong>가장 최근</strong> 스토어 주문을 불러옵니다. 둘 다 입력하면 Order ID가 우선합니다. 템플릿 없이 주문을 만들려면 아래{" "}
-          <strong>주문 입력</strong> 양식만 작성하면 됩니다.
+        <p className="mt-2 text-sm text-slate-600 print:hidden">
+          선택 사항입니다. <strong>Customer Order ID</strong> 또는 <strong>Customer ID</strong> + <strong>Company name</strong>으로
+          불러옵니다. CRM에서는 <span className="font-mono">?quote_id=</span> 로도 열 수 있습니다. 전용 Customer Quote 페이지는{" "}
+          <Link href="/admin/customer-quote" className="font-semibold text-brand-orange hover:underline">
+            Customer Quote
+          </Link>
+          입니다.
         </p>
         <form action={loadInternalOrderTemplate} className="mt-4 space-y-5">
           <div className="flex flex-wrap items-end gap-3">
@@ -164,14 +170,18 @@ export default async function AdminInternalOrderPage({ searchParams }: { searchP
 
       {quoteId && template && !loadError ? (
         <p className="rounded-lg border border-brand-navy/15 bg-brand-navy/5 px-4 py-3 text-sm text-brand-navy">
-          <strong>CRM quote</strong>에서 불러왔습니다. 금액·배송지·라인을 확인한 뒤{" "}
-          <strong>Save as new internal order</strong>로 저장하면 주문이 생성됩니다.
+          <strong>CRM quote</strong>에서 불러왔습니다. 금액·배송지·라인을 조정한 뒤 <strong>Make Store order</strong>로 주문을 생성하세요. 견적만
+          CRM에 저장하려면 <Link href="/admin/customer-quote" className="font-semibold text-brand-orange hover:underline">Customer Quote</Link>에서
+          열어 주세요.
         </p>
       ) : null}
 
       <InternalOrderForm
         template={template ?? EMPTY_INTERNAL_ORDER_TEMPLATE}
         isBlankStarter={template === null || template.baseOrderNumber.trim() === ""}
+        variant="customer-quote"
+        quoteSubmitContext="internal-order"
+        quoteRequestId={quoteId || null}
       />
     </div>
   );

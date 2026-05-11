@@ -83,6 +83,7 @@ function cartLineToSupplierInsert(
   line: StoreOrderCartLine,
   supplier: string,
   productIdForSheet: string,
+  storeOrderItemId?: string | null,
 ): Database["public"]["Tables"]["supplier_order_lines"]["Insert"] {
   const name = line.productName.trim();
   const extra = line.notes?.trim();
@@ -95,6 +96,7 @@ function cartLineToSupplierInsert(
   if (!Number.isFinite(unitCents) || unitCents < 0) unitCents = 0;
   unitCents = Math.min(unitCents, 999_999_999);
 
+  const sid = storeOrderItemId?.trim();
   return {
     list_date: listDateYmd,
     supplier: clampSupplierStr(normalizeSupplierOrderLineSupplierValue(supplier), MAX_STR),
@@ -105,19 +107,42 @@ function cartLineToSupplierInsert(
     quantity: qty,
     unit_price_cents: unitCents,
     notes,
+    ...(sid && /^[0-9a-f-]{36}$/i.test(sid) ? { store_order_item_id: sid } : {}),
   };
+}
+
+/** Same Product ID string as written to `supplier_order_lines.product_id` at checkout (uppercase). */
+export async function resolveSupplierSheetProductIdUpperCaseForStoreItem(
+  supabase: SupabaseClient<Database>,
+  item: { product_id: string; product_name: string },
+): Promise<string> {
+  const line: StoreOrderCartLine = {
+    productId: String(item.product_id ?? ""),
+    productName: String(item.product_name ?? ""),
+    serviceType: "",
+    color: "",
+    size: "",
+    quantity: 1,
+    placements: [],
+    unitPrice: 0,
+    totalPrice: 0,
+  };
+  const catalog = await catalogByProductUuid(supabase, [line]);
+  return resolveSupplierSheetProductId(line, catalog).trim().toUpperCase();
 }
 
 /**
  * After a paid web checkout, mirror each cart line on today’s Perth supplier daily sheet.
  * Supplier prefix uses the full storefront slug (first segment); **Product ID** stores only the last
  * segment when it matches the 2+ parts + 1–12 alnum tail rule (e.g. `fb-bizcare-cpt451ms` → `CPT451MS`).
+ * @param storeOrderItemIds Optional parallel array of `store_order_items.id` (same order as `lines`) for Incoming goods sync.
  */
 export async function insertSupplierOrderLinesFromStoreCheckout(
   supabase: SupabaseClient<Database>,
   orderNumber: string,
   listDateYmd: string,
   lines: StoreOrderCartLine[],
+  storeOrderItemIds?: string[] | null,
 ): Promise<void> {
   if (lines.length === 0) return;
   const catalog = await catalogByProductUuid(supabase, lines);
@@ -158,7 +183,7 @@ export async function insertSupplierOrderLinesFromStoreCheckout(
   const supplierBySlug =
     slugKeys.size > 0 ? await resolveSupplierNamesByProductKeys(supabase, [...slugKeys]) : new Map<string, string>();
 
-  const rows = tentative.map(({ line, pid, supplier, productIdForSheet }) => {
+  const rows = tentative.map(({ line, pid, supplier, productIdForSheet }, idx) => {
     let s = supplier;
     if (!s) {
       const sheet = productIdForSheet.trim();
@@ -169,7 +194,9 @@ export async function insertSupplierOrderLinesFromStoreCheckout(
     }
     const prefix = supplierPrefixFromSheetProductId(productIdForSheet);
     const supplierCell = prefix ?? s;
-    return cartLineToSupplierInsert(orderNumber, listDateYmd, line, supplierCell, productIdForSheet);
+    const itemId =
+      storeOrderItemIds && storeOrderItemIds[idx] ? String(storeOrderItemIds[idx]).trim() : "";
+    return cartLineToSupplierInsert(orderNumber, listDateYmd, line, supplierCell, productIdForSheet, itemId || null);
   });
   const { error } = await supabase.from("supplier_order_lines").insert(rows);
   if (error) {

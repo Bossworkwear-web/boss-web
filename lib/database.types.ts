@@ -412,6 +412,7 @@ export type Database = {
           unit_price_cents: number;
           list_date: string;
           sheet_row_ok: boolean;
+          store_order_item_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -429,6 +430,7 @@ export type Database = {
           unit_price_cents?: number;
           list_date?: string;
           sheet_row_ok?: boolean;
+          store_order_item_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -446,6 +448,7 @@ export type Database = {
           unit_price_cents?: number;
           list_date?: string;
           sheet_row_ok?: boolean;
+          store_order_item_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };

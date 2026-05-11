@@ -90,7 +90,7 @@ function CategoryNavList({
           }`}
           aria-current={pathname === SERVICE_HREF ? "page" : undefined}
         >
-          In Store Service
+          In-Store Service
         </Link>
         <Link
           href="/contact-us"
@@ -186,7 +186,7 @@ function CategoryInlineNav({
           }`}
           aria-current={pathname === SERVICE_HREF ? "page" : undefined}
         >
-          In Store Service
+          In-Store Service
         </Link>
       </div>
     </nav>
