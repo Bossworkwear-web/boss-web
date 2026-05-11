@@ -401,8 +401,12 @@ export async function listClickUpSheetImages(
           .select("storage_bucket, storage_path")
           .eq("customer_email", email)
           .maybeSingle();
-        const masterPath = String((masterRow as { storage_path?: string | null })?.storage_path ?? "").trim();
-        const masterBucket = String((masterRow as { storage_bucket?: string | null })?.storage_bucket ?? CLICK_UP_SHEET_IMAGES_BUCKET).trim() || CLICK_UP_SHEET_IMAGES_BUCKET;
+        const mr = masterRow
+          ? (masterRow as { storage_path?: string | null; storage_bucket?: string | null })
+          : null;
+        const masterPath = String(mr?.storage_path ?? "").trim();
+        const masterBucket =
+          String(mr?.storage_bucket ?? CLICK_UP_SHEET_IMAGES_BUCKET).trim() || CLICK_UP_SHEET_IMAGES_BUCKET;
 
         if (masterPath) {
           const { data: existingMasters } = await supabase

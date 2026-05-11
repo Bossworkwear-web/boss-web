@@ -181,6 +181,57 @@ export type Database = {
         };
         Relationships: [];
       };
+      customer_master_company_logo: {
+        Row: {
+          id: string;
+          customer_email: string;
+          storage_bucket: string;
+          storage_path: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          customer_email: string;
+          storage_bucket?: string;
+          storage_path: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          customer_email?: string;
+          storage_bucket?: string;
+          storage_path?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      customer_special_requests: {
+        Row: {
+          id: string;
+          customer_email: string;
+          body: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          customer_email: string;
+          body?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          customer_email?: string;
+          body?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       products: {
         Row: {
           id: string;
@@ -498,6 +549,7 @@ export type Database = {
           is_mockup: boolean;
           mockup_decorate_methods: string | null;
           mockup_memo: string | null;
+          is_master_logo: boolean;
         };
         Insert: {
           id?: string;
@@ -509,6 +561,7 @@ export type Database = {
           is_mockup?: boolean;
           mockup_decorate_methods?: string | null;
           mockup_memo?: string | null;
+          is_master_logo?: boolean;
         };
         Update: {
           id?: string;
@@ -520,6 +573,7 @@ export type Database = {
           is_mockup?: boolean;
           mockup_decorate_methods?: string | null;
           mockup_memo?: string | null;
+          is_master_logo?: boolean;
         };
         Relationships: [];
       };
@@ -622,18 +676,21 @@ export type Database = {
           store_order_id: string;
           list_date: string;
           moved_at: string;
+          carrier_label_image_urls: string[];
         };
         Insert: {
           id?: string;
           store_order_id: string;
           list_date?: string;
           moved_at?: string;
+          carrier_label_image_urls?: string[];
         };
         Update: {
           id?: string;
           store_order_id?: string;
           list_date?: string;
           moved_at?: string;
+          carrier_label_image_urls?: string[];
         };
         Relationships: [
           {
@@ -873,6 +930,40 @@ export type Database = {
           sort_order?: number;
         };
         Relationships: [];
+      };
+      incoming_goods_receipts: {
+        Row: {
+          id: string;
+          store_order_item_id: string;
+          received_qty: number;
+          note: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_order_item_id: string;
+          received_qty?: number;
+          note?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_order_item_id?: string;
+          received_qty?: number;
+          note?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "incoming_goods_receipts_store_order_item_id_fkey";
+            columns: ["store_order_item_id"];
+            referencedRelation: "store_order_items";
+            referencedColumns: ["id"];
+          },
+        ];
       };
     };
     Views: Record<string, never>;

@@ -274,7 +274,7 @@ export function ProductShowcase({
 
   return (
     <>
-      {hideTopNav ? null : <TopNavClient navSubsByMain={navSubsByMain} />}
+      {hideTopNav ? null : <TopNavClient navSubsByMain={navSubsByMain} mainCategories={[...MAIN_CATEGORIES]} />}
 
       <section className={`${SITE_PAGE_INNER_SHELL_CLASS} py-12`}>
         {layout === "search" && !hasQuery ? (

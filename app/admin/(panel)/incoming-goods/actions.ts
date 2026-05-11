@@ -29,6 +29,33 @@ type IncomingGoodsResult =
   | { ok: true; rows: IncomingGoodsRowDto[] }
   | { ok: false; error: string; rows: IncomingGoodsRowDto[] };
 
+type StoreOrderJoin = {
+  id?: string | null;
+  order_number?: string | null;
+  created_at?: string | null;
+  status?: string | null;
+  customer_name?: string | null;
+} | null;
+
+type StoreOrderItemJoinRow = {
+  id?: string | null;
+  order_id?: string | null;
+  product_name?: string | null;
+  quantity?: number | null;
+  color?: string | null;
+  size?: string | null;
+  service_type?: string | null;
+  sort_order?: number | null;
+  store_orders?: StoreOrderJoin;
+};
+
+type IncomingReceiptRow = {
+  store_order_item_id?: string | null;
+  received_qty?: number | null;
+  updated_at?: string | null;
+  note?: string | null;
+};
+
 export async function listIncomingGoodsRows(): Promise<IncomingGoodsResult> {
   try {
     await assertAdminSession();
@@ -54,21 +81,23 @@ export async function listIncomingGoodsRows(): Promise<IncomingGoodsResult> {
     }
 
     const normalized = (items ?? [])
-      .map((r) => {
-        const order = (r as any).store_orders;
+      .map((raw) => {
+        const r = raw as StoreOrderItemJoinRow;
+        const order = r.store_orders;
         return {
-          storeOrderId: String(order?.id ?? (r as any).order_id ?? "").trim(),
+          storeOrderId: String(order?.id ?? r.order_id ?? "").trim(),
           orderNumber: String(order?.order_number ?? "").trim(),
           orderCreatedAt: String(order?.created_at ?? "").trim(),
           orderStatus: String(order?.status ?? "").trim(),
           customerName: String(order?.customer_name ?? "").trim(),
-          itemId: String((r as any).id ?? "").trim(),
-          productName: String((r as any).product_name ?? "").trim(),
-          qtyOrdered: Number((r as any).quantity ?? 0) || 0,
-          color: ((r as any).color ?? null) ? String((r as any).color) : null,
-          size: ((r as any).size ?? null) ? String((r as any).size) : null,
-          serviceType: ((r as any).service_type ?? null) ? String((r as any).service_type) : null,
-          sortOrder: Math.max(0, Math.floor(Number((r as any).sort_order) || 0)),
+          itemId: String(r.id ?? "").trim(),
+          productName: String(r.product_name ?? "").trim(),
+          qtyOrdered: Number(r.quantity ?? 0) || 0,
+          color: r.color != null && String(r.color).trim() !== "" ? String(r.color) : null,
+          size: r.size != null && String(r.size).trim() !== "" ? String(r.size) : null,
+          serviceType:
+            r.service_type != null && String(r.service_type).trim() !== "" ? String(r.service_type) : null,
+          sortOrder: Math.max(0, Math.floor(Number(r.sort_order) || 0)),
         };
       })
       .filter((x) => x.storeOrderId && x.orderNumber && x.itemId);
@@ -82,19 +111,20 @@ export async function listIncomingGoodsRows(): Promise<IncomingGoodsResult> {
             .from("incoming_goods_receipts")
             .select("store_order_item_id, received_qty, updated_at, note")
             .in("store_order_item_id", itemIds)
-        : { data: [] as any[], error: null };
+        : { data: [] as IncomingReceiptRow[], error: null };
     if (recErr) {
       return { ok: false, error: recErr.message, rows: [] };
     }
 
     const receiptByItemId = new Map<string, { qty: number; updatedAt: string | null; note: string }>();
-    for (const r of receipts ?? []) {
-      const id = String((r as any).store_order_item_id ?? "").trim();
+    for (const raw of receipts ?? []) {
+      const r = raw as IncomingReceiptRow;
+      const id = String(r.store_order_item_id ?? "").trim();
       if (!id) continue;
       receiptByItemId.set(id, {
-        qty: Number((r as any).received_qty ?? 0) || 0,
-        updatedAt: ((r as any).updated_at ?? null) ? String((r as any).updated_at) : null,
-        note: String((r as any).note ?? ""),
+        qty: Number(r.received_qty ?? 0) || 0,
+        updatedAt: r.updated_at != null && String(r.updated_at).trim() !== "" ? String(r.updated_at) : null,
+        note: String(r.note ?? ""),
       });
     }
 
@@ -125,9 +155,10 @@ async function getExistingReceipt(
     .eq("store_order_item_id", itemId)
     .maybeSingle();
   if (!data) return null;
+  const row = data as { received_qty?: number | null; note?: string | null };
   return {
-    received_qty: Number((data as any).received_qty ?? 0) || 0,
-    note: String((data as any).note ?? ""),
+    received_qty: Number(row.received_qty ?? 0) || 0,
+    note: String(row.note ?? ""),
   };
 }
 

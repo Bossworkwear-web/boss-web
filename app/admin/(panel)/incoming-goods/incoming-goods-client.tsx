@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 
 import { setIncomingGoodsNote, setIncomingGoodsReceivedQty, type IncomingGoodsRowDto } from "./actions";
@@ -183,20 +183,18 @@ export function IncomingGoodsClient({ initial }: Props) {
   const totalPages = Math.max(1, pages.length || 1);
 
   const [page, setPage] = useState(1);
-
-  useEffect(() => {
+  const dataVersion = useMemo(
+    () => rows.map((r) => `${r.itemId}:${r.qtyReceived}:${r.qtyOrdered}:${r.sortOrder}`).join("|"),
+    [rows],
+  );
+  const [dataVersionSnapshot, setDataVersionSnapshot] = useState(dataVersion);
+  if (dataVersion !== dataVersionSnapshot) {
+    setDataVersionSnapshot(dataVersion);
     setPage(1);
-  }, [rows]);
+  }
 
-  useEffect(() => {
-    setPage(1);
-  }, [incompleteOnly, orderIdQuery]);
-
-  useEffect(() => {
-    setPage((p) => Math.min(Math.max(1, p), totalPages));
-  }, [totalPages]);
-
-  const pageIndex = Math.min(Math.max(1, page), totalPages) - 1;
+  const pageClamped = Math.min(Math.max(1, page), totalPages);
+  const pageIndex = pageClamped - 1;
   const pageGroups = pages[pageIndex] ?? [];
   const linesThisPage = pageGroups.reduce((s, g) => s + g.rows.length, 0);
 
@@ -215,6 +213,7 @@ export function IncomingGoodsClient({ initial }: Props) {
             onClick={() => {
               setIncompleteOnly(false);
               setOrderIdQuery("");
+              setPage(1);
             }}
             className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-brand-navy transition hover:bg-slate-50"
           >
@@ -223,7 +222,10 @@ export function IncomingGoodsClient({ initial }: Props) {
           <button
             type="button"
             aria-pressed={incompleteOnly}
-            onClick={() => setIncompleteOnly((v) => !v)}
+            onClick={() => {
+              setIncompleteOnly((v) => !v);
+              setPage(1);
+            }}
             className={`rounded-lg border px-4 py-2 text-sm font-semibold transition ${
               incompleteOnly
                 ? "border-brand-orange bg-brand-orange text-white shadow-sm hover:bg-brand-orange/90"
@@ -237,7 +239,10 @@ export function IncomingGoodsClient({ initial }: Props) {
             <input
               type="search"
               value={orderIdQuery}
-              onChange={(e) => setOrderIdQuery(e.target.value)}
+              onChange={(e) => {
+                setOrderIdQuery(e.target.value);
+                setPage(1);
+              }}
               placeholder="Order number or store order UUID…"
               className="w-full max-w-md rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand-orange focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
               autoComplete="off"
@@ -307,14 +312,14 @@ export function IncomingGoodsClient({ initial }: Props) {
         <div className="space-y-3">
           {totalPages > 1 ? (
             <PaginationBar
-              page={page}
+              page={pageClamped}
               totalPages={totalPages}
               linesThisPage={linesThisPage}
               totalLines={totalLines}
-              onPrev={() => setPage((p) => Math.max(1, p - 1))}
-              onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabledPrev={page <= 1}
-              disabledNext={page >= totalPages}
+              onPrev={() => setPage((p) => Math.max(1, Math.min(p, totalPages) - 1))}
+              onNext={() => setPage((p) => Math.min(totalPages, Math.max(1, p) + 1))}
+              disabledPrev={pageClamped <= 1}
+              disabledNext={pageClamped >= totalPages}
             />
           ) : null}
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -461,14 +466,14 @@ export function IncomingGoodsClient({ initial }: Props) {
           </div>
           {totalPages > 1 ? (
             <PaginationBar
-              page={page}
+              page={pageClamped}
               totalPages={totalPages}
               linesThisPage={linesThisPage}
               totalLines={totalLines}
-              onPrev={() => setPage((p) => Math.max(1, p - 1))}
-              onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabledPrev={page <= 1}
-              disabledNext={page >= totalPages}
+              onPrev={() => setPage((p) => Math.max(1, Math.min(p, totalPages) - 1))}
+              onNext={() => setPage((p) => Math.min(totalPages, Math.max(1, p) + 1))}
+              disabledPrev={pageClamped <= 1}
+              disabledNext={pageClamped >= totalPages}
             />
           ) : null}
         </div>

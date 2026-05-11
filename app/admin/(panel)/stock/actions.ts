@@ -81,8 +81,8 @@ export async function updateProductBasePrice(productId: string, basePrice: numbe
     revalidatePath("/");
     revalidatePath("/products");
     revalidatePath("/categories");
-    revalidateTag("storefront-products-browse");
-    revalidateTag("storefront-pdp");
+    revalidateTag("storefront-products-browse", { expire: 0 });
+    revalidateTag("storefront-pdp", { expire: 0 });
     revalidatePath("/admin");
     revalidatePath("/admin/stock");
     return { ok: true };
@@ -127,8 +127,8 @@ export async function updateProductSalePrice(productId: string, salePrice: numbe
     revalidatePath("/");
     revalidatePath("/products");
     revalidatePath("/categories");
-    revalidateTag("storefront-products-browse");
-    revalidateTag("storefront-pdp");
+    revalidateTag("storefront-products-browse", { expire: 0 });
+    revalidateTag("storefront-pdp", { expire: 0 });
     revalidatePath("/admin");
     revalidatePath("/admin/stock");
     return { ok: true };
@@ -171,8 +171,8 @@ export async function applyDefaultPriceToMissing(defaultBasePrice: number): Prom
     revalidatePath("/");
     revalidatePath("/products");
     revalidatePath("/categories");
-    revalidateTag("storefront-products-browse");
-    revalidateTag("storefront-pdp");
+    revalidateTag("storefront-products-browse", { expire: 0 });
+    revalidateTag("storefront-pdp", { expire: 0 });
     revalidatePath("/admin");
     revalidatePath("/admin/stock");
     return { ok: true };
@@ -221,8 +221,8 @@ export async function setProductStorefrontHidden(
     revalidatePath("/");
     revalidatePath("/products");
     revalidatePath("/categories");
-    revalidateTag("storefront-products-browse");
-    revalidateTag("storefront-pdp");
+    revalidateTag("storefront-products-browse", { expire: 0 });
+    revalidateTag("storefront-pdp", { expire: 0 });
     revalidatePath("/admin");
     revalidatePath("/admin/stock");
     return { ok: true };
@@ -261,8 +261,8 @@ export async function deleteProducts(productIds: string[]): Promise<DeleteProduc
     revalidatePath("/");
     revalidatePath("/products");
     revalidatePath("/categories");
-    revalidateTag("storefront-products-browse");
-    revalidateTag("storefront-pdp");
+    revalidateTag("storefront-products-browse", { expire: 0 });
+    revalidateTag("storefront-pdp", { expire: 0 });
     revalidatePath("/admin");
     revalidatePath("/admin/stock");
     return { ok: true };

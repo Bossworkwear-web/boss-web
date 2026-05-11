@@ -217,7 +217,7 @@ export async function completeDispatchQueueRow(formData: FormData): Promise<void
     if (result.invalidQueue) {
       redirect("/admin/dispatch?complete_error=invalid_queue");
     }
-    let msg = appendClickUpDispatchQueueSetupHint(
+    const msg = appendClickUpDispatchQueueSetupHint(
       appendClickUpCompleteOrdersQueueSetupHint(result.error),
     );
     const short = msg.length > 800 ? `${msg.slice(0, 800)}…` : msg;
