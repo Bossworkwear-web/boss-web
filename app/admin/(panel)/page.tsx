@@ -37,7 +37,7 @@ export default async function AdminDashboardPage() {
         </p>
       </header>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {[
           { title: "Active products", value: activeProducts, hint: "is_active = true" },
           { title: "Low stock SKUs", value: lowStock, hint: `≤ ${LOW_STOCK} units` },
@@ -59,6 +59,16 @@ export default async function AdminDashboardPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Sales &amp; leads</p>
           <p className="mt-2 text-2xl font-medium text-brand-navy">CRM →</p>
           <p className="mt-1 text-xs text-slate-600">Quote requests, pipeline stages, follow-ups &amp; customers</p>
+        </Link>
+        <Link
+          href="/admin/customer-invoices"
+          className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand-orange/40 hover:shadow-md"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Invoices</p>
+          <p className="mt-2 text-2xl font-medium text-brand-navy">Customer Invoices →</p>
+          <p className="mt-1 text-xs text-slate-600">
+            Edit tax invoice references for recent store orders (shown on PDFs)
+          </p>
         </Link>
       </div>
 
@@ -112,6 +122,11 @@ export default async function AdminDashboardPage() {
           <li>
             <Link href="/admin/accounting" className="hover:underline">
               Accounting (Xero workflow) →
+            </Link>
+          </li>
+          <li>
+            <Link href="/admin/customer-invoices" className="hover:underline">
+              Customer Invoices (tax invoice reference) →
             </Link>
           </li>
           <li>

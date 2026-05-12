@@ -52,7 +52,7 @@ export default async function OrderTrackPage({ params }: Props) {
     .eq("order_id", order.id)
     .order("sort_order", { ascending: true });
 
-  const orderNumberTrim = order.order_number.trim();
+  const orderNumberTrim = (order.order_number ?? "").trim();
   const mockupQuery = orderNumberTrim
     ? await queryClickUpMockupImagesByCustomerOrderIdIncludingReorder(supabase, orderNumberTrim)
     : { ok: true as const, rows: [] };
@@ -92,7 +92,9 @@ export default async function OrderTrackPage({ params }: Props) {
               <p className="text-lg font-semibold uppercase tracking-[0.12em] text-brand-navy/60">
                 Customer order ID
               </p>
-              <h1 className="font-mono text-[2.8125rem] font-medium leading-tight">{order.order_number}</h1>
+              <h1 className="font-mono text-[2.8125rem] font-medium leading-tight">
+                {orderNumberTrim || "—"}
+              </h1>
               <p className="text-[1.3125rem] text-brand-navy/70">
                 Placed {new Date(order.created_at).toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" })}
               </p>
@@ -183,7 +185,7 @@ export default async function OrderTrackPage({ params }: Props) {
                   order mock-ups appear here once the new order is linked after checkout.
                 </p>
               ) : (
-                <OrderTrackMockupsGrid orderNumber={order.order_number} items={trackMockups} />
+                <OrderTrackMockupsGrid orderNumber={orderNumberTrim || (order.order_number ?? "")} items={trackMockups} />
               )}
             </div>
 

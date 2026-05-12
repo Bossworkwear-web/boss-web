@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { refresh, revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { assertAdminSession } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase";
@@ -11,7 +12,7 @@ export type UpdateInvoiceReferenceResult = { ok: true } | { ok: false; error: st
 
 const INVOICE_REFERENCE_MAX = 500;
 
-/** Optional note shown on customer tax invoice (phone/email orders). */
+/** Optional value shown on customer tax invoice as “Invoice number” (Order ID stays `order_number`). */
 export async function updateStoreOrderInvoiceReference(
   orderId: string,
   referenceRaw: string,
@@ -48,7 +49,44 @@ export async function updateStoreOrderInvoiceReference(
   }
 
   revalidatePath("/admin/store-orders");
+  revalidatePath("/admin/customer-invoices");
+  revalidatePath("/customer");
+  /** So admin lists (e.g. Customer Invoices) refetch RSC payload instead of showing stale `invoice_reference`. */
+  refresh();
   return { ok: true };
+}
+
+function sanitizeAdminReturnTo(raw: string): string | null {
+  const s = raw.trim();
+  if (!s.startsWith("/admin")) return null;
+  if (s.includes("://") || s.includes("\n") || s.includes("\r")) return null;
+  return s;
+}
+
+function appendQueryParam(path: string, param: string): string {
+  const join = path.includes("?") ? "&" : "?";
+  return `${path}${join}${param}`;
+}
+
+/** Form `action` for `StoreOrderInvoiceReferenceForm` — one stable server action (avoids many inline actions on Customer Invoices). */
+export async function submitStoreOrderInvoiceReferenceForm(formData: FormData): Promise<void> {
+  const id = String(formData.get("orderId") ?? "").trim();
+  const ref = String(formData.get("invoice_reference") ?? "");
+  const returnTo = sanitizeAdminReturnTo(String(formData.get("returnTo") ?? ""));
+
+  const res = await updateStoreOrderInvoiceReference(id, ref);
+
+  if (!res.ok) {
+    const q = `invoiceError=${encodeURIComponent(res.error.slice(0, 400))}`;
+    if (returnTo) {
+      redirect(appendQueryParam(returnTo, q));
+    }
+    redirect(appendQueryParam("/admin/store-orders", q));
+  }
+
+  if (returnTo) {
+    redirect(appendQueryParam(returnTo, "invoiceSaved=1"));
+  }
 }
 
 const HOLD_NOTE_MAX = 2000;

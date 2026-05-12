@@ -29,7 +29,7 @@ export type TaxInvoiceOrder = {
   delivery_fee_cents: number;
   total_cents: number;
   currency: string;
-  /** Optional; e.g. phone/email order note — shown on PDF under Invoice number. */
+  /** Optional Xero / manual id — shown on PDF as “Invoice number” (see `TAX_INVOICE_PENDING_INVOICE_NUMBER_NOTE`). */
   invoice_reference?: string | null;
   /** From `customer_profiles.organisation` when generating the invoice (non-empty → BILL TO). */
   customer_organisation?: string | null;
@@ -37,9 +37,9 @@ export type TaxInvoiceOrder = {
 
 /** BILL TO: company name if set, otherwise customer name. */
 export function billToDisplayName(order: TaxInvoiceOrder): string {
-  const org = (order.customer_organisation ?? "").trim();
+  const org = String(order.customer_organisation ?? "").trim();
   if (org) return org;
-  const name = (order.customer_name ?? "").trim();
+  const name = String(order.customer_name ?? "").trim();
   return name || "—";
 }
 
@@ -67,6 +67,60 @@ export type TaxInvoiceLine = {
   size: string | null;
 };
 
+/** Coerce Supabase / loose JSON into a safe shape for PDFKit (avoids runtime throws on bad types). */
+export function sanitizeTaxInvoiceOrderForPdf(order: TaxInvoiceOrder | Record<string, unknown>): TaxInvoiceOrder {
+  const o = order as Record<string, unknown>;
+  const cents = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.round(n) : 0;
+  };
+  const rawCreated = String(o.created_at ?? "").trim();
+  const parsed = Date.parse(rawCreated);
+  const created_at = Number.isFinite(parsed) ? new Date(parsed).toISOString() : new Date().toISOString();
+  const refRaw = o.invoice_reference;
+  const invoice_reference =
+    refRaw == null || refRaw === ""
+      ? null
+      : String(refRaw).trim().slice(0, 500) || null;
+  const orgRaw = o.customer_organisation;
+  const customer_organisation =
+    orgRaw == null || orgRaw === "" ? null : String(orgRaw).trim().slice(0, 500) || null;
+
+  return {
+    order_number: String(o.order_number ?? "").trim() || "—",
+    created_at,
+    customer_name: String(o.customer_name ?? "").trim(),
+    customer_email: String(o.customer_email ?? "").trim(),
+    delivery_address: String(o.delivery_address ?? "").trim() || "—",
+    subtotal_cents: cents(o.subtotal_cents),
+    delivery_fee_cents: cents(o.delivery_fee_cents),
+    total_cents: Math.max(0, cents(o.total_cents)),
+    currency: String(o.currency ?? "AUD").trim().slice(0, 8) || "AUD",
+    invoice_reference,
+    customer_organisation,
+  };
+}
+
+export function sanitizeTaxInvoiceLinesForPdf(lines: readonly TaxInvoiceLine[] | unknown): TaxInvoiceLine[] {
+  const arr = Array.isArray(lines) ? lines : [];
+  return arr.map((row) => {
+    const r = (row ?? {}) as Record<string, unknown>;
+    const qty = Number(r.quantity);
+    const q = Number.isFinite(qty) && qty > 0 ? Math.min(99999, Math.floor(qty)) : 1;
+    const unit = Number(r.unit_price_cents);
+    const line = Number(r.line_total_cents);
+    return {
+      product_name: String(r.product_name ?? "Item").trim() || "Item",
+      quantity: q,
+      unit_price_cents: Number.isFinite(unit) && unit >= 0 ? Math.round(unit) : 0,
+      line_total_cents: Number.isFinite(line) && line >= 0 ? Math.round(line) : 0,
+      service_type: r.service_type == null || r.service_type === "" ? null : String(r.service_type),
+      color: r.color == null || r.color === "" ? null : String(r.color),
+      size: r.size == null || r.size === "" ? null : String(r.size),
+    };
+  });
+}
+
 function esc(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -74,6 +128,9 @@ function esc(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
+/** Shown on tax invoice PDF/HTML when `invoice_reference` is not set yet (entered manually next day). */
+export const TAX_INVOICE_PENDING_INVOICE_NUMBER_NOTE = "will provide soon";
 
 /** GST-inclusive assumption (AU): GST ≈ 1/11 of taxable GST-inclusive amount. */
 export function gstIncludedFromTotalCents(totalCents: number): number {
@@ -96,7 +153,7 @@ export function buildStoreTaxInvoiceHtml(
   const lineRows = lines
     .map((row) => {
       const bits = [row.service_type, row.color, row.size]
-        .map((x) => (x ?? "").trim())
+        .map((x) => String(x ?? "").trim())
         .filter(Boolean);
       const desc = bits.length ? `${esc(row.product_name)} <span class="muted">(${esc(bits.join(" · "))})</span>` : esc(row.product_name);
       return `<tr>
@@ -178,9 +235,14 @@ export function buildStoreTaxInvoiceHtml(
   <div class="wrap">
     ${logoBlock}
     <p class="tag">Tax invoice</p>
-    <h1>${esc(order.order_number)}</h1>
-    <p class="muted" style="margin:0 0 0.35rem;font-size:0.84rem;text-transform:uppercase;letter-spacing:0.06em;">Reference</p>
-    <p style="margin:0 0 1rem;font-size:1.05rem;">${order.invoice_reference?.trim() ? esc(order.invoice_reference.trim()) : "&nbsp;"}</p>
+    <p class="muted" style="margin:0 0 0.35rem;font-size:0.84rem;text-transform:uppercase;letter-spacing:0.06em;">Order ID</p>
+    <h1 style="margin:0 0 0.75rem;">${esc(order.order_number)}</h1>
+    <p class="muted" style="margin:0 0 0.35rem;font-size:0.84rem;text-transform:uppercase;letter-spacing:0.06em;">Invoice number</p>
+    ${
+      (order.invoice_reference ?? "").trim()
+        ? `<p style="margin:0 0 0.35rem;font-size:1.05rem;">${esc((order.invoice_reference ?? "").trim())}</p>`
+        : `<p class="muted" style="margin:0 0 0.35rem;font-size:0.98rem;font-style:italic;">${esc(TAX_INVOICE_PENDING_INVOICE_NUMBER_NOTE)}</p>`
+    }
     <p class="muted" style="margin:0 0 1.5rem;font-size:1.05rem;">Issued ${esc(issued)}</p>
 
     <div class="grid">
@@ -227,8 +289,9 @@ export function buildStoreTaxInvoiceHtml(
 </html>`;
 }
 
-export function taxInvoiceFilename(orderNumber: string): string {
-  const safe = orderNumber.replace(/[^\w.-]+/g, "-").replace(/-+/g, "-").slice(0, 80) || "order";
+export function taxInvoiceFilename(orderNumber: string | null | undefined): string {
+  const base = String(orderNumber ?? "").trim() || "order";
+  const safe = base.replace(/[^\w.-]+/g, "-").replace(/-+/g, "-").slice(0, 80) || "order";
   return `Tax-invoice-${safe}.pdf`;
 }
 

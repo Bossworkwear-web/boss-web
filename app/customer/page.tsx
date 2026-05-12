@@ -10,6 +10,7 @@ import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
+import { MY_ACCOUNT_ORDERED_RECORDS_LIMIT } from "@/lib/customer-ordered-records";
 
 import { CustomerDetailPasswordPopovers } from "./customer-detail-password-popovers";
 import { ReorderOrderButton } from "./reorder-order-button";
@@ -63,6 +64,8 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
     total_cents: number;
     currency: string;
     created_at: string;
+    /** When set (trimmed non-empty), My account Invoice → Download is enabled. */
+    invoice_reference: string | null;
   }[] = [];
 
   let orderLineGroups: Record<
@@ -78,6 +81,8 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
   > = {};
 
   let masterLogoUrl: string | null = null;
+  /** When the store_orders list query included `invoice_reference`, gate My account Invoice → Download on that value. */
+  let orderQueryIncludesInvoiceReference = false;
 
   try {
     const supabase = createSupabaseAdminClient();
@@ -100,14 +105,49 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
     masterLogoUrl = bucket && path ? publicStorageObjectUrl(bucket, path) : null;
 
     const ilikeExact = sessionEmail.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
-    const { data: o } = await supabase
+    const withRef = await supabase
       .from("store_orders")
-      .select("id, order_number, tracking_token, status, total_cents, currency, created_at")
+      .select(
+        "id, order_number, tracking_token, status, total_cents, currency, created_at, invoice_reference",
+      )
       .ilike("customer_email", ilikeExact)
       .order("created_at", { ascending: false })
-      .limit(50);
+      .limit(MY_ACCOUNT_ORDERED_RECORDS_LIMIT);
 
-    orders = o ?? [];
+    let rawOrders: Record<string, unknown>[] = [];
+    if (!withRef.error) {
+      orderQueryIncludesInvoiceReference = true;
+      rawOrders = (withRef.data ?? []) as unknown as Record<string, unknown>[];
+    } else {
+      orderQueryIncludesInvoiceReference = false;
+      const withoutRef = await supabase
+        .from("store_orders")
+        .select("id, order_number, tracking_token, status, total_cents, currency, created_at")
+        .ilike("customer_email", ilikeExact)
+        .order("created_at", { ascending: false })
+        .limit(MY_ACCOUNT_ORDERED_RECORDS_LIMIT);
+      rawOrders = (withoutRef.data ?? []) as unknown as Record<string, unknown>[];
+    }
+
+    orders = rawOrders.map((r) => {
+      const refRaw = r.invoice_reference;
+      const invoice_reference =
+        refRaw == null || refRaw === ""
+          ? null
+          : typeof refRaw === "string"
+            ? refRaw.trim().slice(0, 500) || null
+            : String(refRaw).trim().slice(0, 500) || null;
+      return {
+        id: String(r.id ?? ""),
+        order_number: String(r.order_number ?? "").trim() || "—",
+        tracking_token: String(r.tracking_token ?? "").trim(),
+        status: String(r.status ?? "").trim() || "—",
+        total_cents: typeof r.total_cents === "number" && Number.isFinite(r.total_cents) ? r.total_cents : Number(r.total_cents) || 0,
+        currency: String(r.currency ?? "AUD").trim() || "AUD",
+        created_at: String(r.created_at ?? "").trim() || new Date(0).toISOString(),
+        invoice_reference,
+      };
+    });
 
     const orderIds = orders.map((r) => r.id).filter(Boolean);
     if (orderIds.length > 0) {
@@ -136,6 +176,7 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
     profile = null;
     orders = [];
     orderLineGroups = {};
+    orderQueryIncludesInvoiceReference = false;
   }
 
   const canChangePassword =
@@ -180,13 +221,40 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
               </div>
             ) : null}
             <h2 className="text-[1.62rem] font-semibold text-brand-navy">Ordered records</h2>
-            <p className="text-[1.26rem] text-brand-navy/70">
-              Past store orders are listed below. Open <span className="font-medium text-brand-navy/80">Line items</span>{" "}
-              to review what you bought. The <span className="font-medium text-brand-navy/80">Download</span> link in
-              the Invoice column saves an A4 tax invoice as a PDF. Use{" "}
-              <span className="font-medium text-brand-navy/80">Reorder</span> to load this order into your cart
-              (you can remove lines there), then continue to payment for a new order.
-            </p>
+            <div className="space-y-2 text-[1.26rem] text-brand-navy/70">
+              <p className="flex gap-2">
+                <span className="shrink-0 select-none font-semibold text-brand-navy/45" aria-hidden>
+                  ·
+                </span>
+                <span>Past store orders are listed below.</span>
+              </p>
+              <p className="flex gap-2">
+                <span className="shrink-0 select-none font-semibold text-brand-navy/45" aria-hidden>
+                  ·
+                </span>
+                <span>
+                  Open <span className="font-medium text-brand-navy/80">Line items</span> to review what you bought.
+                </span>
+              </p>
+              <p className="flex gap-2">
+                <span className="shrink-0 select-none font-semibold text-brand-navy/45" aria-hidden>
+                  ·
+                </span>
+                <span>
+                  The <span className="font-medium text-brand-navy/80">Download</span> link in the Invoice column saves
+                  an A4 tax invoice as a PDF once your invoice number has been added to the order.
+                </span>
+              </p>
+              <p className="flex gap-2">
+                <span className="shrink-0 select-none font-semibold text-brand-navy/45" aria-hidden>
+                  ·
+                </span>
+                <span>
+                  Use <span className="font-medium text-brand-navy/80">Reorder</span> to load this order into your cart
+                  (you can remove lines there), then continue to payment for a new order.
+                </span>
+              </p>
+            </div>
             <div className="overflow-x-auto rounded-2xl border border-brand-navy/10 bg-brand-surface/50">
               {orders.length === 0 ? (
                 <p className="p-6 text-[1.26rem] text-brand-navy/70">
@@ -209,6 +277,8 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
                   <tbody>
                     {orders.map((row) => {
                       const lines = orderLineGroups[row.id] ?? [];
+                      const canDownloadTaxInvoice =
+                        !orderQueryIncludesInvoiceReference || (row.invoice_reference ?? "").trim().length > 0;
                       return (
                         <Fragment key={row.id}>
                           <tr className="border-b border-brand-navy/5">
@@ -228,12 +298,21 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
                               </Link>
                             </td>
                             <td className="px-4 py-3">
-                              <a
-                                href={`/api/orders/tax-invoice?orderId=${encodeURIComponent(row.id)}`}
-                                className="font-semibold text-brand-orange hover:underline"
-                              >
-                                Download
-                              </a>
+                              {canDownloadTaxInvoice ? (
+                                <a
+                                  href={`/api/orders/tax-invoice?orderId=${encodeURIComponent(row.id)}`}
+                                  className="font-semibold text-brand-orange hover:underline"
+                                >
+                                  Download
+                                </a>
+                              ) : (
+                                <span
+                                  className="font-semibold text-brand-navy/35 cursor-not-allowed select-none"
+                                  title="Available once your invoice number has been added to this order."
+                                >
+                                  Download
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-3 align-top">
                               <ReorderOrderButton orderId={row.id} />
@@ -253,7 +332,7 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
                                   <ul className="mt-3 space-y-2 border-l-2 border-brand-orange/30 pl-4 text-[1.26rem]">
                                     {lines.map((line, idx) => {
                                       const bits = [line.service_type, line.color, line.size]
-                                        .map((s) => (s ?? "").trim())
+                                        .map((s) => String(s ?? "").trim())
                                         .filter(Boolean);
                                       return (
                                         <li key={`${row.id}-${idx}`} className="text-brand-navy/90">

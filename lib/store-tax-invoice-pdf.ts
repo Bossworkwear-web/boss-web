@@ -5,13 +5,14 @@ import { resolveTaxInvoiceLogoFilePath } from "@/lib/tax-invoice-logo";
 
 import {
   billToDisplayName,
+  sanitizeTaxInvoiceLinesForPdf,
+  sanitizeTaxInvoiceOrderForPdf,
   sellerBankBlockLines,
+  TAX_INVOICE_PENDING_INVOICE_NUMBER_NOTE,
   type TaxInvoiceLine,
   type TaxInvoiceOrder,
   type TaxInvoiceSeller,
 } from "./store-tax-invoice";
-
-type PdfDoc = InstanceType<typeof PDFDocument>;
 
 /** Tighter than before so typical invoices stay on one A4 page. */
 const PAGE_MARGIN = 40;
@@ -31,17 +32,21 @@ function exGstCents(inclusiveCents: number): number {
 
 export function buildStoreTaxInvoicePdfBuffer(
   seller: TaxInvoiceSeller,
-  order: TaxInvoiceOrder,
-  lines: TaxInvoiceLine[],
+  orderInput: TaxInvoiceOrder,
+  linesInput: TaxInvoiceLine[],
 ): Promise<Buffer> {
+  const order = sanitizeTaxInvoiceOrderForPdf(orderInput);
+  const lines = sanitizeTaxInvoiceLinesForPdf(linesInput);
+
   return new Promise((resolve, reject) => {
+    try {
     const chunks: Buffer[] = [];
     const doc = new PDFDocument({
       size: "A4",
       margin: PAGE_MARGIN,
       info: {
-        Title: `Tax invoice ${order.order_number}`,
-        Author: seller.legalName || "Store",
+        Title: `Tax invoice ${order.order_number}`.slice(0, 200),
+        Author: String(seller.legalName || "Store").slice(0, 120),
       },
     });
 
@@ -54,12 +59,17 @@ export function buildStoreTaxInvoicePdfBuffer(
     const innerRight = pageW - PAGE_MARGIN;
     const currency = order.currency || "AUD";
 
-    const invoiceDateStr = new Date(order.created_at).toLocaleDateString("en-AU", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      timeZone: "Australia/Perth",
-    });
+    let invoiceDateStr: string;
+    try {
+      invoiceDateStr = new Date(order.created_at).toLocaleDateString("en-AU", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        timeZone: "Australia/Perth",
+      });
+    } catch {
+      invoiceDateStr = order.created_at.slice(0, 10);
+    }
 
     const metaW = 132;
     const metaX = innerRight - metaW;
@@ -102,18 +112,21 @@ export function buildStoreTaxInvoicePdfBuffer(
     yMeta = doc.y + 1;
     doc.fontSize(9.5).fillColor(BODY).text(invoiceDateStr, metaX, yMeta, { width: metaW });
     yMeta = doc.y + 6;
-    doc.fontSize(7).fillColor(MUTED).text("Invoice Number", metaX, yMeta, { width: metaW });
+    doc.fontSize(7).fillColor(MUTED).text("Order ID", metaX, yMeta, { width: metaW });
     yMeta = doc.y + 1;
     doc.fontSize(9.5).fillColor(BODY).text(order.order_number ?? "—", metaX, yMeta, { width: metaW });
     yMeta = doc.y + 6;
-    doc.fontSize(7).fillColor(MUTED).text("Reference", metaX, yMeta, { width: metaW });
+    doc.fontSize(7).fillColor(MUTED).text("Invoice number", metaX, yMeta, { width: metaW });
     yMeta = doc.y + 1;
-    const refText = (order.invoice_reference ?? "").trim();
+    const refText = String(order.invoice_reference ?? "").trim();
     if (refText) {
       doc.fontSize(9.5).fillColor(BODY).text(refText, metaX, yMeta, { width: metaW });
       yMeta = doc.y + 6;
     } else {
-      yMeta += 9;
+      doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(TAX_INVOICE_PENDING_INVOICE_NUMBER_NOTE, metaX, yMeta, {
+        width: metaW,
+      });
+      yMeta = doc.y + 6;
     }
 
     let y = Math.max(leftHeaderBottom + 6, yMeta + 6);
@@ -165,7 +178,7 @@ export function buildStoreTaxInvoicePdfBuffer(
     const qtyW = 52;
     const unitW = 78;
     const gstW = 36;
-    const amtW = contentW - descW - qtyW - unitW - gstW - 24;
+    const amtW = Math.max(40, contentW - descW - qtyW - unitW - gstW - 24);
     const qtyX = PAGE_MARGIN + descW + 6;
     const unitX = qtyX + qtyW + 6;
     const gstX = unitX + unitW + 6;
@@ -203,10 +216,11 @@ export function buildStoreTaxInvoicePdfBuffer(
     } else {
       for (const row of lines) {
         const bits = [row.service_type, row.color, row.size]
-          .map((x) => (x ?? "").trim())
+          .map((x) => String(x ?? "").trim())
           .filter(Boolean);
         const name = row.product_name ?? "";
-        const descPlain = bits.length > 0 ? `${name} (${bits.join(" · ")})` : name;
+        const descPlainRaw = bits.length > 0 ? `${name} (${bits.join(" · ")})` : name;
+        const descPlain = descPlainRaw.length > 900 ? `${descPlainRaw.slice(0, 897)}…` : descPlainRaw;
         const qRaw = Number(row.quantity);
         const q = Number.isFinite(qRaw) && qRaw > 0 ? qRaw : 1;
         const lineEx = exGstCents(row.line_total_cents);
@@ -248,18 +262,22 @@ export function buildStoreTaxInvoicePdfBuffer(
     const FOOTER_BAND_PT = 22;
     const bankLineGap = 2;
     if (bankBlock) {
-      doc.font("Helvetica").fontSize(8.5).fillColor(BODY);
-      const h = doc.heightOfString(bankBlock, { width: contentW, lineGap: bankLineGap });
-      const bankBottomLimit = doc.page.maxY() - FOOTER_BAND_PT;
-      let bankY = Math.max(y, bankBottomLimit - h);
-      if (bankY + h > bankBottomLimit) {
-        bankY = bankBottomLimit - h;
+      try {
+        doc.font("Helvetica").fontSize(8.5).fillColor(BODY);
+        const h = doc.heightOfString(bankBlock, { width: contentW, lineGap: bankLineGap });
+        const bankBottomLimit = doc.page.maxY() - FOOTER_BAND_PT;
+        let bankY = Math.max(y, bankBottomLimit - h);
+        if (bankY + h > bankBottomLimit) {
+          bankY = bankBottomLimit - h;
+        }
+        if (bankY < y - 0.5) {
+          bankY = y;
+        }
+        doc.font("Helvetica").fontSize(8.5).fillColor(BODY).lineGap(bankLineGap);
+        doc.text(bankBlock, PAGE_MARGIN, bankY, { width: contentW, lineGap: bankLineGap });
+      } catch {
+        /* skip bank block rather than failing the whole PDF */
       }
-      if (bankY < y - 0.5) {
-        bankY = y;
-      }
-      doc.font("Helvetica").fontSize(8.5).fillColor(BODY).lineGap(bankLineGap);
-      doc.text(bankBlock, PAGE_MARGIN, bankY, { width: contentW, lineGap: bankLineGap });
     }
 
     // Footer must sit above page.maxY() minus one line height, or PDFKit's
@@ -270,5 +288,8 @@ export function buildStoreTaxInvoicePdfBuffer(
     doc.text("-- 1 of 1 --", PAGE_MARGIN, footerY, { width: contentW, align: "center" });
 
     doc.end();
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error(String(err)));
+    }
   });
 }

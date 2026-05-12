@@ -29,10 +29,12 @@ export function carrierTrackingUrl(carrier: string, trackingNumber: string | nul
 }
 
 export function formatMoneyFromCents(cents: number, currency: string): string {
-  const amount = cents / 100;
+  const raw = Number(cents);
+  const amount = Number.isFinite(raw) ? raw / 100 : 0;
+  const code = (currency ?? "AUD").trim() || "AUD";
   try {
-    return amount.toLocaleString("en-AU", { style: "currency", currency: currency || "AUD" });
+    return amount.toLocaleString("en-AU", { style: "currency", currency: code });
   } catch {
-    return `${currency} ${amount.toFixed(2)}`;
+    return `${code} ${amount.toFixed(2)}`;
   }
 }

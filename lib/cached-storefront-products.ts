@@ -15,7 +15,13 @@ let devCache:
  * Cached ~60s so concurrent navigations reuse one payload (still `force-dynamic` pages).
  */
 async function fetchActiveProductsBrowseRows(): Promise<CategoryBrowseProductRow[]> {
-  const supabase = createSupabaseClient();
+  let supabase: ReturnType<typeof createSupabaseClient>;
+  try {
+    supabase = createSupabaseClient();
+  } catch {
+    // Missing NEXT_PUBLIC_SUPABASE_* — same resilience as home `getStorefrontShowcaseProducts`.
+    return [];
+  }
   const pageSize = Math.max(100, Number(process.env.STOREFRONT_BROWSE_PAGE_SIZE ?? 500));
   const maxScan = Math.max(pageSize, Number(process.env.STOREFRONT_BROWSE_MAX_SCAN ?? 6_000));
   const selectWithAudience =
