@@ -10,8 +10,8 @@ export function printProductionPackView() {
     pageStyle.id = PRINT_PAGE_STYLE_ID;
     document.head.appendChild(pageStyle);
   }
-  /* Paper size/orientation: browser print dialog (do not force portrait). */
-  pageStyle.textContent = "@page { margin: 0; }";
+  /* Paper margin: 10mm each side (print preview + hard copy). */
+  pageStyle.textContent = "@page { margin: 10mm; }";
 
   document.body.classList.add("production-pack-print-mode");
 

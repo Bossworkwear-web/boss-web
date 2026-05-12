@@ -7,7 +7,7 @@ import { serviceTypeColoredContent } from "@/lib/service-type-colored";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 import { StoreOrderBarcode } from "@/app/components/store-order-barcode";
-import { storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
+import { normalizeStoreOrderUuidParam, storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
 
 import { listClickUpMockupsByStoreOrderNumber } from "@/app/admin/(panel)/click-up-sheet/actions";
 import { hasProductionPackForStoreOrder } from "../actions";
@@ -31,12 +31,13 @@ export default async function AdminProductionOrderPage({
   searchParams?: Promise<ProductionOrderSearch>;
 }) {
   const { id } = await params;
-  const orderId = (id ?? "").trim();
-  if (!/^[0-9a-f-]{36}$/i.test(orderId)) {
+  const orderId = normalizeStoreOrderUuidParam(id ?? "");
+  if (!orderId) {
     notFound();
   }
 
   let organisationName = "";
+  let orderLoadError: string | null = null;
 
   let order:
     | {
@@ -59,46 +60,72 @@ export default async function AdminProductionOrderPage({
 
   try {
     const supabase = createSupabaseAdminClient();
-    const { data: o } = await supabase
+    const { data: o, error: orderErr } = await supabase
       .from("store_orders")
       .select("id, order_number, customer_email")
       .eq("id", orderId)
       .maybeSingle();
-    order = o ?? null;
-
-    const emailRaw = (o?.customer_email ?? "").trim();
-    if (emailRaw) {
-      const emailLower = emailRaw.toLowerCase();
-      const { data: profEq } = await supabase
-        .from("customer_profiles")
-        .select("organisation")
-        .eq("email_address", emailLower)
-        .maybeSingle();
-      const orgEq = profEq?.organisation?.trim();
-      if (orgEq) {
-        organisationName = orgEq;
-      } else {
-        const { data: profIlike } = await supabase
-          .from("customer_profiles")
-          .select("organisation")
-          .ilike("email_address", emailRaw)
-          .maybeSingle();
-        organisationName = profIlike?.organisation?.trim() ?? "";
-      }
+    if (orderErr) {
+      orderLoadError = orderErr.message;
+      order = null;
+    } else {
+      order = o ?? null;
     }
 
-    const { data: its } = await supabase
-      .from("store_order_items")
-      .select("id, product_name, quantity, color, size, service_type, placements")
-      .eq("order_id", orderId)
-      .order("sort_order", { ascending: true });
-    items = its ?? [];
-  } catch {
+    if (order) {
+      const emailRaw = (order.customer_email ?? "").trim();
+      if (emailRaw) {
+        const emailLower = emailRaw.toLowerCase();
+        const { data: profEq } = await supabase
+          .from("customer_profiles")
+          .select("organisation")
+          .eq("email_address", emailLower)
+          .maybeSingle();
+        const orgEq = profEq?.organisation?.trim();
+        if (orgEq) {
+          organisationName = orgEq;
+        } else {
+          const { data: profIlike } = await supabase
+            .from("customer_profiles")
+            .select("organisation")
+            .ilike("email_address", emailRaw)
+            .maybeSingle();
+          organisationName = profIlike?.organisation?.trim() ?? "";
+        }
+      }
+
+      const { data: its, error: itemsErr } = await supabase
+        .from("store_order_items")
+        .select("id, product_name, quantity, color, size, service_type, placements")
+        .eq("order_id", orderId)
+        .order("sort_order", { ascending: true });
+      if (itemsErr) {
+        orderLoadError = orderLoadError ?? itemsErr.message;
+      }
+      items = its ?? [];
+    }
+  } catch (e) {
+    orderLoadError = e instanceof Error ? e.message : "Load failed";
     order = null;
     items = null;
   }
 
   if (!order) {
+    if (orderLoadError) {
+      return (
+        <div className="mx-auto max-w-lg space-y-4 rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-950">
+          <p className="font-semibold">주문을 불러오지 못했습니다.</p>
+          <p className="font-mono text-xs break-all">{orderLoadError}</p>
+          <p className="text-red-900/90">
+            Supabase <span className="font-mono">store_orders</span>에 이 ID가 없거나, 서비스 롤 키·RLS 설정을
+            확인하세요. (URL id: <span className="font-mono">{orderId}</span>)
+          </p>
+          <Link href="/admin/production" className="inline-block font-semibold text-brand-orange hover:underline">
+            ← Production 목록
+          </Link>
+        </div>
+      );
+    }
     notFound();
   }
 
@@ -121,7 +148,10 @@ export default async function AdminProductionOrderPage({
     );
   }
 
-  const mockupsRes = await listClickUpMockupsByStoreOrderNumber(order.order_number);
+  const mockupsRes = await listClickUpMockupsByStoreOrderNumber(order.order_number).catch(() => ({
+    ok: false as const,
+    error: "Mockups load failed",
+  }));
   const initialMockupImages = mockupsRes.ok ? mockupsRes.images : [];
 
   const sp = spEarly;
@@ -211,9 +241,9 @@ export default async function AdminProductionOrderPage({
               <tr>
                 <th className="w-12 px-4 py-3 text-center tabular-nums">#</th>
                 <th className="px-4 py-3">Item</th>
-                <th className="px-4 py-3 w-24">Qty</th>
                 <th className="px-4 py-3 w-44">Color</th>
                 <th className="px-4 py-3 w-32">Size</th>
+                <th className="px-4 py-3 w-24">Qty</th>
                 <th className="px-4 py-3 w-44">Service</th>
               </tr>
             </thead>
@@ -222,9 +252,9 @@ export default async function AdminProductionOrderPage({
                 <tr key={it.id} className="border-b border-slate-100 align-top">
                   <td className="px-4 py-3 text-center font-mono tabular-nums text-slate-600">{idx + 1}</td>
                   <td className="px-4 py-3 font-medium text-brand-navy">{it.product_name}</td>
-                  <td className="px-4 py-3 tabular-nums">{it.quantity}</td>
                   <td className="px-4 py-3">{it.color ?? "—"}</td>
                   <td className="px-4 py-3">{it.size ?? "—"}</td>
+                  <td className="px-4 py-3 tabular-nums">{it.quantity}</td>
                   <td className="px-4 py-3">{serviceTypeColoredContent(it.service_type)}</td>
                 </tr>
               ))}

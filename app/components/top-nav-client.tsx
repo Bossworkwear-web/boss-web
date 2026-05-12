@@ -3,8 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { RefObject } from "react";
-import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { AnimationEvent, RefObject } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { CartIcon, MenuIcon, SearchIcon, UserIcon } from "@/app/components/icons";
 import { LOGO_SRC } from "@/app/generated/logo";
@@ -279,14 +279,56 @@ function HeaderSearchToggle({
   onOpen: () => void;
   onClose: () => void;
 }) {
+  const [isCollapsing, setIsCollapsing] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setIsCollapsing(false);
+    }
+  }, [open]);
+
+  const beginClose = useCallback(() => {
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      onClose();
+      return;
+    }
+    setIsCollapsing(true);
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open || isCollapsing) {
+      return;
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        beginClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, isCollapsing, beginClose]);
+
+  function onSearchShellAnimationEnd(e: AnimationEvent<HTMLDivElement>) {
+    if (e.animationName !== "store-header-search-collapse" || !isCollapsing) {
+      return;
+    }
+    setIsCollapsing(false);
+    onClose();
+  }
+
   return open ? (
-    <div className="flex max-w-full items-center gap-1.5">
+    <div
+      className={`flex max-w-full items-center gap-1.5 ${
+        isCollapsing ? "store-header-search-collapse" : "store-header-search-expand"
+      }`}
+      onAnimationEnd={onSearchShellAnimationEnd}
+    >
       <Suspense fallback={<HeaderSearchFormView />}>
         <HeaderSearchFormInner />
       </Suspense>
       <button
         type="button"
-        onClick={onClose}
+        onClick={beginClose}
         className="inline-flex shrink-0 items-center justify-center rounded-full p-2 text-brand-navy transition hover:bg-brand-surface sm:p-2.5"
         aria-label="Close search"
       >
@@ -419,17 +461,6 @@ export function TopNavClient({
   }, [pathname]);
 
   useEffect(() => {
-    if (!searchOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setSearchOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [searchOpen]);
-
-  useEffect(() => {
     if (!logoutNoticeVisible) {
       return;
     }
@@ -485,97 +516,102 @@ export function TopNavClient({
         }`}
       >
         <nav
-          className={`mx-auto flex w-full max-w-none items-center gap-2 py-2.5 sm:gap-3 sm:py-3.5 ${SITE_PAGE_INSET_X_CLASS}`}
+          className={`mx-auto flex w-full max-w-none flex-col gap-y-1 py-2.5 sm:gap-y-[0.3125rem] sm:py-3.5 ${SITE_PAGE_INSET_X_CLASS}`}
         >
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <button
-              type="button"
-              onClick={() => setMobileNavOpen(true)}
-              className="inline-flex items-center justify-center rounded-lg border border-brand-navy/25 p-2 text-brand-navy lg:hidden"
-              aria-expanded={mobileNavOpen}
-              aria-controls="mobile-store-menu"
-              aria-haspopup="dialog"
-            >
-              <MenuIcon className="h-6 w-6" />
-              <span className="sr-only">Open full menu</span>
-            </button>
-            <Link href="/" className="inline-flex items-center px-0.5 py-0.5 sm:px-1 sm:py-1" aria-label="Home">
-              <Image
-                src={LOGO_SRC}
-                alt="Boss Workwear"
-                width={240}
-                height={72}
-                className="h-[3.2rem] w-auto sm:h-[3.6rem]"
-                priority
+          <div className="flex w-full items-center gap-2 sm:gap-3">
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen(true)}
+                className="inline-flex items-center justify-center rounded-lg border border-brand-navy/25 p-2 text-brand-navy lg:hidden"
+                aria-expanded={mobileNavOpen}
+                aria-controls="mobile-store-menu"
+                aria-haspopup="dialog"
+              >
+                <MenuIcon className="h-6 w-6" />
+                <span className="sr-only">Open full menu</span>
+              </button>
+              <Link href="/" className="inline-flex items-center px-0.5 py-0.5 sm:px-1 sm:py-1" aria-label="Home">
+                <Image
+                  src={LOGO_SRC}
+                  alt="Boss Workwear"
+                  width={240}
+                  height={72}
+                  className="h-[3.2rem] w-auto sm:h-[3.6rem]"
+                  priority
+                />
+              </Link>
+            </div>
+
+            <div className="hidden min-w-0 flex-1 justify-center px-2 lg:flex">
+              <CategoryInlineNav
+                pathname={pathname}
+                productSidebarNav={productSidebarNav}
+                navSubsByMain={navSubsByMain}
+                mainCategories={mainCategories}
               />
-            </Link>
+            </div>
+
+            <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 md:gap-3">
+              {customerName ? (
+                <>
+                  <Link
+                    href="/customer"
+                    className="max-w-[9rem] truncate rounded-full bg-brand-surface px-2.5 py-2 text-xs font-medium leading-snug text-brand-navy transition hover:bg-brand-navy/10 sm:max-w-none sm:px-[1.125rem] sm:py-2.5 sm:text-[1.3125rem]"
+                    title={customerName}
+                  >
+                    Hi, {customerName}
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={handleLogOut}
+                    className="rounded-full px-2.5 py-2 text-xs font-medium leading-snug text-brand-navy transition hover:bg-brand-surface sm:px-[1.125rem] sm:py-2.5 sm:text-[1.3125rem]"
+                  >
+                    Log out
+                  </button>
+                </>
+              ) : (
+                <Link
+                  href="/log-in"
+                  className={`inline-flex items-center justify-center rounded-full p-2 sm:p-2.5 ${
+                    pathname === "/log-in" ? "bg-brand-orange text-brand-navy" : "text-brand-navy hover:bg-brand-surface"
+                  }`}
+                  aria-label="Sign in"
+                >
+                  <UserIcon className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
+                </Link>
+              )}
+              <Link
+                href="/cart"
+                className={`relative inline-flex items-center justify-center gap-1 rounded-full p-2 sm:p-2.5 ${
+                  pathname === "/cart" ? "bg-brand-orange text-brand-navy" : "text-brand-navy hover:bg-brand-surface"
+                }`}
+                aria-label="Cart"
+              >
+                <span
+                  className={
+                    pathname !== "/cart" && cartCount > 0
+                      ? "store-cart-icon-animate shrink-0"
+                      : "inline-flex shrink-0"
+                  }
+                >
+                  <CartIcon className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
+                </span>
+                {cartCount > 0 && (
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-brand-navy px-1.5 text-xs font-medium text-white sm:min-w-6 sm:px-2 sm:text-sm">
+                    {cartCount}
+                  </span>
+                )}
+              </Link>
+            </div>
           </div>
 
-          <div className="hidden min-w-0 flex-1 justify-center px-2 lg:flex">
-            <CategoryInlineNav
-              pathname={pathname}
-              productSidebarNav={productSidebarNav}
-              navSubsByMain={navSubsByMain}
-              mainCategories={mainCategories}
-            />
-          </div>
-
-          <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 md:gap-3">
+          <div className="flex w-full items-center justify-center pt-1 sm:pt-[0.3125rem]">
             <HeaderSearchToggle
               open={searchOpen}
               onOpen={() => setSearchOpen(true)}
               onClose={() => setSearchOpen(false)}
             />
-            {customerName ? (
-              <>
-                <Link
-                  href="/customer"
-                  className="max-w-[9rem] truncate rounded-full bg-brand-surface px-2.5 py-2 text-xs font-medium leading-snug text-brand-navy transition hover:bg-brand-navy/10 sm:max-w-none sm:px-[1.125rem] sm:py-2.5 sm:text-[1.3125rem]"
-                  title={customerName}
-                >
-                  Hi, {customerName}
-                </Link>
-                <button
-                  type="button"
-                  onClick={handleLogOut}
-                  className="rounded-full px-2.5 py-2 text-xs font-medium leading-snug text-brand-navy transition hover:bg-brand-surface sm:px-[1.125rem] sm:py-2.5 sm:text-[1.3125rem]"
-                >
-                  Log out
-                </button>
-              </>
-            ) : (
-              <Link
-                href="/log-in"
-                className={`inline-flex items-center justify-center rounded-full p-2 sm:p-2.5 ${
-                  pathname === "/log-in" ? "bg-brand-orange text-brand-navy" : "text-brand-navy hover:bg-brand-surface"
-                }`}
-                aria-label="Sign in"
-              >
-                <UserIcon className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
-              </Link>
-            )}
-            <Link
-              href="/cart"
-              className={`relative inline-flex items-center justify-center gap-1 rounded-full p-2 sm:p-2.5 ${
-                pathname === "/cart" ? "bg-brand-orange text-brand-navy" : "text-brand-navy hover:bg-brand-surface"
-              }`}
-              aria-label="Cart"
-            >
-              <span
-                className={
-                  pathname !== "/cart" && cartCount > 0
-                    ? "store-cart-icon-animate shrink-0"
-                    : "inline-flex shrink-0"
-                }
-              >
-                <CartIcon className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
-              </span>
-              {cartCount > 0 && (
-                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-brand-navy px-1.5 text-xs font-medium text-white sm:min-w-6 sm:px-2 sm:text-sm">
-                  {cartCount}
-                </span>
-              )}
-            </Link>
           </div>
         </nav>
       </section>

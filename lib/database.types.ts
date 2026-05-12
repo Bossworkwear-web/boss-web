@@ -53,6 +53,7 @@ export type Database = {
           role: string;
           is_active: boolean;
           created_at: string;
+          password_hash: string | null;
         };
         Insert: {
           id?: string;
@@ -60,6 +61,7 @@ export type Database = {
           role?: string;
           is_active?: boolean;
           created_at?: string;
+          password_hash?: string | null;
         };
         Update: {
           id?: string;
@@ -67,6 +69,7 @@ export type Database = {
           role?: string;
           is_active?: boolean;
           created_at?: string;
+          password_hash?: string | null;
         };
         Relationships: [];
       };

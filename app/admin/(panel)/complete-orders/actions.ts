@@ -1,6 +1,6 @@
 "use server";
 
-import { assertAdminSession } from "@/lib/admin-auth";
+import { assertAdminSessionForPathSegment } from "@/lib/admin-auth";
 import { appendClickUpCompleteOrdersQueueSetupHint } from "@/lib/supabase-click-up-complete-orders-queue-hint";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -19,7 +19,7 @@ export async function listClickUpCompleteOrdersQueue(): Promise<
   { ok: true; rows: ClickUpCompleteOrdersQueueRowDto[] } | { ok: false; error: string }
 > {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/complete-orders");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }

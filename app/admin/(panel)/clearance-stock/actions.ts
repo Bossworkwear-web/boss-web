@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { assertAdminSession } from "@/lib/admin-auth";
+import { assertAdminSessionForPathSegment } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 function parseOptionalQuantity(raw: string): number | null {
@@ -26,7 +26,7 @@ function boolFromForm(formData: FormData, key: string): boolean {
 
 export async function createClearanceStockItem(formData: FormData): Promise<void> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/clearance-stock");
   } catch {
     redirect("/admin/login");
   }
@@ -67,7 +67,7 @@ export async function createClearanceStockItem(formData: FormData): Promise<void
 
 export async function updateClearanceStockItem(formData: FormData): Promise<void> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/clearance-stock");
   } catch {
     redirect("/admin/login");
   }
@@ -112,7 +112,7 @@ export async function updateClearanceStockItem(formData: FormData): Promise<void
 
 export async function deleteClearanceStockItem(formData: FormData): Promise<void> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/clearance-stock");
   } catch {
     redirect("/admin/login");
   }

@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
-import { assertAdminSession } from "@/lib/admin-auth";
+import { assertAdminSessionForPathSegment } from "@/lib/admin-auth";
 import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -51,7 +51,7 @@ type DispatchCarrierLabelActionResult =
 /** Upload one carrier label image/PDF (AusPost QR, barcode sheet, etc.) for a dispatch queue row. */
 export async function uploadDispatchCarrierLabel(formData: FormData): Promise<DispatchCarrierLabelActionResult> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/dispatch");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -141,7 +141,7 @@ export async function uploadDispatchCarrierLabel(formData: FormData): Promise<Di
 /** Remove one uploaded label URL from the queue row and delete the storage object when possible. */
 export async function removeDispatchCarrierLabel(formData: FormData): Promise<DispatchCarrierLabelActionResult> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/dispatch");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }

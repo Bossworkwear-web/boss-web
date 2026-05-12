@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { refresh, revalidatePath } from "next/cache";
 
-import { assertAdminSession } from "@/lib/admin-auth";
+import { assertAdminSession, assertAdminSessionForPathSegment } from "@/lib/admin-auth";
 import { formatClickUpSheetStorageError } from "@/lib/click-up-sheet-storage-errors";
 import { sanitizeMockupDecorateMethodsFromClient } from "@/lib/click-up-sheet-mockup-methods";
 import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
@@ -117,7 +117,7 @@ export async function loadSupplierOrderLinesForClickUpSheet(
   customerOrderIdFilter: string | null,
 ): Promise<LoadSupplierLinesResult> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -183,7 +183,7 @@ export async function lookupCustomerByStoreOrderNumber(
   orderNumber: string,
 ): Promise<LookupStoreOrderCustomerResult> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -213,7 +213,7 @@ export async function resolveProductionOrderIdForStoreOrderNumber(
   orderNumber: string,
 ): Promise<ResolveProductionOrderIdResult> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -376,7 +376,7 @@ export async function listClickUpSheetImages(
   assetFilter: ClickUpSheetImageFilter = "all",
 ): Promise<{ ok: true; images: ClickUpSheetImageDto[] } | { ok: false; error: string }> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -649,7 +649,7 @@ export type ListClickUpMockupsByOrderResult =
   | { ok: true; images: ClickUpSheetImageDto[] }
   | { ok: false; error: string };
 
-/** All mock-up assets for a store order number (any Perth worksheet date). For warehouse workers. */
+/** All mock-up assets for a store order number (any Perth worksheet date). Used from Click up, Production pack, warehouse mockups. */
 export async function listClickUpMockupsByStoreOrderNumber(
   orderNumber: string,
 ): Promise<ListClickUpMockupsByOrderResult> {
@@ -731,7 +731,7 @@ export async function listCustomerReferenceVisualsForStoreOrderNumber(
   orderNumber: string,
 ): Promise<{ ok: true; items: CustomerReferenceVisualDto[] } | { ok: false; error: string }> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -896,7 +896,7 @@ export async function setCustomerMasterCompanyLogoFromOrderAsset(args: {
   enabled: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -963,7 +963,7 @@ export async function getCustomerMasterCompanyLogoForStoreOrderNumber(
   orderNumber: string,
 ): Promise<{ ok: true; public_url: string | null } | { ok: false; error: string }> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -1006,7 +1006,7 @@ export type UploadClickUpSheetImageResult =
 
 export async function uploadClickUpSheetImage(formData: FormData): Promise<UploadClickUpSheetImageResult> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -1145,7 +1145,7 @@ export async function setClickUpSheetMasterCompanyLogo(
   nextIsMaster: boolean,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -1260,7 +1260,7 @@ export async function deleteClickUpSheetImage(
   imageId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }

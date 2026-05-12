@@ -2,7 +2,7 @@
 
 import { refresh, revalidatePath } from "next/cache";
 
-import { assertAdminSession } from "@/lib/admin-auth";
+import { assertAdminSessionForPathSegment } from "@/lib/admin-auth";
 import { syncSupplierOrderLinesReceivedDateFromIncomingGoods } from "@/lib/supplier-order-line-received-from-incoming";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -58,7 +58,7 @@ type IncomingReceiptRow = {
 
 export async function listIncomingGoodsRows(): Promise<IncomingGoodsResult> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/incoming-goods");
   } catch {
     return { ok: false, error: "Unauthorized", rows: [] };
   }
@@ -167,7 +167,7 @@ export async function setIncomingGoodsReceivedQty(args: {
   receivedQty: number;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/incoming-goods");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -206,7 +206,7 @@ export async function setIncomingGoodsNote(args: {
   note: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/incoming-goods");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }

@@ -4,11 +4,14 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
+import type { AdminPortalNavAccess } from "@/lib/admin-portal-permissions";
+import { isAdminPathAllowedForPortalAccess } from "@/lib/admin-portal-permissions";
+
 const LINKS = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/customer-info", label: "Customer Info" },
   { href: "/admin/customer-quote", label: "Customer Quote" },
-  { href: "/admin/store-orders", label: "Online orders" },
+  { href: "/admin/store-orders", label: "Store Orders" },
   { href: "/admin/supplier-orders", label: "Supplier orders" },
   { href: "/admin/work-process", label: "Click Up" },
   { href: "/admin/incoming-goods", label: "Incoming goods" },
@@ -27,31 +30,34 @@ const LINKS = [
   { href: "/admin/site", label: "Site & content" },
 ] as const;
 
-export function AdminNav() {
+export function AdminNav({ portalAccess }: { portalAccess: AdminPortalNavAccess }) {
   const pathname = usePathname();
   const router = useRouter();
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  const visibleLinks = useMemo(() => {
+    if (portalAccess.mode === "full") return [...LINKS];
+    return LINKS.filter((item) => isAdminPathAllowedForPortalAccess(portalAccess, item.href));
+  }, [portalAccess]);
+
   // Avoid hydration mismatch: `usePathname()` can be empty/unstable during the server render.
-  // We only compute the active link after mount so SSR + first client paint match.
   const activeHref = useMemo(() => {
     if (!mounted || !pathname) return null;
-    let best = "/admin";
-    for (const item of LINKS) {
+    let best = visibleLinks[0]?.href ?? "/admin";
+    for (const item of visibleLinks) {
       const href = item.href;
       if (pathname === href) {
         if (href.length > best.length) best = href;
         continue;
       }
-      // Match nested routes, but ensure we don't treat "/admin/x-y" as "/admin/x".
       if (href !== "/admin" && (pathname === href || pathname.startsWith(`${href}/`))) {
         if (href.length > best.length) best = href;
       }
     }
     return best;
-  }, [mounted, pathname]);
+  }, [mounted, pathname, visibleLinks]);
 
   async function logout() {
     await fetch("/api/admin/logout", { method: "POST" });
@@ -69,7 +75,7 @@ export function AdminNav() {
         className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden p-4 overscroll-contain"
         aria-label="Admin sections"
       >
-        {LINKS.map((item) => {
+        {visibleLinks.map((item) => {
           const active = activeHref ? item.href === activeHref : false;
           return (
             <Fragment key={item.href}>

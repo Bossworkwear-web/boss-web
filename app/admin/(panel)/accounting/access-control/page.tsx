@@ -8,7 +8,13 @@ import { AccessControlTable, type AdminAccessUserRow } from "./access-control-ta
 
 export const dynamic = "force-dynamic";
 
-type Search = { created?: string; updated?: string; deleted?: string; error?: string };
+type Search = {
+  created?: string;
+  updated?: string;
+  deleted?: string;
+  password_cleared?: string;
+  error?: string;
+};
 
 export default async function AdminAccessControlPage({ searchParams }: { searchParams: Promise<Search> }) {
   const q = await searchParams;
@@ -22,15 +28,22 @@ export default async function AdminAccessControlPage({ searchParams }: { searchP
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
       .from("admin_access_users")
-      .select("id, identifier, role, is_active, created_at")
+      .select("id, identifier, role, is_active, created_at, password_hash")
       .order("created_at", { ascending: false });
 
     if (error) {
-      loadError = error.message.includes("admin_access_users")
-        ? `${error.message} — Supabase에 마이그레이션 supabase/migrations/20260461_admin_access_control.sql 을 적용한 뒤 API 스키마를 새로고침하세요.`
+      loadError = error.message.includes("admin_access_users") || error.message.includes("password_hash")
+        ? `${error.message} — Supabase에 마이그레이션 supabase/migrations/20260461_admin_access_control.sql 및 20260513_admin_access_users_password_hash.sql 을 적용한 뒤 API 스키마를 새로고침하세요.`
         : error.message;
     } else {
-      rows = (data ?? []) as AdminAccessUserRow[];
+      rows = (data ?? []).map((row) => ({
+        id: row.id,
+        identifier: row.identifier,
+        role: row.role,
+        is_active: row.is_active,
+        created_at: row.created_at,
+        has_individual_password: Boolean(row.password_hash?.trim()),
+      }));
     }
   } catch (e) {
     loadError = e instanceof Error ? e.message : "Failed to load access control list.";
@@ -40,9 +53,16 @@ export default async function AdminAccessControlPage({ searchParams }: { searchP
   if (q.created === "1") banner = { kind: "ok", text: "추가했습니다." };
   else if (q.updated === "1") banner = { kind: "ok", text: "저장했습니다." };
   else if (q.deleted === "1") banner = { kind: "ok", text: "삭제했습니다." };
+  else if (q.password_cleared === "1") banner = { kind: "ok", text: "개별 비밀번호를 제거했습니다. 이제 공유 비밀번호로 로그인합니다." };
   else if (q.error === "missing_identifier") banner = { kind: "err", text: "Identifier는 필수입니다." };
   else if (q.error === "invalid_row") banner = { kind: "err", text: "잘못된 요청입니다." };
-  else if (q.error) {
+  else if (q.error === "password_incomplete") {
+    banner = { kind: "err", text: "비밀번호를 바꾸려면 새 비밀번호와 확인을 모두 입력하세요." };
+  } else if (q.error === "password_mismatch") {
+    banner = { kind: "err", text: "새 비밀번호와 확인이 일치하지 않습니다." };
+  } else if (q.error === "password_short") {
+    banner = { kind: "err", text: "비밀번호는 최소 8자 이상이어야 합니다." };
+  } else if (q.error) {
     try {
       banner = { kind: "err", text: decodeURIComponent(q.error.replace(/\+/g, " ")) };
     } catch {

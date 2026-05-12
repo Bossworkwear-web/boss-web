@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-/** Must stay in sync with `lib/admin-constants.ts` — Vercel Edge middleware cannot import app `@/` paths. */
+import { ADMIN_PATHNAME_HEADER } from "./lib/admin-constants";
+
+/** Must stay in sync with `lib/admin-constants.ts` — middleware imports via relative path (no `@/`). */
 const ADMIN_SESSION_COOKIE = "boss_admin_session";
 
 /** Must stay in sync with `lib/supplier-orders-warehouse-manager.ts`. */
 const SUPPLIER_ORDERS_WAREHOUSE_MANAGER_COOKIE = "boss_supplier_orders_wm";
+
+function nextWithAdminPathname(request: NextRequest, pathname: string) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(ADMIN_PATHNAME_HEADER, pathname);
+  return NextResponse.next({ request: { headers: requestHeaders } });
+}
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -20,8 +28,8 @@ export function middleware(request: NextRequest) {
 
   const session = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
   if (session === "1") {
+    const res = nextWithAdminPathname(request, pathname);
     if (pathname === "/admin/supplier-orders") {
-      const res = NextResponse.next();
       const wm = request.nextUrl.searchParams.get("warehouse_manager");
       const wmActive = wm === "1" || wm === "true";
       if (wmActive) {
@@ -41,9 +49,8 @@ export function middleware(request: NextRequest) {
           secure: process.env.NODE_ENV === "production",
         });
       }
-      return res;
     }
-    return NextResponse.next();
+    return res;
   }
 
   const url = request.nextUrl.clone();

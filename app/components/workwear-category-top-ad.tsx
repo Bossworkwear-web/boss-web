@@ -9,7 +9,7 @@ export function WorkwearCategoryTopAd() {
         aria-label="Promotion"
       >
         <img
-          src="/Ad_Workwear.png"
+          src="/Ad_workwear.png"
           alt="Workwear — promotional banner"
           className="block h-auto w-full bg-white object-contain"
           decoding="async"

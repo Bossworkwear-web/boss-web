@@ -80,12 +80,18 @@ export default async function AdminProductionPage() {
                 </td>
                 <td className="px-4 py-3 capitalize">{r.status}</td>
                 <td className="px-4 py-3">
-                  <Link
-                    href={`/admin/production/${r.storeOrderId}`}
-                    className="inline-flex rounded-xl bg-brand-orange px-4 py-2 text-xs font-semibold text-brand-navy transition hover:brightness-95"
-                  >
-                    Open production pack →
-                  </Link>
+                  {r.storeOrderResolved ? (
+                    <Link
+                      href={`/admin/production/${r.storeOrderId}`}
+                      className="inline-flex rounded-xl bg-brand-orange px-4 py-2 text-xs font-semibold text-brand-navy transition hover:brightness-95"
+                    >
+                      Open production pack →
+                    </Link>
+                  ) : (
+                    <span className="text-xs text-amber-800" title="store_orders row missing for queue store_order_id">
+                      Unlinked queue row
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

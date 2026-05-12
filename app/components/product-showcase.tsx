@@ -88,21 +88,15 @@ function inferCategory(name: string): StoreProduct["category"] {
   return "T-shirts";
 }
 
-/** Hero images for home “Shop by Category” — aligned with left-nav `MAIN_CATEGORIES`. */
+/** Hero/top banner images — same assets as `*CategoryTopAd` on `/categories/[slug]`. */
 const MAIN_CATEGORY_IMAGE_MAP: Record<string, string> = {
-  workwear:
-    "https://images.unsplash.com/photo-1592878904946-b3cd8ae243d0?auto=format&fit=crop&w=1600&q=80",
-  mens: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1600&q=80",
-  womens:
-    "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1600&q=80",
-  kids: "https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?auto=format&fit=crop&w=1600&q=80",
-  "health-care":
-    "https://images.unsplash.com/photo-1612532275214-e4ca76d0e4d1?auto=format&fit=crop&w=1600&q=80",
-  ppe: "https://images.unsplash.com/photo-1581578731548-c64695d5ad77?auto=format&fit=crop&w=1600&q=80",
-  "special-offer":
-    "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1600&q=80",
-  clearance:
-    "https://images.unsplash.com/photo-1607082349566-187342175e2f?auto=format&fit=crop&w=1600&q=80",
+  workwear: "/Ad_workwear.png",
+  mens: "/Ad_men's.png",
+  womens: "/Ad_women's.png",
+  kids: "/Ad_kid's.png",
+  "health-care": "/Ad_Health%20care%20.png",
+  chef: "/Ad_chef.png",
+  ppe: "/Ad_PPE.png",
 };
 
 /** Home category grid — matches `/service` imagery. */
@@ -520,13 +514,13 @@ export function ProductShowcase({
                     className="group overflow-hidden rounded-2xl border border-brand-navy/10 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
                   >
                     <div
-                      className="h-44 w-full bg-cover bg-center"
+                      className="h-[6.545rem] w-full bg-cover bg-center"
                       style={{
                         backgroundImage: `linear-gradient(0deg, rgba(0,31,63,0.2), rgba(0,31,63,0.2)), url("${imageSrc}")`,
                       }}
                     />
 
-                    <div className="flex flex-row items-center justify-between gap-[0.6rem] p-[2.73rem] sm:gap-[0.8rem]">
+                    <div className="flex flex-row items-center justify-between gap-[0.357rem] p-[1.624rem] sm:gap-[0.476rem]">
                       <p className="min-w-0 flex-1 truncate text-left text-[1.638rem] font-semibold uppercase leading-snug tracking-[0.1em] text-brand-navy/65">
                         {main.label}
                       </p>
@@ -546,13 +540,13 @@ export function ProductShowcase({
                 className="group overflow-hidden rounded-2xl border border-brand-navy/10 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
               >
                 <div
-                  className="h-44 w-full bg-cover bg-center"
+                  className="h-[6.545rem] w-full bg-cover bg-center"
                   style={{
                     backgroundImage: `linear-gradient(0deg, rgba(0,31,63,0.2), rgba(0,31,63,0.2)), url("${IN_STORE_SERVICE_CARD_IMAGE}")`,
                   }}
                 />
 
-                <div className="flex flex-row items-center justify-between gap-[0.6rem] p-[2.73rem] sm:gap-[0.8rem]">
+                <div className="flex flex-row items-center justify-between gap-[0.357rem] p-[1.624rem] sm:gap-[0.476rem]">
                   <p className="min-w-0 flex-1 truncate text-left text-[1.638rem] font-semibold uppercase leading-snug tracking-[0.1em] text-brand-navy/65">
                     In Store Service
                   </p>

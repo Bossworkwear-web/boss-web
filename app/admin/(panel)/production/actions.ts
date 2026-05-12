@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
-import { assertAdminSession } from "@/lib/admin-auth";
+import { assertAdminSessionForPathSegment } from "@/lib/admin-auth";
 import { guardStoreOrderNotInCompleteOrdersQueue } from "@/lib/complete-orders-queue-mutation-block";
 import { appendClickUpProductionQueueSetupHint } from "@/lib/supabase-click-up-production-queue-hint";
 import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
@@ -62,7 +62,7 @@ export type ProductionAssetDto = {
 
 export async function listProductionAssets(orderId: string): Promise<{ ok: true; assets: ProductionAssetDto[] } | { ok: false; error: string }> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/production");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -110,7 +110,7 @@ export async function uploadProductionAsset(
   file: File,
 ): Promise<{ ok: true; asset: ProductionAssetDto } | { ok: false; error: string }> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/production");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -195,7 +195,7 @@ export async function deleteProductionAsset(
   assetId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/production");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -252,6 +252,8 @@ export async function deleteProductionAsset(
 export type ClickUpProductionQueueRowDto = {
   queueId: string;
   storeOrderId: string;
+  /** False when queue references a store_orders.id that is missing from the orders fetch (RLS/orphan). */
+  storeOrderResolved: boolean;
   listDate: string;
   movedAt: string;
   orderNumber: string;
@@ -265,7 +267,7 @@ export async function listClickUpProductionQueue(): Promise<
   { ok: true; rows: ClickUpProductionQueueRowDto[] } | { ok: false; error: string }
 > {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/production");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -296,13 +298,17 @@ export async function listClickUpProductionQueue(): Promise<
       return { ok: false, error: oErr.message };
     }
 
-    const orderMap = new Map((orders ?? []).map((o) => [o.id, o]));
+    const orderMap = new Map(
+      (orders ?? []).map((o) => [String(o.id).trim().toLowerCase().replace(/-/g, ""), o]),
+    );
 
     const rows: ClickUpProductionQueueRowDto[] = queue.map((q) => {
-      const o = orderMap.get(q.store_order_id);
+      const sid = String(q.store_order_id ?? "").trim().toLowerCase().replace(/-/g, "");
+      const o = sid ? orderMap.get(sid) : undefined;
       return {
         queueId: q.id,
         storeOrderId: q.store_order_id,
+        storeOrderResolved: Boolean(o),
         listDate: q.list_date ?? "",
         movedAt: q.moved_at,
         orderNumber: o?.order_number ?? "—",
@@ -321,7 +327,7 @@ export async function listClickUpProductionQueue(): Promise<
 
 export async function hasProductionPackForStoreOrder(orderId: string): Promise<boolean> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/production");
   } catch {
     return false;
   }

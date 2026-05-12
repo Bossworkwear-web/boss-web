@@ -1,6 +1,14 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
+import { findActiveAdminAccessUserByIdentifier } from "@/lib/admin-access-users";
 import { ADMIN_SESSION_COOKIE, ADMIN_USER_COOKIE } from "@/lib/admin-constants";
+import {
+  defaultLandingPathForPortalAccess,
+  isAdminPathAllowedForPortalAccess,
+  type AdminPortalNavAccess,
+  portalNavAccessFromRole,
+} from "@/lib/admin-portal-permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 export async function isAdminSession(): Promise<boolean> {
@@ -14,7 +22,7 @@ export async function getAdminUser(): Promise<string | null> {
   return raw.length ? raw : null;
 }
 
-async function isAccessControlEnabled(): Promise<boolean> {
+export async function isAccessControlEnabled(): Promise<boolean> {
   try {
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
@@ -48,16 +56,62 @@ export async function assertAdminSession(): Promise<void> {
 
   try {
     const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("admin_access_users")
-      .select("id")
-      .eq("identifier", user)
-      .eq("is_active", true)
-      .maybeSingle();
-    if (error || !data?.id) {
+    const row = await findActiveAdminAccessUserByIdentifier(supabase, user);
+    if (!row?.id) {
       throw new Error("Unauthorized");
     }
   } catch {
     throw new Error("Unauthorized");
   }
+}
+
+/** When access control is off, everyone is full portal. When on, uses DB role for production/warehouse restrictions. */
+export async function resolveAdminPortalNavAccess(): Promise<AdminPortalNavAccess> {
+  if (!(await isAccessControlEnabled())) {
+    return { mode: "full" };
+  }
+  const user = await getAdminUser();
+  if (!user) {
+    return { mode: "full" };
+  }
+  try {
+    const supabase = createSupabaseAdminClient();
+    const row = await findActiveAdminAccessUserByIdentifier(supabase, user);
+    if (!row) {
+      return { mode: "full" };
+    }
+    return portalNavAccessFromRole(row.role);
+  } catch {
+    return { mode: "full" };
+  }
+}
+
+/** Server layout: redirect restricted roles away from disallowed admin paths. */
+export async function assertAdminPortalPath(pathname: string, access: AdminPortalNavAccess): Promise<void> {
+  if (access.mode === "full") {
+    return;
+  }
+  if (!pathname.startsWith("/admin")) {
+    redirect(defaultLandingPathForPortalAccess(access));
+  }
+  if (pathname === "/admin") {
+    redirect(defaultLandingPathForPortalAccess(access));
+  }
+  if (isAdminPathAllowedForPortalAccess(access, pathname)) {
+    return;
+  }
+  redirect(defaultLandingPathForPortalAccess(access));
+}
+
+/** Server actions for a fixed admin section — throws if role cannot access that segment. */
+export async function assertAdminSessionForPathSegment(pathPrefix: string): Promise<void> {
+  await assertAdminSession();
+  const access = await resolveAdminPortalNavAccess();
+  if (access.mode === "full") {
+    return;
+  }
+  if (isAdminPathAllowedForPortalAccess(access, pathPrefix)) {
+    return;
+  }
+  throw new Error("Unauthorized");
 }

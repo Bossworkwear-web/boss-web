@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { assertAdminSession } from "@/lib/admin-auth";
+import { assertAdminSessionForPathSegment } from "@/lib/admin-auth";
 import { storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
 import { guardStoreOrderNotInCompleteOrdersQueue } from "@/lib/complete-orders-queue-mutation-block";
 import { appendClickUpProductionQueueSetupHint } from "@/lib/supabase-click-up-production-queue-hint";
@@ -26,7 +26,7 @@ export async function listClickUpQualityCheckQueue(): Promise<
   { ok: true; rows: ClickUpQcQueueRowDto[] } | { ok: false; error: string }
 > {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/quality-control");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -85,7 +85,7 @@ export async function listClickUpQualityCheckQueue(): Promise<
  */
 export async function moveStoreOrderToQualityControlFromProduction(formData: FormData): Promise<void> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/quality-control");
   } catch {
     redirect("/admin/login");
   }
@@ -148,7 +148,7 @@ export async function getStoreOrderScanCodeByOrderNumber(orderNumber: string): P
   const t = orderNumber.trim();
   if (!t) return null;
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/quality-control");
   } catch {
     return null;
   }

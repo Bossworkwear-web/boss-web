@@ -138,9 +138,48 @@ pre {
   will-change: transform;
 }
 
+/* Header search: magnifier → expanded field — horizontal reveal */
+@keyframes store-header-search-expand {
+  from {
+    max-width: 2.75rem;
+  }
+  to {
+    max-width: min(100%, 34rem);
+  }
+}
+
+@keyframes store-header-search-collapse {
+  from {
+    max-width: min(100%, 34rem);
+  }
+  to {
+    max-width: 2.75rem;
+  }
+}
+
+.store-header-search-expand {
+  overflow: hidden;
+  animation: store-header-search-expand 1.52s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.store-header-search-collapse {
+  overflow: hidden;
+  animation: store-header-search-collapse 1.52s cubic-bezier(0.36, 0, 0.66, 1) forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .store-cart-icon-animate {
     animation: none;
+  }
+
+  .store-header-search-expand {
+    animation: none;
+    max-width: min(100%, 34rem);
+  }
+
+  .store-header-search-collapse {
+    animation: none;
+    max-width: 2.75rem;
   }
 }
 
@@ -590,11 +629,12 @@ pre {
 /* Production pack (admin): print — hide sidebar & panel chrome; only pack body */
 @media print {
   /*
-   * Admin print uses html 120% (see above). Production pack: 200% root → 2× rem-based type.
-   * Table uses explicit pt (doubled below). File thumbs use zoom 0.5 so h-28 tiles stay ~previous size.
+   * Admin print uses html 120% (see above). Production pack: 98% root (was 140%; −30% for print preview type).
+   * @page margin 10mm is set in production/print-button.tsx when opening print.
+   * Table uses explicit pt. File thumbs zoom scales with the body text.
    */
   html:has(body.production-pack-print-mode) {
-    font-size: 200% !important;
+    font-size: 98% !important;
   }
 
   body.production-pack-print-mode {
@@ -636,15 +676,16 @@ pre {
   }
 
   body.production-pack-print-mode .production-pack-print-area {
-    padding: 6mm;
+    /* Page inset comes from @page margin (print-button); keep inner padding 0 to avoid double margin */
+    padding: 0 !important;
     box-sizing: border-box;
     max-width: 100%;
     zoom: 1;
   }
 
   body.production-pack-print-mode .production-pack-print-area .production-pack-print-1x-thumb {
-    /* Counter 2× html rem so asset tiles stay ~1× on paper while body text is 2×. */
-    zoom: 0.5;
+    /* Tuned with 98% html root so file thumbs stay balanced vs line items. */
+    zoom: 0.714;
   }
 
   body.production-pack-print-mode .production-pack-print-area * {
@@ -661,11 +702,11 @@ pre {
     width: 100% !important;
     max-width: 100% !important;
     table-layout: auto !important;
-    font-size: 20pt !important;
+    font-size: 9.8pt !important;
     line-height: 1.35 !important;
   }
 
-  /* Order items only: Item column ~3× a fair equal share (~50% vs ~17% each for 6 cols). */
+  /* Order items: #, Item, Color, Size, Qty, Service — Item ~50%, others share remainder */
   body.production-pack-print-mode .production-pack-order-items-table {
     table-layout: fixed !important;
   }

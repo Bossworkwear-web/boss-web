@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Encode_Sans_Condensed, Montserrat } from "next/font/google";
 import "./globals.css";
 import "./store-ui.css";
@@ -53,12 +52,6 @@ export default function RootLayout({
         <div className="flex-1">{children}</div>
         <footer className="border-t border-brand-navy/10 bg-white print:hidden">
           <div className={`flex flex-wrap items-center justify-center gap-3 py-6 ${SITE_PAGE_ROW_CLASS}`}>
-            <Link
-              href="/admin"
-              className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-navy/60 hover:text-brand-orange"
-            >
-              Admin
-            </Link>
             <span className="rounded-full border border-brand-navy/20 bg-brand-surface px-4 py-1.5 text-xs font-medium uppercase tracking-[0.08em] text-brand-navy">
               ISO Certified
             </span>

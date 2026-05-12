@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { assertAdminSession } from "@/lib/admin-auth";
+import { assertAdminSessionForPathSegment } from "@/lib/admin-auth";
 import { appendClickUpCompleteOrdersQueueSetupHint } from "@/lib/supabase-click-up-complete-orders-queue-hint";
 import { appendClickUpDispatchQueueSetupHint } from "@/lib/supabase-click-up-dispatch-queue-hint";
 import { createSupabaseAdminClient } from "@/lib/supabase";
@@ -26,7 +26,7 @@ export async function listClickUpDispatchQueue(): Promise<
   { ok: true; rows: ClickUpDispatchQueueRowDto[] } | { ok: false; error: string }
 > {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/dispatch");
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
@@ -200,7 +200,7 @@ async function moveDispatchQueueRowToComplete(
 
 export async function completeDispatchQueueRow(formData: FormData): Promise<void> {
   try {
-    await assertAdminSession();
+    await assertAdminSessionForPathSegment("/admin/dispatch");
   } catch {
     redirect("/admin/login");
   }
