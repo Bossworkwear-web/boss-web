@@ -934,6 +934,73 @@ export type Database = {
         };
         Relationships: [];
       };
+      storefront_chat_messages: {
+        Row: {
+          id: string;
+          thread_id: string;
+          sender: string;
+          body: string;
+          staff_identifier: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          thread_id: string;
+          sender: string;
+          body: string;
+          staff_identifier?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          thread_id?: string;
+          sender?: string;
+          body?: string;
+          staff_identifier?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "storefront_chat_messages_thread_id_fkey";
+            columns: ["thread_id"];
+            referencedRelation: "storefront_chat_threads";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      storefront_chat_threads: {
+        Row: {
+          id: string;
+          visitor_key: string;
+          customer_email: string;
+          visitor_name: string | null;
+          visitor_email: string | null;
+          status: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          visitor_key: string;
+          customer_email: string;
+          visitor_name?: string | null;
+          visitor_email?: string | null;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          visitor_key?: string;
+          customer_email?: string;
+          visitor_name?: string | null;
+          visitor_email?: string | null;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       incoming_goods_receipts: {
         Row: {
           id: string;

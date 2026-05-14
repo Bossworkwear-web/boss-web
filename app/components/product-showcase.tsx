@@ -492,19 +492,20 @@ export function ProductShowcase({
           </>
         ) : (
           <>
-            <div className="mb-7 flex items-end justify-between gap-4">
-              <div>
-                <p className="text-[1.4625rem] font-semibold uppercase tracking-[0.12em] text-brand-navy/70">
-                  Featured Range
-                </p>
-                <h2 className="text-[3.65625rem] font-medium leading-tight">Shop by Category</h2>
-              </div>
-              <p className="text-[1.70625rem] font-semibold text-brand-orange">
-                {MAIN_CATEGORIES.length + 1} categories
-              </p>
-            </div>
+            <div className="min-w-0">
+                <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-[1.4625rem] font-semibold uppercase tracking-[0.12em] text-brand-navy/70">
+                      Featured Range
+                    </p>
+                    <h2 className="text-[3.65625rem] font-medium leading-tight">Shop by Category</h2>
+                  </div>
+                  <p className="text-[1.70625rem] font-semibold text-brand-orange sm:text-right">
+                    {MAIN_CATEGORIES.length + 1} categories
+                  </p>
+                </div>
 
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {MAIN_CATEGORIES.map((main) => {
                 const imageSrc =
                   MAIN_CATEGORY_IMAGE_MAP[main.slug] ?? MAIN_CATEGORY_IMAGE_MAP.workwear;
@@ -559,6 +560,7 @@ export function ProductShowcase({
                   </Link>
                 </div>
               </article>
+                </div>
             </div>
           </>
         )}

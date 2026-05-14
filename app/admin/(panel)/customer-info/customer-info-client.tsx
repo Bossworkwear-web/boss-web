@@ -32,6 +32,7 @@ export function CustomerInfoClient() {
 
   const [logoLightboxOpen, setLogoLightboxOpen] = useState(false);
   const [masterLogoFile, setMasterLogoFile] = useState<File | null>(null);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   const profileStats = useMemo(() => {
     if (!payload) return null;
@@ -82,6 +83,10 @@ export function CustomerInfoClient() {
   useEffect(() => {
     setSpecialRequestBody(payload?.specialRequest?.body ?? "");
   }, [payload?.specialRequest?.body]);
+
+  useEffect(() => {
+    setShowLoginPassword(false);
+  }, [payload?.profile?.id]);
 
   function runSearch() {
     setError(null);
@@ -366,6 +371,43 @@ export function CustomerInfoClient() {
               <p className="mt-3 text-sm text-slate-600">No `customer_profiles` row for this email.</p>
             ) : profileForm ? (
               <div className="mt-3 space-y-3">
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Email</span>
+                  <input
+                    readOnly
+                    value={payload.profile.email_address}
+                    autoComplete="off"
+                    className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                  />
+                </label>
+                <div className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Login password</span>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    {payload.profile.login_password ? (
+                      <>
+                        <input
+                          readOnly
+                          type={showLoginPassword ? "text" : "password"}
+                          value={payload.profile.login_password}
+                          autoComplete="off"
+                          className="min-w-[12rem] flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-brand-navy"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowLoginPassword((v) => !v)}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                          aria-pressed={showLoginPassword}
+                        >
+                          {showLoginPassword ? "Hide" : "Show"}
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-sm text-slate-600">
+                        Not set — email/password login is disabled until the customer sets a password (e.g. OAuth-only).
+                      </p>
+                    )}
+                  </div>
+                </div>
                 {(
                   [
                     ["Organisation", "organisation"],

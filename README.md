@@ -1,3 +1,19 @@
+## Run on another computer
+
+Backups (`scripts/backup-boss-web.sh`) **exclude** `node_modules` and `.next`, so a copied tree is not runnable until you install dependencies.
+
+1. **Get the code** — either:
+   - Copy the `boss-web` folder from Google Drive **`Boss_Web/boss-web/`**, or from **`Boss Workwear/boss-web/`** on an external drive (e.g. External 4T HD or a USB stick under **`Boss Workwear/`**), **or**
+   - Extract a `boss-web-backup-*.tar.gz` from the matching **`archives/`** folder into your `dev/` (or any) directory.
+2. **Node.js** — use a current LTS (this repo targets Next.js in `package.json`; Node 20+ is typical).
+3. **Environment** — from the repo root: `cp .env.example .env.local` and fill in Supabase (and other) keys. See **Supabase Setup** below and your team’s secrets (never commit `.env.local`).
+4. **Install & run**:
+   ```bash
+   npm install
+   npm run dev
+   ```
+5. **Database** — point `.env.local` at the same Supabase project (or a clone) and apply migrations in `supabase/migrations/` as in README sections for each feature.
+
 ## Supabase Setup
 
 1. Update `.env.local`:

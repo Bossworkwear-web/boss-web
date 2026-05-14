@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { CategoryBrowseTitle } from "@/app/components/category-browse-title";
 import { CategoryBrandFilter } from "@/app/components/category-brand-filter";
 import { CategoryGetAQuoteCta } from "@/app/components/category-get-a-quote-cta";
+import { CategoryPaginationPageSummary } from "@/app/components/category-pagination-page-summary";
 import { ProductGridPriceCells } from "@/app/components/product-grid-price";
 import { ProductNavLink } from "@/app/components/product-nav-link";
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
@@ -305,9 +306,9 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
         {slug === HEALTH_CARE_MAIN_SLUG ? <HealthCareCategoryTopAd /> : null}
         {slug === "ppe" ? <PpeCategoryTopAd /> : null}
         {slug === "chef" ? <ChefCategoryTopAd /> : null}
-        <section className={`${SITE_PAGE_ROW_CLASS} py-10`}>
+        <section className={`${SITE_PAGE_ROW_CLASS} pb-10 pt-0`}>
           <CategoryGetAQuoteCta />
-          <header className="mb-7 space-y-6">
+          <header className="mb-7 mt-10 space-y-6">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-brand-navy/70">Category</p>
             <div className="flex flex-wrap items-center justify-between gap-4">
               <CategoryBrowseTitle>
@@ -411,9 +412,10 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
 
           {totalPages > 1 && sorted.length > 0 ? (
             <nav
-              className="mt-10 flex flex-wrap items-center justify-center gap-4 border-t border-brand-navy/10 pt-8 text-[1.05rem] leading-snug"
+              className="mt-10 w-full max-w-full min-w-0 border-t border-brand-navy/10 pt-8 text-[1.05rem] leading-snug"
               aria-label="Product list pagination"
             >
+              <div className="flex w-full max-w-full min-w-0 flex-wrap items-center justify-center gap-4">
               {currentPage > 1 ? (
                 <Link
                   href={subPageHref(slug, subSlug, currentPage - 1, brandParamEffective, sortEffective)}
@@ -459,6 +461,8 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
                   Next
                 </span>
               )}
+              <CategoryPaginationPageSummary currentPage={currentPage} totalPages={totalPages} />
+              </div>
             </nav>
           ) : null}
 

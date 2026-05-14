@@ -35,6 +35,30 @@ export function addCalendarDaysYmd(ymd: string, deltaDays: number): string {
   return `${yy}-${mm}-${dd}`;
 }
 
+/** ISO weekday in Perth: Monday = 1 … Sunday = 7. */
+export function perthWeekdayIsoNumericMon1Sun7(ymd: string): number {
+  const d = new Date(`${ymd}T12:00:00+08:00`);
+  const short = new Intl.DateTimeFormat("en-AU", { weekday: "short", timeZone: PERTH_TZ }).format(d);
+  const key = short.slice(0, 3);
+  const map: Record<string, number> = {
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+    Sun: 7,
+  };
+  return map[key] ?? 1;
+}
+
+/** Calendar Monday `YYYY-MM-DD` (Perth) for the week that contains `ymd`. */
+export function perthMondayYmdOfWeekContaining(ymd: string): string {
+  const dow = perthWeekdayIsoNumericMon1Sun7(ymd);
+  const daysBack = dow - 1;
+  return addCalendarDaysYmd(ymd, -daysBack);
+}
+
 /**
  * Perth “today” through (dayCount − 1) days earlier, newest first.
  * Every calendar day in range is listed so the UI can render an empty sheet when there are no rows.

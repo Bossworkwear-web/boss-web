@@ -9,7 +9,8 @@
  *
  * Env:
  *   PORT               — dev server port (default 3000)
- *   DEV_PREVIEW_URL    — full URL to open (default http://localhost:$PORT)
+ *   DEV_PREVIEW_HOST   — dev bind + poll URL host (default 127.0.0.1)
+ *   DEV_PREVIEW_URL    — full URL to open (default http://$DEV_PREVIEW_HOST:$PORT)
  *   DEV_PREVIEW_BROWSER — `chrome` (default) or `default` for OS default browser only
  *   NEXT_DEV_WEBPACK   — set to `1` to run `next dev --webpack` (helps when Turbopack hits EMFILE / broken routes on macOS)
  */
@@ -20,7 +21,9 @@ import path from "node:path";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const port = process.env.PORT ?? "3000";
-const url = process.env.DEV_PREVIEW_URL ?? `http://localhost:${port}`;
+/** Bind IPv4 explicitly — on Windows `localhost` + `-H localhost` can listen only on ::1 while browsers resolve `localhost` to 127.0.0.1. */
+const host = process.env.DEV_PREVIEW_HOST ?? "127.0.0.1";
+const url = process.env.DEV_PREVIEW_URL ?? `http://${host}:${port}`;
 const browserMode = (process.env.DEV_PREVIEW_BROWSER ?? "chrome").toLowerCase();
 
 const nextBin = path.join(root, "node_modules", "next", "dist", "bin", "next");
@@ -32,7 +35,7 @@ if (!existsSync(nextBin)) {
 // Force localhost to avoid Node `os.networkInterfaces()` failures (uv_interface_addresses)
 // that can crash Next's "network host" detection on some machines.
 const useWebpack = process.env.NEXT_DEV_WEBPACK === "1" || process.env.NEXT_DEV_WEBPACK === "true";
-const devArgs = ["dev", "-H", "localhost", "-p", port];
+const devArgs = ["dev", "-H", host, "-p", port];
 if (useWebpack) {
   devArgs.push("--webpack");
 }

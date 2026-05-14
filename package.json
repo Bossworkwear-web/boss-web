@@ -7,7 +7,7 @@
     "predev": "node scripts/generate-logo-version.mjs && node scripts/generate-biz-care-misc-skus.mjs && node scripts/generate-fashion-biz-gender.mjs && node scripts/generate-fashion-biz-listing-subslug.mjs && node scripts/generate-syzmik-style-titles.mjs && node scripts/generate-biz-care-collection-style-titles.mjs",
     "dev": "node scripts/dev-open.mjs",
     "predev:server": "node scripts/generate-logo-version.mjs && node scripts/generate-biz-care-misc-skus.mjs && node scripts/generate-fashion-biz-gender.mjs && node scripts/generate-fashion-biz-listing-subslug.mjs && node scripts/generate-syzmik-style-titles.mjs && node scripts/generate-biz-care-collection-style-titles.mjs",
-    "dev:server": "next dev -H localhost",
+    "dev:server": "next dev -H 127.0.0.1",
     "predev:open": "node scripts/generate-logo-version.mjs && node scripts/generate-biz-care-misc-skus.mjs && node scripts/generate-fashion-biz-gender.mjs && node scripts/generate-fashion-biz-listing-subslug.mjs && node scripts/generate-syzmik-style-titles.mjs && node scripts/generate-biz-care-collection-style-titles.mjs",
     "dev:open": "node scripts/dev-open.mjs",
     "prepreview": "node scripts/generate-logo-version.mjs && node scripts/generate-biz-care-misc-skus.mjs && node scripts/generate-fashion-biz-gender.mjs && node scripts/generate-fashion-biz-listing-subslug.mjs && node scripts/generate-syzmik-style-titles.mjs && node scripts/generate-biz-care-collection-style-titles.mjs",

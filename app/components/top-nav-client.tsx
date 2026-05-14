@@ -194,7 +194,7 @@ function CategoryInlineNav({
 }
 
 const HEADER_SEARCH_INPUT_CLASS =
-  "min-w-0 w-[min(100%,11rem)] rounded-full border border-brand-navy/20 bg-white px-[0.875rem] py-2 text-base leading-snug text-brand-navy placeholder:text-brand-navy/50 focus:border-brand-orange focus:outline-none sm:w-52 sm:px-[1.125rem] sm:py-2.5 sm:text-lg";
+  "min-w-0 w-[min(100%,22rem)] rounded-full border border-brand-navy/20 bg-white px-[0.875rem] py-2 text-base leading-snug text-brand-navy placeholder:text-brand-navy/50 focus:border-brand-orange focus:outline-none sm:w-[26rem] sm:px-[1.125rem] sm:py-2.5 sm:text-lg";
 
 /**
  * Same DOM for Suspense fallback and hydrated tree — avoids `<div>` placeholder vs `<form>` mismatch.
@@ -372,17 +372,33 @@ export function TopNavClient({
     if (!node || typeof document === "undefined") {
       return;
     }
-    const syncHeaderHeight = () => {
+    let rafId = 0;
+    let lastHeight = -1;
+    const flushHeaderHeight = () => {
+      rafId = 0;
       const h = node.offsetHeight;
+      if (h === lastHeight) {
+        return;
+      }
+      lastHeight = h;
       document.documentElement.style.setProperty("--site-header-height", `${h}px`);
     };
-    syncHeaderHeight();
-    const ro = new ResizeObserver(syncHeaderHeight);
+    const scheduleHeaderHeight = () => {
+      if (rafId) {
+        return;
+      }
+      rafId = requestAnimationFrame(flushHeaderHeight);
+    };
+    flushHeaderHeight();
+    const ro = new ResizeObserver(scheduleHeaderHeight);
     ro.observe(node);
-    window.addEventListener("resize", syncHeaderHeight);
+    window.addEventListener("resize", scheduleHeaderHeight);
     return () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
       ro.disconnect();
-      window.removeEventListener("resize", syncHeaderHeight);
+      window.removeEventListener("resize", scheduleHeaderHeight);
     };
   }, []);
 
@@ -535,9 +551,9 @@ export function TopNavClient({
                 <Image
                   src={LOGO_SRC}
                   alt="Boss Workwear"
-                  width={240}
-                  height={72}
-                  className="h-[3.2rem] w-auto sm:h-[3.6rem]"
+                  width={360}
+                  height={108}
+                  className="h-[4.8rem] w-auto sm:h-[5.4rem]"
                   priority
                 />
               </Link>
@@ -595,7 +611,7 @@ export function TopNavClient({
                       : "inline-flex shrink-0"
                   }
                 >
-                  <CartIcon className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
+                  <CartIcon className="h-[1.5125rem] w-[1.5125rem] shrink-0 sm:h-[1.815rem] sm:w-[1.815rem]" />
                 </span>
                 {cartCount > 0 && (
                   <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-brand-navy px-1.5 text-xs font-medium text-white sm:min-w-6 sm:px-2 sm:text-sm">
@@ -606,7 +622,7 @@ export function TopNavClient({
             </div>
           </div>
 
-          <div className="flex w-full items-center justify-center pt-1 sm:pt-[0.3125rem]">
+          <div className="flex min-h-[3.75rem] w-full items-center justify-center pt-1 sm:min-h-[4rem] sm:pt-[0.3125rem]">
             <HeaderSearchToggle
               open={searchOpen}
               onOpen={() => setSearchOpen(true)}

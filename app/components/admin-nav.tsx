@@ -23,6 +23,7 @@ const LINKS = [
   { href: "/admin/stock", label: "Stock" },
   { href: "/admin/clearance-stock", label: "Clearance Stock" },
   { href: "/admin/crm", label: "CRM & Pipeline" },
+  { href: "/admin/storefront-chat", label: "Storefront chat" },
   { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/reports", label: "Reports" },
   { href: "/admin/accounting", label: "Accounting" },
@@ -67,7 +68,7 @@ export function AdminNav({ portalAccess }: { portalAccess: AdminPortalNavAccess 
   }
 
   return (
-    <aside className="fixed bottom-0 left-0 top-0 z-40 hidden w-[306px] flex-col border-r border-slate-700 bg-slate-900 text-white lg:flex">
+    <aside className="fixed bottom-0 left-0 top-0 z-40 hidden w-[calc(306px*0.7)] flex-col border-r border-slate-700 bg-slate-900 text-white lg:flex">
       <div className="shrink-0 border-b border-slate-700 px-6 py-8">
         <p className="text-[1.125rem] font-semibold uppercase tracking-[0.12em] text-slate-400">Admin</p>
         <p className="mt-1 text-[1.6875rem] font-medium leading-tight">Boss Web</p>
@@ -94,7 +95,7 @@ export function AdminNav({ portalAccess }: { portalAccess: AdminPortalNavAccess 
               )}
               <Link
                 href={item.href}
-                className={`rounded-xl px-[1.125rem] py-[0.9375rem] text-[1.3125rem] font-semibold leading-snug transition ${
+                className={`rounded-xl px-[1.125rem] py-[0.9375rem] text-[1.05rem] font-semibold leading-snug transition ${
                   active ? "bg-brand-orange text-brand-navy" : "text-slate-200 hover:bg-slate-800"
                 }`}
               >
@@ -107,14 +108,14 @@ export function AdminNav({ portalAccess }: { portalAccess: AdminPortalNavAccess 
       <div className="shrink-0 border-t border-slate-700 bg-slate-900 p-4">
         <Link
           href="/"
-          className="mb-2 block rounded-xl px-[1.125rem] py-[0.9375rem] text-[1.3125rem] font-semibold text-slate-300 hover:bg-slate-800"
+          className="mb-2 block rounded-xl px-[1.125rem] py-[0.9375rem] text-[1.05rem] font-semibold text-slate-300 hover:bg-slate-800"
         >
           View storefront
         </Link>
         <button
           type="button"
           onClick={() => void logout()}
-          className="w-full rounded-xl px-[1.125rem] py-[0.9375rem] text-left text-[1.3125rem] font-semibold text-red-300 hover:bg-slate-800"
+          className="w-full rounded-xl px-[1.125rem] py-[0.9375rem] text-left text-[1.05rem] font-semibold text-red-300 hover:bg-slate-800"
         >
           Log out
         </button>

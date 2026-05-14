@@ -1,6 +1,10 @@
 import Link from "next/link";
 
+import { loadDashboardStoreOrderPeriodStats } from "@/lib/admin-dashboard-store-order-stats";
+import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
+
+import { buildStoreOrdersListHref } from "./store-orders/store-orders-list-helpers";
 
 const LOW_STOCK = 10;
 
@@ -8,6 +12,8 @@ export default async function AdminDashboardPage() {
   let activeProducts = "—";
   let lowStock = "—";
   let totalUnits = "—";
+
+  const orderStatsRes = await loadDashboardStoreOrderPeriodStats();
 
   try {
     const supabase = createSupabaseAdminClient();
@@ -36,6 +42,102 @@ export default async function AdminDashboardPage() {
           Overview and quick links. Stock levels use the <strong>stock_quantity</strong> column (see migration).
         </p>
       </header>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-medium text-brand-navy">Store orders received</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Count and totals by <strong>Australia/Perth</strong> calendar windows. Paid/processing/shipped orders only (
+          <strong>cancelled</strong> excluded). Amounts are storefront order totals (GST inclusive), AUD.
+        </p>
+        {orderStatsRes.error ? (
+          <p className="mt-4 text-sm text-amber-800">{orderStatsRes.error}</p>
+        ) : orderStatsRes.stats ? (
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-[32rem] w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="py-2 pr-4">Period</th>
+                  <th className="py-2 pr-4 text-right">Orders</th>
+                  <th className="py-2 text-right">Total</th>
+                  <th className="w-24 py-2 pl-4 text-right"> </th>
+                </tr>
+              </thead>
+              <tbody className="text-slate-800">
+                {(
+                  [
+                    {
+                      key: "day",
+                      title: "Daily",
+                      subtitle: `Today (${orderStatsRes.stats.labels.asOfPerthYmd})`,
+                      href: buildStoreOrdersListHref(
+                        { ship: "all", from: orderStatsRes.stats.labels.asOfPerthYmd, to: orderStatsRes.stats.labels.asOfPerthYmd, q: "", page: 1 },
+                      ),
+                      bucket: orderStatsRes.stats.day,
+                    },
+                    {
+                      key: "week",
+                      title: "Weekly",
+                      subtitle: `This week · Mon ${orderStatsRes.stats.labels.weekStartsYmd} → ${orderStatsRes.stats.labels.asOfPerthYmd}`,
+                      href: buildStoreOrdersListHref({
+                        ship: "all",
+                        from: orderStatsRes.stats.labels.weekStartsYmd,
+                        to: orderStatsRes.stats.labels.asOfPerthYmd,
+                        q: "",
+                        page: 1,
+                      }),
+                      bucket: orderStatsRes.stats.week,
+                    },
+                    {
+                      key: "month",
+                      title: "Monthly",
+                      subtitle: `Month to date · from ${orderStatsRes.stats.labels.monthStartsYmd}`,
+                      href: buildStoreOrdersListHref({
+                        ship: "all",
+                        from: orderStatsRes.stats.labels.monthStartsYmd,
+                        to: orderStatsRes.stats.labels.asOfPerthYmd,
+                        q: "",
+                        page: 1,
+                      }),
+                      bucket: orderStatsRes.stats.month,
+                    },
+                    {
+                      key: "year",
+                      title: "Yearly",
+                      subtitle: `Year to date · from ${orderStatsRes.stats.labels.yearStartsYmd}`,
+                      href: buildStoreOrdersListHref({
+                        ship: "all",
+                        from: orderStatsRes.stats.labels.yearStartsYmd,
+                        to: orderStatsRes.stats.labels.asOfPerthYmd,
+                        q: "",
+                        page: 1,
+                      }),
+                      bucket: orderStatsRes.stats.year,
+                    },
+                  ] as const
+                ).map((row) => (
+                  <tr key={row.key} className="border-b border-slate-100 last:border-0">
+                    <td className="py-3 pr-4 align-top">
+                      <span className="font-semibold text-brand-navy">{row.title}</span>
+                      <span className="mt-0.5 block text-xs font-normal text-slate-500">{row.subtitle}</span>
+                    </td>
+                    <td className="py-3 pr-4 text-right align-top tabular-nums">{row.bucket.count}</td>
+                    <td className="py-3 text-right align-top tabular-nums font-medium text-brand-navy">
+                      {formatMoneyFromCents(row.bucket.totalCents, "AUD")}
+                    </td>
+                    <td className="py-3 pl-4 text-right align-top">
+                      <Link href={row.href} className="text-xs font-semibold text-brand-orange hover:underline">
+                        List →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-slate-600">No data.</p>
+        )}
+      </section>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {[

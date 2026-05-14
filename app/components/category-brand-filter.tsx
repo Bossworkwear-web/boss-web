@@ -35,13 +35,13 @@ export function CategoryBrandFilter({ brands }: Props) {
   const disabled = options.length === 0;
 
   return (
-    <div className="flex flex-wrap items-center gap-4">
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-semibold uppercase tracking-[0.12em] text-brand-navy/70">
+    <div className="flex flex-wrap items-center gap-[0.8rem]">
+      <div className="flex items-center gap-[0.6rem]">
+        <label className="text-[0.7rem] font-semibold uppercase tracking-[0.096em] text-brand-navy/70">
           Brand
         </label>
         <select
-          className="category-filter-native-select min-w-[14.7rem] rounded-xl bg-white px-[0.96rem] py-[0.72rem] text-[1.008rem] text-brand-navy shadow-sm outline-none transition"
+          className="category-filter-native-select min-w-[11.76rem] rounded-[0.6rem] bg-white px-[0.768rem] py-[0.576rem] text-[0.8064rem] text-brand-navy shadow-sm outline-none transition"
           value={current}
           suppressHydrationWarning
           disabled={disabled}
@@ -71,12 +71,12 @@ export function CategoryBrandFilter({ brands }: Props) {
         </select>
       </div>
 
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-semibold uppercase tracking-[0.12em] text-brand-navy/70">
+      <div className="flex items-center gap-[0.6rem]">
+        <label className="text-[0.7rem] font-semibold uppercase tracking-[0.096em] text-brand-navy/70">
           Sort
         </label>
         <select
-          className="category-filter-native-select min-w-[14rem] rounded-xl bg-white px-[0.96rem] py-[0.72rem] text-[1.008rem] text-brand-navy shadow-sm outline-none transition"
+          className="category-filter-native-select min-w-[11.2rem] rounded-[0.6rem] bg-white px-[0.768rem] py-[0.576rem] text-[0.8064rem] text-brand-navy shadow-sm outline-none transition"
           value={sort}
           suppressHydrationWarning
           onChange={(e) => {

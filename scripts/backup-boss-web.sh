@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Create a tarball in a temp dir (not next to the repo), copy it to Google Drive
-# and optionally to an external disk, then remove the local tarball.
-# Also rsyncs the working tree to My Drive/Boss_Web/boss-web/ and the external path.
+# and optionally to one or two external disks, then remove the local tarball.
+# Also rsyncs the working tree to My Drive/Boss_Web/boss-web/ and each external path.
 #
 # Optional env:
-#   BACKUP_GOOGLE_DRIVE_ROOT  Absolute path to "My Drive" (if auto-detect fails)
-#   BACKUP_DRIVE_SUBDIR       Under My Drive; default: Boss_Web
-#   BACKUP_EXTERNAL_ROOT      e.g. /Volumes/External 4T HD/Boss Workwear
+#   BACKUP_GOOGLE_DRIVE_ROOT   Absolute path to "My Drive" (if auto-detect fails)
+#   BACKUP_DRIVE_SUBDIR        Under My Drive; default: Boss_Web
+#   BACKUP_EXTERNAL_ROOT       e.g. /Volumes/External 4T HD/Boss Workwear
+#   BACKUP_EXTERNAL_ROOT2      Second disk, e.g. /Volumes/ESD-USB/Boss Workwear
 
 set -euo pipefail
 
@@ -16,6 +17,7 @@ DEV_DIR="$(cd "$BOSS_WEB/.." && pwd)"
 REPO_NAME="$(basename "$BOSS_WEB")"
 SUBDIR="${BACKUP_DRIVE_SUBDIR:-Boss_Web}"
 EXTERNAL_ROOT="${BACKUP_EXTERNAL_ROOT:-}"
+EXTERNAL_ROOT2="${BACKUP_EXTERNAL_ROOT2:-}"
 
 excludes=(--exclude='node_modules' --exclude='.next')
 
@@ -51,9 +53,13 @@ rm -f "$DEV_DIR"/boss-web-backup-*.tar.gz || true
 cleanup_tar() { rm -f "$TMP_TAR" || true; }
 trap cleanup_tar EXIT
 
-if [[ -z "$MY_DRIVE" && -z "$EXTERNAL_ROOT" ]]; then
-  echo "==> No destinations: Google Drive not found and BACKUP_EXTERNAL_ROOT unset." >&2
-  echo "    Set BACKUP_GOOGLE_DRIVE_ROOT and/or BACKUP_EXTERNAL_ROOT." >&2
+has_any_external=false
+[[ -n "$EXTERNAL_ROOT" ]] && has_any_external=true
+[[ -n "$EXTERNAL_ROOT2" ]] && has_any_external=true
+
+if [[ -z "$MY_DRIVE" && "$has_any_external" != true ]]; then
+  echo "==> No destinations: Google Drive not found and no BACKUP_EXTERNAL_ROOT / BACKUP_EXTERNAL_ROOT2." >&2
+  echo "    Set BACKUP_GOOGLE_DRIVE_ROOT and/or BACKUP_EXTERNAL_ROOT (and optional BACKUP_EXTERNAL_ROOT2)." >&2
   exit 1
 fi
 
@@ -73,22 +79,32 @@ if [[ -n "$MY_DRIVE" ]]; then
   echo "    Done (Drive)."
 fi
 
-if [[ -n "$EXTERNAL_ROOT" ]]; then
-  if [[ ! -d "$EXTERNAL_ROOT" ]]; then
-    echo "==> BACKUP_EXTERNAL_ROOT is not a directory: $EXTERNAL_ROOT" >&2
-    exit 1
+backup_to_external() {
+  local root="$1"
+  if [[ -z "$root" ]]; then
+    return 0
   fi
-  EXT_ARCH="$EXTERNAL_ROOT/archives"
-  mkdir -p "$EXT_ARCH"
-  echo "==> External: $EXTERNAL_ROOT"
-  rm -f "$EXT_ARCH"/boss-web-backup-*.tar.gz
-  cp "$TMP_TAR" "$EXT_ARCH/$TAR_NAME"
-  echo "    Copied tarball to $EXT_ARCH/$TAR_NAME"
-  mkdir -p "$EXTERNAL_ROOT/boss-web"
-  echo "==> Rsync working tree -> $EXTERNAL_ROOT/boss-web/"
-  rsync -a --delete "${excludes[@]}" "$BOSS_WEB/" "$EXTERNAL_ROOT/boss-web/"
-  echo "    Done (external)."
-fi
+  local parent
+  parent="$(dirname "$root")"
+  if [[ ! -d "$parent" ]]; then
+    echo "==> Skipping external (volume not mounted): $root"
+    return 0
+  fi
+  mkdir -p "$root"
+  local ext_arch="$root/archives"
+  mkdir -p "$ext_arch"
+  echo "==> External: $root"
+  rm -f "$ext_arch"/boss-web-backup-*.tar.gz
+  cp "$TMP_TAR" "$ext_arch/$TAR_NAME"
+  echo "    Copied tarball to $ext_arch/$TAR_NAME"
+  mkdir -p "$root/boss-web"
+  echo "==> Rsync working tree -> $root/boss-web/"
+  rsync -a --delete "${excludes[@]}" "$BOSS_WEB/" "$root/boss-web/"
+  echo "    Done (external: $root)."
+}
+
+backup_to_external "$EXTERNAL_ROOT"
+backup_to_external "$EXTERNAL_ROOT2"
 
 echo "==> Removed temporary tarball."
 cleanup_tar

@@ -112,6 +112,8 @@ export type CustomerInfoPayload = {
     delivery_address: string;
     billing_address: string;
     created_at: string;
+    /** Plain-text storefront password when set (admin-only surface). */
+    login_password: string | null;
   } | null;
   masterLogo: { public_url: string; storage_bucket: string; storage_path: string } | null;
   specialRequest: { body: string; updated_at: string | null } | null;
@@ -152,7 +154,9 @@ export async function getCustomerInfoPayload(
     const supabase = createSupabaseAdminClient();
     const { data: profile } = await supabase
       .from("customer_profiles")
-      .select("id, customer_name, organisation, contact_number, email_address, delivery_address, billing_address, created_at")
+      .select(
+        "id, customer_name, organisation, contact_number, email_address, delivery_address, billing_address, created_at, login_password",
+      )
       .eq("email_address", email)
       .maybeSingle();
 
@@ -225,6 +229,10 @@ export async function getCustomerInfoPayload(
               delivery_address: String(profile.delivery_address ?? ""),
               billing_address: String(profile.billing_address ?? ""),
               created_at: String(profile.created_at ?? ""),
+              login_password:
+                profile.login_password != null && String(profile.login_password).trim()
+                  ? String(profile.login_password)
+                  : null,
             }
           : null,
         masterLogo,

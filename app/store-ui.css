@@ -10,19 +10,20 @@
 
 :root {
   /* —— Role: subcategory-picker —— */
-  --store-ui-subpicker-font: 22.68px;
-  --store-ui-subpicker-pad-y: 12.96px;
-  --store-ui-subpicker-pad-x: 17.28px;
-  --store-ui-subpicker-radius: 9.72px;
-  --store-ui-subpicker-gap: 9.72px;
+  --store-ui-subpicker-font: clamp(1.125rem, 0.95rem + 0.55vw, 1.4175rem);
+  --store-ui-subpicker-pad-y: 0.81rem;
+  --store-ui-subpicker-pad-x: 1.08rem;
+  --store-ui-subpicker-radius: 0.6075rem;
+  --store-ui-subpicker-gap: 0.6075rem;
 
   /* —— Role: category-browse-grid —— */
-  --store-ui-browse-card-title-size: 20.59px;
+  --store-ui-browse-card-title-size: 1.029375rem;
   /* Product name only (keep code/price larger for scanability). */
-  --store-ui-browse-card-name-size: 14.41px;
-  --store-ui-browse-card-price-was-size: 18.22px;
-  --store-ui-browse-card-media-height: 331px;
-  --store-ui-browse-card-body-padding: 24px;
+  --store-ui-browse-card-name-size: 0.720625rem;
+  --store-ui-browse-card-price-was-size: 0.91125rem;
+  /* vmin keeps image tiles balanced in tablet portrait and on short laptop viewports */
+  --store-ui-browse-card-media-height: clamp(12.5rem, 38vmin, 20.6875rem);
+  --store-ui-browse-card-body-padding: 1.5rem;
   --store-ui-browse-grid-gap: 1.8rem;
 
   /* —— Role: sidebar-nav (desktop + drawer; fonts scale on small viewports) —— */
@@ -39,11 +40,11 @@
 /* Narrow viewports: picker + sidebar copy slightly smaller; drawer a touch wider for wrap */
 @media (max-width: 1023px) {
   :root {
-    --store-ui-subpicker-font: 18px;
-    --store-ui-subpicker-pad-y: 11px;
-    --store-ui-subpicker-pad-x: 14px;
-    --store-ui-subpicker-radius: 8px;
-    --store-ui-subpicker-gap: 8px;
+    --store-ui-subpicker-font: clamp(1.0625rem, 0.9rem + 0.45vw, 1.125rem);
+    --store-ui-subpicker-pad-y: 0.6875rem;
+    --store-ui-subpicker-pad-x: 0.875rem;
+    --store-ui-subpicker-radius: 0.5rem;
+    --store-ui-subpicker-gap: 0.5rem;
     --store-ui-nav-drawer-pad-x: 0.875rem;
   }
 }
@@ -51,7 +52,7 @@
 /* Tablet band: slightly shorter card media so columns + gaps feel balanced */
 @media (min-width: 640px) and (max-width: 1023px) {
   :root {
-    --store-ui-browse-card-media-height: 300px;
+    --store-ui-browse-card-media-height: clamp(11.5rem, 36vmin, 18.75rem);
     --store-ui-browse-grid-gap: 1.5rem;
   }
 }

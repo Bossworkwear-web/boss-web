@@ -5,8 +5,8 @@
   --foreground: #171717;
   /* Match TopNav Suspense fallback (`h-[5.5rem]` / `sm:h-[6.25rem]`) until TopNav measures via ResizeObserver. */
   --site-header-height: 5.5rem;
-  /* Mirrors `SITE_PAGE_INSET_X_CLASS` in lib/site-layout.ts for non-TS CSS if needed */
-  --site-page-inset-x: 5cm;
+  /* Mirrors horizontal padding in `.site-page-inset-x` (lib/site-layout.ts) */
+  --site-page-inset-x: clamp(1rem, calc(5cm / 1.452), 8vw);
 
   /*
    * Single storefront + admin type stack (Encode Sans Condensed from next/font on <html>).
@@ -41,19 +41,29 @@
   }
 }
 
-/* Storefront + admin: scale rem-based type/spacing for typical laptops. */
+/*
+ * Storefront + admin: fluid root rem so Tailwind/rem UI scales smoothly across phones, tablets,
+ * laptops, and large monitors without jumping at fixed breakpoints (keeps the same visual density).
+ * Percentages are relative to the browser default (typically 16px).
+ */
 html {
   font-family: var(--font-app);
-  font-size: 75%;
+  font-size: clamp(73%, calc(70% + 1vw), 88%);
 }
 
-@media (min-width: 1280px) {
-  html {
-    font-size: 80%;
-  }
+/* Shared horizontal gutters (TopNav, pages using SITE_PAGE_ROW_CLASS / SITE_PAGE_INSET_X_CLASS). */
+.site-page-inset-x {
+  box-sizing: border-box;
+  padding-inline: clamp(1rem, calc(5cm / 1.452), 8vw);
 }
 
-/* Log in / sign up: +30% vs site-wide 80% root (0.8 × 1.3 = 1.04 of UA base). */
+/* Admin panel content row — half storefront inset, same fluid cap idea. */
+.admin-panel-inset-x {
+  box-sizing: border-box;
+  padding-inline: clamp(1rem, calc(2.5cm / 1.452), 5vw);
+}
+
+/* Log in / sign up: bump root size vs fluid storefront base (see `html` rule above). */
 html:has([data-log-in-page]) {
   font-size: 104% !important;
 }
@@ -144,13 +154,13 @@ pre {
     max-width: 2.75rem;
   }
   to {
-    max-width: min(100%, 34rem);
+    max-width: min(100%, 68rem);
   }
 }
 
 @keyframes store-header-search-collapse {
   from {
-    max-width: min(100%, 34rem);
+    max-width: min(100%, 68rem);
   }
   to {
     max-width: 2.75rem;
@@ -174,7 +184,7 @@ pre {
 
   .store-header-search-expand {
     animation: none;
-    max-width: min(100%, 34rem);
+    max-width: min(100%, 68rem);
   }
 
   .store-header-search-collapse {
@@ -205,13 +215,13 @@ pre {
   margin-left: auto;
   margin-right: auto;
   width: 100%;
-  max-width: 1800px;
+  max-width: 2614px;
   padding: 3rem 1rem;
 }
 
-/* Get a Quote: inner column 20% narrower than default shell (1800px × 0.8 = 1440px). */
+/* Get a Quote: inner column 20% narrower than default shell (2614px × 0.8 ≈ 2091px). */
 .site-page-inner-shell.quote-page-inner-narrow {
-  max-width: 1440px;
+  max-width: 2091px;
 }
 
 /*

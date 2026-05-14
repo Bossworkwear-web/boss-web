@@ -1,9 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import { Encode_Sans_Condensed, Montserrat } from "next/font/google";
 import "./globals.css";
 import "./store-ui.css";
 import "./product-listing-cards.css";
-import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
+import { SiteFooter } from "@/app/components/site-footer";
+import { StorePublicChatGate } from "@/app/components/store-public-chat-gate";
 
 const encodeSansCondensed = Encode_Sans_Condensed({
   variable: "--font-encode-sans-condensed",
@@ -23,6 +25,11 @@ const metadataBaseUrl =
   process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "") ||
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}` : "http://localhost:3000");
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
+
 export const metadata: Metadata = {
   metadataBase: new URL(metadataBaseUrl),
   title: {
@@ -37,11 +44,14 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const storeChatCustomerSignedIn = Boolean((cookieStore.get("customer_email")?.value ?? "").trim());
+
   return (
     <html
       lang="en"
@@ -49,20 +59,9 @@ export default function RootLayout({
       className={`${encodeSansCondensed.variable} ${montserrat.variable} font-sans h-full antialiased`}
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col font-sans antialiased">
-        <div className="flex-1">{children}</div>
-        <footer className="border-t border-brand-navy/10 bg-white print:hidden">
-          <div className={`flex flex-wrap items-center justify-center gap-3 py-6 ${SITE_PAGE_ROW_CLASS}`}>
-            <span className="rounded-full border border-brand-navy/20 bg-brand-surface px-4 py-1.5 text-xs font-medium uppercase tracking-[0.08em] text-brand-navy">
-              ISO Certified
-            </span>
-            <span className="rounded-full border border-brand-navy/20 bg-brand-surface px-4 py-1.5 text-xs font-medium uppercase tracking-[0.08em] text-brand-navy">
-              Australia-wide Shipping
-            </span>
-            <span className="rounded-full border border-brand-navy/20 bg-brand-surface px-4 py-1.5 text-xs font-medium uppercase tracking-[0.08em] text-brand-navy">
-              Bulk Order Discounts
-            </span>
-          </div>
-        </footer>
+        <div className="flex-1 min-w-0">{children}</div>
+        <SiteFooter />
+        <StorePublicChatGate initialCustomerSignedIn={storeChatCustomerSignedIn} />
       </body>
     </html>
   );
