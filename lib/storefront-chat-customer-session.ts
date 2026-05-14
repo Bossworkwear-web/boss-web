@@ -1,9 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-export async function requireStorefrontCustomerEmail():
+export type StorefrontChatCustomerSessionResult =
   | { ok: true; emailNorm: string }
-  | { ok: false; response: NextResponse } {
+  | { ok: false; response: NextResponse };
+
+export async function requireStorefrontCustomerEmail(): Promise<StorefrontChatCustomerSessionResult> {
   const c = await cookies();
   const raw = (c.get("customer_email")?.value ?? "").trim();
   if (!raw) {
