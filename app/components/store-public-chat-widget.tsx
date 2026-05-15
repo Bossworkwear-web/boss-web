@@ -5,6 +5,10 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getBrowserCookie } from "@/lib/customer-browser-cookie";
+import {
+  isStorefrontChatSystemMessage,
+  isStorefrontChatThreadClosed,
+} from "@/lib/storefront-chat-status";
 
 const STORAGE_KEY = "bossworkwear_storefront_chat_visitor_id";
 const POLL_MS = 3500;
@@ -51,6 +55,7 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
   const [customerDisplayName, setCustomerDisplayName] = useState("");
   const [visitorKey, setVisitorKey] = useState("");
   const [messages, setMessages] = useState<ChatRow[]>([]);
+  const [threadStatus, setThreadStatus] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +130,7 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
       ok?: boolean;
       messages?: ChatRow[];
       threadId?: string | null;
+      threadStatus?: string | null;
       error?: string;
     };
     if (!res.ok || !json.ok) {
@@ -134,8 +140,35 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
       return;
     }
     setMessages(Array.isArray(json.messages) ? json.messages : []);
+    setThreadStatus(json.threadStatus ?? null);
     setError(null);
   }, [visitorKey, open, signedIn]);
+
+  const threadClosed = isStorefrontChatThreadClosed(threadStatus);
+
+  const reopenConversation = useCallback(async () => {
+    if (!visitorKey || busy) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/storefront/chat/reopen", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visitorKey }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        setError(json.error ?? "Could not start a new conversation.");
+        return;
+      }
+      await refreshMessages();
+    } finally {
+      setBusy(false);
+    }
+  }, [visitorKey, busy, refreshMessages]);
 
   useEffect(() => {
     if (!open || !visitorKey || !signedIn) {
@@ -160,7 +193,7 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
   }, [open, messages, scrollToBottom]);
 
   async function sendGuest() {
-    if (!signedIn) {
+    if (!signedIn || threadClosed) {
       return;
     }
     const text = draft.trim();
@@ -293,6 +326,16 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
                 ) : (
                   messages.map((m) => {
                     const mine = m.sender === "guest";
+                    const system = isStorefrontChatSystemMessage(m.staff_identifier);
+                    if (system) {
+                      return (
+                        <div key={m.id} className="flex justify-center px-1 py-1">
+                          <p className="max-w-[95%] rounded-xl bg-brand-surface px-3 py-2 text-center text-[0.7rem] leading-relaxed text-brand-navy/75">
+                            {m.body}
+                          </p>
+                        </div>
+                      );
+                    }
                     return (
                       <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                         <div
@@ -313,29 +356,45 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
                 )}
               </div>
               {error ? <p className="px-3 pb-1 text-xs text-red-600">{error}</p> : null}
-              <div className="flex gap-2 border-t border-brand-navy/10 p-2">
-                <textarea
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      void sendGuest();
-                    }
-                  }}
-                  rows={2}
-                  placeholder="Type a message…"
-                  className="min-h-[2.75rem] flex-1 resize-none rounded-xl border border-brand-navy/15 px-2 py-1.5 text-xs text-brand-navy"
-                />
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void sendGuest()}
-                  className="shrink-0 self-end rounded-xl bg-brand-orange px-3 py-2 text-xs font-semibold text-brand-navy disabled:opacity-50"
-                >
-                  Send
-                </button>
-              </div>
+              {threadClosed ? (
+                <div className="space-y-2 border-t border-brand-navy/10 p-3">
+                  <p className="text-center text-xs leading-relaxed text-brand-navy/75">
+                    This conversation has ended. You cannot send more messages here.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void reopenConversation()}
+                    className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#ffb366] to-[#ff6600] px-4 py-2.5 text-sm font-semibold text-brand-navy disabled:opacity-50"
+                  >
+                    Start a new conversation
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2 border-t border-brand-navy/10 p-2">
+                  <textarea
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        void sendGuest();
+                      }
+                    }}
+                    rows={2}
+                    placeholder="Type a message…"
+                    className="min-h-[2.75rem] flex-1 resize-none rounded-xl border border-brand-navy/15 px-2 py-1.5 text-xs text-brand-navy"
+                  />
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void sendGuest()}
+                    className="shrink-0 self-end rounded-xl bg-brand-orange px-3 py-2 text-xs font-semibold text-brand-navy disabled:opacity-50"
+                  >
+                    Send
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>

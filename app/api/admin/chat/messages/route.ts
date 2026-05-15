@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { assertAdminSession, getAdminUser } from "@/lib/admin-auth";
 import { bumpStorefrontChatThreadUpdatedAt } from "@/lib/storefront-chat-db";
+import { isStorefrontChatThreadClosed } from "@/lib/storefront-chat-status";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -76,6 +77,23 @@ export async function POST(request: Request) {
     supabase = createSupabaseAdminClient();
   } catch {
     return NextResponse.json({ ok: false, error: "Server misconfigured" }, { status: 503 });
+  }
+
+  const { data: thread, error: tErr } = await supabase
+    .from("storefront_chat_threads")
+    .select("id, status")
+    .eq("id", threadId)
+    .maybeSingle();
+
+  if (tErr || !thread?.id) {
+    return NextResponse.json({ ok: false, error: "Thread not found" }, { status: 404 });
+  }
+
+  if (isStorefrontChatThreadClosed(thread.status)) {
+    return NextResponse.json(
+      { ok: false, error: "This conversation is closed. Reopen it before replying." },
+      { status: 409 },
+    );
   }
 
   const staffId = (await getAdminUser()) ?? "admin";

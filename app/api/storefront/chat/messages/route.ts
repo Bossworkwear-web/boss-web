@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { bumpStorefrontChatThreadUpdatedAt } from "@/lib/storefront-chat-db";
 import { requireStorefrontCustomerEmail } from "@/lib/storefront-chat-customer-session";
+import { isStorefrontChatThreadClosed } from "@/lib/storefront-chat-status";
 import { isValidStorefrontChatVisitorKey } from "@/lib/storefront-chat-visitor-key";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
 
   const { data: thread, error: tErr } = await supabase
     .from("storefront_chat_threads")
-    .select("id")
+    .select("id, status")
     .eq("visitor_key", visitorKey)
     .eq("customer_email", emailNorm)
     .maybeSingle();
@@ -38,7 +39,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: "Could not load chat" }, { status: 500 });
   }
   if (!thread?.id) {
-    return NextResponse.json({ ok: true as const, threadId: null as string | null, messages: [] as const });
+    return NextResponse.json({
+      ok: true as const,
+      threadId: null as string | null,
+      threadStatus: null as string | null,
+      messages: [] as const,
+    });
   }
 
   const { data: messages, error: mErr } = await supabase
@@ -55,6 +61,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true as const,
     threadId: thread.id,
+    threadStatus: thread.status,
     messages: messages ?? [],
   });
 }
@@ -94,13 +101,20 @@ export async function POST(request: Request) {
 
   const { data: thread, error: tErr } = await supabase
     .from("storefront_chat_threads")
-    .select("id")
+    .select("id, status")
     .eq("visitor_key", visitorKey)
     .eq("customer_email", emailNorm)
     .maybeSingle();
 
   if (tErr || !thread?.id) {
     return NextResponse.json({ ok: false, error: "Open the chat first" }, { status: 400 });
+  }
+
+  if (isStorefrontChatThreadClosed(thread.status)) {
+    return NextResponse.json(
+      { ok: false, error: "This conversation has been closed. Start a new conversation to continue." },
+      { status: 409 },
+    );
   }
 
   const { error: insErr } = await supabase.from("storefront_chat_messages").insert({

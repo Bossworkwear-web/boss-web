@@ -2,6 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { playStorefrontChatGuestDing } from "@/lib/storefront-chat-admin-sound";
+import {
+  STOREFRONT_CHAT_STATUS_CLOSED,
+  STOREFRONT_CHAT_STATUS_OPEN,
+  isStorefrontChatSystemMessage,
+  isStorefrontChatThreadClosed,
+} from "@/lib/storefront-chat-status";
+
+import { StorefrontChatSoundSettings } from "./storefront-chat-sound-settings";
+
 type ThreadRow = {
   id: string;
   visitor_key: string;
@@ -32,6 +42,9 @@ export function StorefrontChatAdminClient() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const guestAlertBaselineRef = useRef<string | null>(null);
+  const guestAlertReadyRef = useRef(false);
+  const seenGuestMessageIdsRef = useRef<Set<string>>(new Set());
 
   const loadThreads = useCallback(async () => {
     const res = await fetch("/api/admin/chat/threads", { credentials: "include", cache: "no-store" });
@@ -62,11 +75,65 @@ export function StorefrontChatAdminClient() {
     setMessages(json.messages ?? []);
   }, []);
 
+  const pollGuestAlerts = useCallback(async () => {
+    if (!guestAlertReadyRef.current) {
+      guestAlertBaselineRef.current = new Date().toISOString();
+      guestAlertReadyRef.current = true;
+      return;
+    }
+
+    const baseline = guestAlertBaselineRef.current;
+    if (!baseline) {
+      return;
+    }
+
+    const res = await fetch(`/api/admin/chat/guest-alerts?after=${encodeURIComponent(baseline)}`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    const json = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      alerts?: { id: string; thread_id: string; created_at: string }[];
+    };
+    if (!res.ok || !json.ok || !Array.isArray(json.alerts)) {
+      return;
+    }
+
+    const alerts = json.alerts;
+    const seen = seenGuestMessageIdsRef.current;
+    const fresh = alerts.filter((row) => !seen.has(row.id));
+
+    let latestMs = Date.parse(baseline);
+    if (Number.isNaN(latestMs)) {
+      latestMs = 0;
+    }
+
+    for (const row of alerts) {
+      seen.add(row.id);
+      const ms = Date.parse(row.created_at);
+      if (!Number.isNaN(ms) && ms > latestMs) {
+        latestMs = ms;
+      }
+    }
+
+    guestAlertBaselineRef.current = new Date(latestMs).toISOString();
+
+    if (fresh.length > 0) {
+      playStorefrontChatGuestDing();
+    }
+  }, []);
+
   useEffect(() => {
     void loadThreads();
     const t = window.setInterval(() => void loadThreads(), POLL_MS * 2);
     return () => window.clearInterval(t);
   }, [loadThreads]);
+
+  useEffect(() => {
+    void pollGuestAlerts();
+    const t = window.setInterval(() => void pollGuestAlerts(), POLL_MS);
+    return () => window.clearInterval(t);
+  }, [pollGuestAlerts]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -86,10 +153,36 @@ export function StorefrontChatAdminClient() {
   }, [messages]);
 
   const selected = useMemo(() => threads.find((t) => t.id === selectedId) ?? null, [threads, selectedId]);
+  const selectedClosed = isStorefrontChatThreadClosed(selected?.status);
+
+  async function setThreadStatus(status: typeof STOREFRONT_CHAT_STATUS_OPEN | typeof STOREFRONT_CHAT_STATUS_CLOSED) {
+    if (!selectedId || busy) {
+      return;
+    }
+    setBusy(true);
+    setMsgError(null);
+    try {
+      const res = await fetch("/api/admin/chat/threads/status", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId: selectedId, status }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        setMsgError(json.error ?? "Could not update conversation.");
+        return;
+      }
+      await loadMessages(selectedId);
+      await loadThreads();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function sendStaff() {
     const text = draft.trim();
-    if (!selectedId || !text || busy) {
+    if (!selectedId || !text || busy || selectedClosed) {
       return;
     }
     setBusy(true);
@@ -130,6 +223,8 @@ export function StorefrontChatAdminClient() {
         </div>
       ) : null}
 
+      <StorefrontChatSoundSettings />
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,17rem)_1fr]">
         <aside className="rounded-xl border border-slate-200 bg-white">
           <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -155,7 +250,14 @@ export function StorefrontChatAdminClient() {
                         active ? "bg-brand-orange/15 text-brand-navy" : "text-slate-800 hover:bg-slate-50"
                       }`}
                     >
-                      <span className="font-medium leading-snug">{label}</span>
+                      <span className="flex w-full items-center gap-2">
+                        <span className="font-medium leading-snug">{label}</span>
+                        {isStorefrontChatThreadClosed(t.status) ? (
+                          <span className="shrink-0 rounded-full bg-slate-200 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-slate-600">
+                            Closed
+                          </span>
+                        ) : null}
+                      </span>
                       <span className="text-[0.7rem] text-slate-500">
                         {new Date(t.updated_at).toLocaleString(undefined, {
                           dateStyle: "short",
@@ -175,18 +277,54 @@ export function StorefrontChatAdminClient() {
             <p className="p-6 text-sm text-slate-500">Select a thread to view messages.</p>
           ) : (
             <>
-              <div className="border-b border-slate-200 px-4 py-3">
-                <p className="text-sm font-semibold text-slate-900">
-                  {selected?.customer_email?.trim() ||
-                    selected?.visitor_email?.trim() ||
-                    selected?.visitor_name?.trim() ||
-                    "Anonymous visitor"}
-                </p>
-                <p className="mt-1 font-mono text-xs text-slate-500">Thread {selectedId}</p>
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">
+                    {selected?.customer_email?.trim() ||
+                      selected?.visitor_email?.trim() ||
+                      selected?.visitor_name?.trim() ||
+                      "Anonymous visitor"}
+                  </p>
+                  <p className="mt-1 font-mono text-xs text-slate-500">Thread {selectedId}</p>
+                  {selectedClosed ? (
+                    <p className="mt-1 text-xs font-medium text-amber-800">This conversation is closed.</p>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  {selectedClosed ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void setThreadStatus(STOREFRONT_CHAT_STATUS_OPEN)}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      Reopen conversation
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void setThreadStatus(STOREFRONT_CHAT_STATUS_CLOSED)}
+                      className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50"
+                    >
+                      End conversation
+                    </button>
+                  )}
+                </div>
               </div>
               <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
                 {messages.map((m) => {
                   const staff = m.sender === "staff";
+                  const system = isStorefrontChatSystemMessage(m.staff_identifier);
+                  if (system) {
+                    return (
+                      <div key={m.id} className="flex justify-center py-1">
+                        <p className="max-w-[90%] rounded-lg bg-slate-50 px-3 py-2 text-center text-xs leading-relaxed text-slate-600">
+                          {m.body}
+                        </p>
+                      </div>
+                    );
+                  }
                   return (
                     <div key={m.id} className={`flex ${staff ? "justify-end" : "justify-start"}`}>
                       <div
@@ -210,29 +348,35 @@ export function StorefrontChatAdminClient() {
                 })}
               </div>
               {msgError ? <p className="px-4 pb-1 text-xs text-red-600">{msgError}</p> : null}
-              <div className="mt-auto flex gap-2 border-t border-slate-200 p-3">
-                <textarea
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      void sendStaff();
-                    }
-                  }}
-                  rows={2}
-                  placeholder="Reply to customer…"
-                  className="min-h-[2.75rem] flex-1 resize-none rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                />
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void sendStaff()}
-                  className="shrink-0 self-end rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-brand-navy disabled:opacity-50"
-                >
-                  Send
-                </button>
-              </div>
+              {selectedClosed ? (
+                <p className="mt-auto border-t border-slate-200 px-4 py-3 text-center text-xs text-slate-500">
+                  Reopen this conversation to send another reply.
+                </p>
+              ) : (
+                <div className="mt-auto flex gap-2 border-t border-slate-200 p-3">
+                  <textarea
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        void sendStaff();
+                      }
+                    }}
+                    rows={2}
+                    placeholder="Reply to customer…"
+                    className="min-h-[2.75rem] flex-1 resize-none rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                  />
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void sendStaff()}
+                    className="shrink-0 self-end rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-brand-navy disabled:opacity-50"
+                  >
+                    Send
+                  </button>
+                </div>
+              )}
             </>
           )}
         </section>
