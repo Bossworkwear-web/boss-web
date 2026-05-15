@@ -7,5 +7,6 @@ export const SITE_STORE_ADDRESS_LINES = [
   "Perth Western Australia 6062",
 ] as const;
 
-export const siteFacebookUrl = process.env.NEXT_PUBLIC_FACEBOOK_URL ?? "https://www.facebook.com/";
+export const siteFacebookUrl =
+  process.env.NEXT_PUBLIC_FACEBOOK_URL ?? "https://www.facebook.com/profile.php?id=100076025040158";
 export const siteInstagramUrl = process.env.NEXT_PUBLIC_INSTAGRAM_URL ?? "https://www.instagram.com/";

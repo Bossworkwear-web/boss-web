@@ -28,6 +28,18 @@ function InstagramMark({ className }: { className?: string }) {
 const footerLinkClass =
   "text-sm text-brand-navy/95 transition hover:text-brand-navy hover:underline";
 
+const PAYMENT_ICONS = [
+  { src: "/visa.png", alt: "Visa" },
+  { src: "/mastercard.png", alt: "Mastercard" },
+  { src: "/amex.svg", alt: "American Express" },
+  { src: "/eftpos.svg", alt: "EFTPOS" },
+  { src: "/apple-pay.svg", alt: "Apple Pay" },
+  { src: "/google-pay.svg", alt: "Google Pay" },
+  { src: "/paypal.svg", alt: "PayPal" },
+  { src: "/payid.svg", alt: "PayID" },
+  { src: "/payto.svg", alt: "PayTo" },
+] as const;
+
 export function SiteFooter() {
   const pathname = usePathname();
   if (pathname.startsWith("/admin")) {
@@ -56,15 +68,16 @@ export function SiteFooter() {
             <div className="flex flex-col gap-6 py-10 lg:py-0 lg:pr-8">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-navy/75">Payment</p>
               <div className="flex flex-wrap items-center gap-4">
-                <Image src="/visa.png" alt="Visa" width={56} height={36} className="h-8 w-auto object-contain" />
-                <Image
-                  src="/mastercard.png"
-                  alt="Mastercard"
-                  width={56}
-                  height={36}
-                  className="h-8 w-auto object-contain"
-                />
-                <Image src="/eftpos.png" alt="EFTPOS" width={56} height={36} className="h-8 w-auto object-contain" />
+                {PAYMENT_ICONS.map(({ src, alt }) => (
+                  <Image
+                    key={src}
+                    src={src}
+                    alt={alt}
+                    width={56}
+                    height={36}
+                    className="h-8 w-auto object-contain"
+                  />
+                ))}
               </div>
             </div>
 

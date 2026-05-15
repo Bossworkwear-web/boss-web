@@ -46,6 +46,7 @@ function getOrCreateVisitorId(): string {
 export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCustomerSignedIn: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [signedIn, setSignedIn] = useState(initialCustomerSignedIn);
   const [customerDisplayName, setCustomerDisplayName] = useState("");
   const [visitorKey, setVisitorKey] = useState("");
@@ -188,48 +189,84 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
     }
   }
 
+  const showPanel = open || closing;
+
+  const openPanel = useCallback(() => {
+    setClosing(false);
+    setOpen(true);
+  }, []);
+
+  const closePanel = useCallback(() => {
+    if (!open) {
+      return;
+    }
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setOpen(false);
+      setClosing(false);
+      return;
+    }
+    setClosing(true);
+  }, [open]);
+
+  const handlePanelAnimationEnd = useCallback(
+    (e: React.AnimationEvent<HTMLDivElement>) => {
+      if (e.target !== e.currentTarget || !closing) {
+        return;
+      }
+      setOpen(false);
+      setClosing(false);
+    },
+    [closing],
+  );
+
   const title = "Chat with US";
-  const fabClass = `fixed bottom-5 right-5 ${CHAT_Z} flex max-w-[min(18rem,calc(100vw-2.5rem))] items-center gap-2 rounded-full border border-brand-navy/15 bg-brand-navy px-4 py-3 text-left text-sm font-semibold text-white shadow-lg transition hover:bg-brand-navy/95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2`;
-  const panelClass = `fixed bottom-5 right-5 ${CHAT_Z} flex w-[min(22rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-brand-navy/15 bg-white shadow-2xl`;
+  const fabClass = `storefront-chat-fab-enter fixed bottom-5 right-5 ${CHAT_Z} flex h-14 w-14 items-center justify-center rounded-full border border-brand-navy/15 bg-brand-navy text-white shadow-lg transition hover:bg-brand-navy/95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2`;
+  const panelClass = `fixed bottom-5 right-5 ${CHAT_Z} flex max-h-[min(52rem,90vh)] w-[min(22rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-brand-navy/15 bg-white shadow-2xl`;
 
   return (
     <div className="print:hidden">
-      {!open ? (
+      {!showPanel ? (
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={openPanel}
           className={fabClass}
           aria-haspopup="dialog"
           aria-expanded={false}
+          aria-label={title}
         >
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15" aria-hidden>
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-            </svg>
-          </span>
-          <span className="leading-snug">{title}</span>
+          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+          </svg>
         </button>
       ) : (
-        <div className={panelClass} role="dialog" aria-label="Store chat">
-          {signedIn ? (
-            <p className="border-b border-brand-navy/10 bg-brand-surface px-3 py-2.5 text-sm font-medium text-brand-navy">
-              Hi, {customerDisplayName ? customerDisplayName : "there"}
-            </p>
-          ) : null}
-          <div className="flex items-center justify-between gap-2 border-b border-brand-navy/10 bg-brand-navy px-3 py-2.5 text-white">
-            <p className="text-sm font-semibold">{title}</p>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-lg px-2 py-1 text-xs font-medium text-white/90 hover:bg-white/10"
-              aria-label="Close chat"
-            >
-              Close
-            </button>
+        <div
+          className={`${panelClass} ${closing ? "storefront-chat-panel-exit" : "storefront-chat-panel-enter"}`}
+          role="dialog"
+          aria-label="Store chat"
+          aria-modal="true"
+          onAnimationEnd={handlePanelAnimationEnd}
+        >
+          <div className="border-b border-brand-navy/10 bg-brand-navy px-3 py-2.5 text-white">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold">{title}</p>
+              <button
+                type="button"
+                onClick={closePanel}
+                className="rounded-lg px-2 py-1 text-xs font-medium text-white/90 hover:bg-white/10"
+                aria-label="Close chat"
+              >
+                Close
+              </button>
+            </div>
+            {signedIn ? (
+              <p className="mt-1.5 text-sm font-medium text-white/90">
+                Hi, {customerDisplayName ? customerDisplayName : "there"}
+              </p>
+            ) : null}
           </div>
 
           {!signedIn ? (
-            <div className="space-y-3 px-4 py-5">
+            <div className="min-h-[min(14rem,24vh)] space-y-3 px-4 py-5">
               <p className="text-sm leading-relaxed text-brand-navy/85">
                 Sign in to your account to send messages and see replies from our team.
               </p>
@@ -245,7 +282,10 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
             </div>
           ) : (
             <>
-              <div ref={listRef} className="max-h-[min(22rem,40vh)] space-y-2 overflow-y-auto px-3 py-3">
+              <div
+                ref={listRef}
+                className="min-h-[min(22rem,40vh)] flex-1 max-h-[min(44rem,80vh)] space-y-2 overflow-y-auto px-3 py-3"
+              >
                 {messages.length === 0 ? (
                   <p className="text-xs leading-relaxed text-brand-navy/70">
                     Send us a message — our team will reply here when they are available.

@@ -13,6 +13,7 @@ const boldonse = Boldonse({
   subsets: ["latin"],
   weight: "400",
   display: "swap",
+  adjustFontFallback: false,
 });
 
 export const dynamic = "force-dynamic";

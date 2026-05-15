@@ -6,10 +6,14 @@ import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
 export const dynamic = "force-dynamic";
 
 /** Repo-local fallback when Storage has no object (dev / before upload). */
-const AP_2310_BACK_DISK_PARTS = ["data", "supplier", "Aussie Pacific", "2310_back.webp"] as const;
-
 function localAp2310BackAbsPath(): string {
-  return join(process.cwd(), ...AP_2310_BACK_DISK_PARTS);
+  return join(
+    /* turbopackIgnore: true */ process.cwd(),
+    "data",
+    "supplier",
+    "Aussie Pacific",
+    "2310_back.webp",
+  );
 }
 
 /** `/api/supplier-media/aussie-pacific/2310_back.webp` */

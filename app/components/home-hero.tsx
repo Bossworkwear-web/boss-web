@@ -5,6 +5,7 @@ const boldonse = Boldonse({
   subsets: ["latin"],
   weight: "400",
   display: "swap",
+  adjustFontFallback: false,
 });
 
 /**

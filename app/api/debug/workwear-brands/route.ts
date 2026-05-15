@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { blockDebugRouteInProduction } from "@/lib/production-guard";
 import { createSupabaseClient } from "@/lib/supabase";
 
 function inferredBrandForFilter(item: {
@@ -20,6 +21,11 @@ function inferredBrandForFilter(item: {
 }
 
 export async function GET() {
+  const blocked = blockDebugRouteInProduction();
+  if (blocked) {
+    return blocked;
+  }
+
   const supabase = createSupabaseClient();
 
   const pageSize = 1000;

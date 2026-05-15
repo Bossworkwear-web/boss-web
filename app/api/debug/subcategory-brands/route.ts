@@ -2,8 +2,13 @@ import { NextResponse } from "next/server";
 
 import { getCachedActiveProductsBrowseRows } from "@/lib/cached-storefront-products";
 import { filterProductsForSubCategoryBrowse } from "@/lib/main-category-browse";
+import { blockDebugRouteInProduction } from "@/lib/production-guard";
 
 export async function GET(request: Request) {
+  const blocked = blockDebugRouteInProduction();
+  if (blocked) {
+    return blocked;
+  }
   const url = new URL(request.url);
   const main = (url.searchParams.get("main") ?? "").trim();
   const sub = (url.searchParams.get("sub") ?? "").trim();

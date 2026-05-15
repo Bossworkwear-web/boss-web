@@ -12,6 +12,7 @@ const boldonse = Boldonse({
   subsets: ["latin"],
   weight: "400",
   display: "swap",
+  adjustFontFallback: false,
 });
 
 const mailtoHref = `mailto:${STOREFRONT_QUOTE_EMAIL_RECIPIENT}`;

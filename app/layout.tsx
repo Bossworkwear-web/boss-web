@@ -6,6 +6,7 @@ import "./store-ui.css";
 import "./product-listing-cards.css";
 import { SiteFooter } from "@/app/components/site-footer";
 import { StorePublicChatGate } from "@/app/components/store-public-chat-gate";
+import { getSiteUrl } from "@/lib/site-url";
 
 const encodeSansCondensed = Encode_Sans_Condensed({
   variable: "--font-encode-sans-condensed",
@@ -21,9 +22,7 @@ const montserrat = Montserrat({
   display: "swap",
 });
 
-const metadataBaseUrl =
-  process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "") ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}` : "http://localhost:3000");
+const metadataBaseUrl = getSiteUrl();
 
 export const viewport: Viewport = {
   width: "device-width",
