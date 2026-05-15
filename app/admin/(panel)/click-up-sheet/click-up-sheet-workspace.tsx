@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { ImageUrlLightbox } from "@/app/components/image-url-lightbox";
+import { StoreOrderBarcode } from "@/app/components/store-order-barcode";
 
 import type { StoreOrderCustomerMemoLine } from "@/lib/store-order-customer-detail";
 import { supplierOrderProductIdHeadTail } from "@/lib/supplier-order-product-id-parts";
@@ -14,7 +14,6 @@ import {
   loadSupplierOrderLinesForClickUpSheet,
   lookupCustomerByStoreOrderNumber,
   moveClickUpSheetOrderToProduction,
-  getCustomerMasterCompanyLogoForStoreOrderNumber,
   type ClickUpSheetImageDto,
   type ClickUpSupplierLineRow,
   type CustomerReferenceVisualDto,
@@ -96,7 +95,8 @@ type Props = {
   initialMockupImages: ClickUpSheetImageDto[];
   initialReferenceImages: ClickUpSheetImageDto[];
   initialCustomerReferenceItems: CustomerReferenceVisualDto[];
-  initialCustomerMasterLogoUrl: string | null;
+  /** Code128 payload for the resolved store order (same as Production / QC / Dispatch). */
+  initialOrderScanPayload?: string | null;
   /** Opened from Completed Order → Pre-process documents: view-only UI (mutations also blocked server-side). */
   completeOrdersDocumentsView?: boolean;
 };
@@ -111,18 +111,17 @@ export function ClickUpSheetWorkspace({
   initialMockupImages,
   initialReferenceImages,
   initialCustomerReferenceItems,
-  initialCustomerMasterLogoUrl,
+  initialOrderScanPayload = null,
   completeOrdersDocumentsView = false,
 }: Props) {
   const [orderId, setOrderId] = useState(initialCustomerOrderId);
+  const [orderScanPayload, setOrderScanPayload] = useState<string | null>(initialOrderScanPayload);
   const [organisationName, setOrganisationName] = useState(initialOrganisationName);
   const [supplierLines, setSupplierLines] = useState<ClickUpSupplierLineRow[]>(initialSupplierLines);
   const [embroideryLogoId, setEmbroideryLogoId] = useState("");
   const [printingLogoId, setPrintingLogoId] = useState("");
   const [logoLocations, setLogoLocations] = useState(initialLogoLocations);
   const [checkoutMemos, setCheckoutMemos] = useState<StoreOrderCustomerMemoLine[]>(initialCheckoutMemos);
-  const [customerMasterLogoUrl, setCustomerMasterLogoUrl] = useState<string | null>(initialCustomerMasterLogoUrl);
-  const [masterLogoLightboxOpen, setMasterLogoLightboxOpen] = useState(false);
   const [sheetActionMessage, setSheetActionMessage] = useState<string | null>(null);
   const [moveToProductionBusy, setMoveToProductionBusy] = useState(false);
   const router = useRouter();
@@ -153,6 +152,10 @@ export function ClickUpSheetWorkspace({
   }, [initialListDate, initialCustomerOrderId]);
 
   useEffect(() => {
+    setOrderScanPayload(initialOrderScanPayload);
+  }, [initialOrderScanPayload]);
+
+  useEffect(() => {
     const id = orderId.trim();
     let cancelled = false;
 
@@ -162,7 +165,7 @@ export function ClickUpSheetWorkspace({
           setOrganisationName("");
           setLogoLocations("");
           setCheckoutMemos([]);
-          setCustomerMasterLogoUrl(null);
+          setOrderScanPayload(null);
         }
       }, 0);
       return () => {
@@ -174,7 +177,12 @@ export function ClickUpSheetWorkspace({
     const debounceTimer = window.setTimeout(() => {
       void (async () => {
         const result = await lookupCustomerByStoreOrderNumber(id);
-        if (cancelled || !result.ok) return;
+        if (cancelled) return;
+        if (!result.ok) {
+          setOrderScanPayload(null);
+          return;
+        }
+        setOrderScanPayload(result.orderScanPayload);
         setCheckoutMemos(result.checkoutMemos);
         if (skipCustomerLookupOnceRef.current) {
           skipCustomerLookupOnceRef.current = false;
@@ -189,38 +197,6 @@ export function ClickUpSheetWorkspace({
       cancelled = true;
       window.clearTimeout(debounceTimer);
     };
-  }, [orderId]);
-
-  useEffect(() => {
-    const id = orderId.trim();
-    if (!id) {
-      return;
-    }
-    let cancelled = false;
-    const t = window.setTimeout(() => {
-      void getCustomerMasterCompanyLogoForStoreOrderNumber(id).then((r) => {
-        if (cancelled) return;
-        if (!r.ok) return;
-        setCustomerMasterLogoUrl(r.public_url);
-      });
-    }, 260);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(t);
-    };
-  }, [orderId]);
-
-  useEffect(() => {
-    const onUpdate = () => {
-      const id = orderId.trim();
-      if (!id) return;
-      void getCustomerMasterCompanyLogoForStoreOrderNumber(id).then((r) => {
-        if (!r.ok) return;
-        setCustomerMasterLogoUrl(r.public_url);
-      });
-    };
-    window.addEventListener("customer-master-logo-updated", onUpdate);
-    return () => window.removeEventListener("customer-master-logo-updated", onUpdate);
   }, [orderId]);
 
   useEffect(() => {
@@ -286,8 +262,8 @@ export function ClickUpSheetWorkspace({
   function printSheet() {
     const pageStyle = document.createElement("style");
     pageStyle.id = "click-up-sheet-print-page";
-    /* margin 0: maximize drawable area; paper size/orientation come from the browser print dialog (no forced landscape). */
-    pageStyle.textContent = "@page { margin: 0; }";
+    /* 10mm printable inset; paper size/orientation from the print dialog. */
+    pageStyle.textContent = "@page { margin: 10mm; }";
     document.head.appendChild(pageStyle);
     const previousTitle = document.title;
     document.title = "";
@@ -408,44 +384,16 @@ export function ClickUpSheetWorkspace({
           </p>
         ) : null}
 
-        <div className="click-up-sheet-print-grid grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,4fr)]">
-        <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Master logo</h2>
-          {customerMasterLogoUrl ? (
-            <div className="mt-3 flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-5">
-              <button
-                type="button"
-                onClick={() => setMasterLogoLightboxOpen(true)}
-                className="cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2"
-                aria-label="View master logo larger"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={customerMasterLogoUrl}
-                  alt="Customer master logo"
-                  className="pointer-events-none h-20 w-full max-w-[14rem] object-contain"
-                  loading="lazy"
-                  decoding="async"
-                />
-              </button>
+        <div className="space-y-6">
+          {orderScanPayload ? (
+            <div className="click-up-sheet-print-order-barcode">
+              <StoreOrderBarcode
+                large
+                value={orderScanPayload}
+                className="max-w-[min(100%,36rem)]"
+              />
             </div>
-          ) : (
-            <div className="mt-3 flex min-h-[6.5rem] items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-              —
-            </div>
-          )}
-          <p className="mt-2 text-xs text-slate-600">
-            고객 기준으로 저장됩니다. 재설정 전까지 다음 주문에도 그대로 표시됩니다.
-          </p>
-        </section>
-
-        <ImageUrlLightbox
-          open={masterLogoLightboxOpen}
-          onClose={() => setMasterLogoLightboxOpen(false)}
-          src={customerMasterLogoUrl ?? ""}
-          ariaLabel="Enlarged master logo"
-          enlarged
-        />
+          ) : null}
 
         <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Order</h2>
@@ -500,23 +448,24 @@ export function ClickUpSheetWorkspace({
             </div>
           </div>
         </section>
+        </div>
 
-        <section className="click-up-sheet-print-span-2 rounded-xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2 print:shadow-none">
+        <section className="click-up-sheet-print-supplier-section rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Customer order list &amp; quantity
           </h2>
-          <p className="mt-1 text-xs text-slate-600">
+          <p className="click-up-sheet-print-hide mt-1 text-xs text-slate-600">
             <strong>Supplier orders</strong> 워크시트(같은 Perth <span className="font-mono">list_date</span>)와 동일한 행입니다.
             Order ID가 있으면 그 주문 번호가 일치하는 행만 표시합니다. 읽기 전용입니다.
           </p>
           <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
             {!initialListDate ? (
-              <p className="px-4 py-8 text-center text-sm text-slate-600">
+              <p className="click-up-sheet-print-hide px-4 py-8 text-center text-sm text-slate-600">
                 워크시트 날짜(<span className="font-mono">list_date</span>)가 없습니다. Click Up에서 시트를 열 때 URL에 날짜가 포함되는지
                 확인하세요.
               </p>
             ) : supplierLines.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-slate-600">
+              <p className="click-up-sheet-print-hide px-4 py-8 text-center text-sm text-slate-600">
                 이 날짜
                 {orderId.trim() ? (
                   <>
@@ -595,14 +544,14 @@ export function ClickUpSheetWorkspace({
           </div>
           <div className="mt-6 border-t border-slate-100 pt-6">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Memo</h3>
-            <p className="mt-1 text-xs text-slate-600" suppressHydrationWarning>
+            <p className="click-up-sheet-print-hide mt-1 text-xs text-slate-600" suppressHydrationWarning>
               체크아웃 시 고객이 라인별로 입력한 내용(<span className="font-mono">store_order_items.notes</span>)입니다. 내용이 같은
               메모는 한 번만 표시합니다. 읽기 전용입니다.
             </p>
             {!orderId.trim() ? (
-              <p className="mt-3 text-sm text-slate-500">Order ID가 있으면 표시됩니다.</p>
+              <p className="click-up-sheet-print-hide mt-3 text-sm text-slate-500">Order ID가 있으면 표시됩니다.</p>
             ) : checkoutMemos.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">이 주문에 저장된 메모가 없습니다.</p>
+              <p className="click-up-sheet-print-hide mt-3 text-sm text-slate-500">이 주문에 저장된 메모가 없습니다.</p>
             ) : (
               <ul className="mt-3 space-y-3">
                 {checkoutMemos.map((row, idx) => (
@@ -642,7 +591,6 @@ export function ClickUpSheetWorkspace({
             variant="mockup"
             readOnly={completeOrdersDocumentsView}
           />
-        </div>
         </div>
       </div>
     </div>

@@ -71,7 +71,6 @@ export function ClickUpSheetCustomerReferenceSection({ customerOrderId, initialI
         setError(res.error);
         return;
       }
-      window.dispatchEvent(new Event("customer-master-logo-updated"));
       setItems((prev) =>
         prev.map((it) =>
           it.storage_bucket && it.storage_path
@@ -93,7 +92,7 @@ export function ClickUpSheetCustomerReferenceSection({ customerOrderId, initialI
       <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
         Order assets (checkout / production)
       </h2>
-      <p className="mt-1 text-xs text-slate-600">
+      <p className="click-up-sheet-print-hide mt-1 text-xs text-slate-600">
         이 주문(<span className="font-mono">store_orders</span>)에 연결된{" "}
         <span className="font-mono">production_order_assets</span> 전체, 체크아웃 라인의{" "}
         <span className="font-mono">placements</span>·<span className="font-mono">notes</span> 안의 이미지/PDF URL입니다.
@@ -106,9 +105,13 @@ export function ClickUpSheetCustomerReferenceSection({ customerOrderId, initialI
         </p>
       ) : null}
       {!customerOrderId.trim() ? (
-        <p className="mt-4 text-sm text-slate-500">Order ID(스토어 주문 번호)를 입력하면 고객 참고 파일이 표시됩니다.</p>
+        <p className="click-up-sheet-print-hide mt-4 text-sm text-slate-500">
+          Order ID(스토어 주문 번호)를 입력하면 고객 참고 파일이 표시됩니다.
+        </p>
       ) : items.length === 0 ? (
-        <p className="mt-4 text-sm text-slate-500">이 주문에 연결된 고객 참고 파일이 없습니다.</p>
+        <p className="click-up-sheet-print-hide mt-4 text-sm text-slate-500">
+          이 주문에 연결된 고객 참고 파일이 없습니다.
+        </p>
       ) : (
         <ul className="mt-4 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {items.map((row) => (

@@ -17,6 +17,10 @@ import { insertSupplierOrderLinesFromStoreCheckout } from "@/lib/supplier-order-
 import { ensureClickUpSheetListForSupplierListDate } from "@/lib/supplier-sheet-click-up-bootstrap";
 import { formatMoneyFromCents, siteBaseUrl } from "@/lib/store-order-utils";
 import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
+import {
+  recordPromotionRedemption,
+  validatePromotionCodeForCheckout,
+} from "@/lib/promotion-codes";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 const CHECKOUT_REFERENCE_BUCKET = "production-order-assets";
@@ -179,6 +183,8 @@ export type PlaceStoreOrderResult =
 export type PlaceStoreOrderOptions = {
   /** `store_orders.id` of the order the customer reordered from (same email); persisted for Click Up mock-up carry-over. */
   reorderedFromStoreOrderId?: string;
+  /** Applied checkout promotion code (`promotion_codes.id`), re-validated server-side. */
+  promotionCodeId?: string;
 };
 
 function escapeCustomerEmailForIlikeExact(email: string): string {
@@ -273,10 +279,41 @@ export async function placeStoreOrder(
     hasPriorEmbroideryOrder: hasPriorEmbroidery,
   });
   const deliveryFeeDollars = fees.deliveryFeeAud;
-  const totalDollars = fees.totalAud;
+  let promotionDiscountDollars = 0;
+  let promotionCodeId: string | null = null;
+
+  const promoIdCandidate = (options?.promotionCodeId ?? "").trim();
+  if (promoIdCandidate) {
+    const { data: promoRow } = await supabase
+      .from("promotion_codes")
+      .select("code")
+      .eq("id", promoIdCandidate)
+      .maybeSingle();
+
+    if (!promoRow?.code) {
+      return { ok: false, error: "Discount code is no longer valid." };
+    }
+
+    const promoCheck = await validatePromotionCodeForCheckout(supabase, {
+      codeInput: promoRow.code,
+      customerEmail,
+      productSubtotalAud: subtotalDollars,
+    });
+    if (!promoCheck.ok) {
+      return { ok: false, error: promoCheck.error };
+    }
+    if (promoCheck.promotionCodeId !== promoIdCandidate) {
+      return { ok: false, error: "Discount code is no longer valid." };
+    }
+    promotionDiscountDollars = promoCheck.discountAud;
+    promotionCodeId = promoCheck.promotionCodeId;
+  }
+
+  const totalDollars = Math.max(0, fees.totalAud - promotionDiscountDollars);
 
   const subtotalCents = dollarsToCents(subtotalDollars);
   const deliveryFeeCents = dollarsToCents(deliveryFeeDollars);
+  const promotionDiscountCents = dollarsToCents(promotionDiscountDollars);
   const totalCents = dollarsToCents(totalDollars);
 
   const insertPayload = {
@@ -286,6 +323,8 @@ export async function placeStoreOrder(
     delivery_fee_cents: deliveryFeeCents,
     subtotal_cents: subtotalCents,
     total_cents: totalCents,
+    promotion_discount_cents: promotionDiscountCents,
+    ...(promotionCodeId ? { promotion_code_id: promotionCodeId } : {}),
     currency: "AUD",
     carrier: "Australia Post",
     status: "paid",
@@ -382,6 +421,20 @@ export async function placeStoreOrder(
       };
     }
     return { ok: false, error: imsg };
+  }
+
+  if (promotionCodeId && promotionDiscountCents > 0) {
+    const redemption = await recordPromotionRedemption(supabase, {
+      promotionCodeId,
+      customerEmail,
+      discountCents: promotionDiscountCents,
+      storeOrderId: orderId,
+    });
+    if (!redemption.ok) {
+      await supabase.from("store_order_items").delete().eq("order_id", orderId);
+      await supabase.from("store_orders").delete().eq("id", orderId);
+      return { ok: false, error: redemption.error };
+    }
   }
 
   const insertedIds = (insertedItems ?? []).map((r) => String((r as { id?: string }).id ?? "").trim());

@@ -25,6 +25,14 @@ import { STORE_MAIN_SHELL_CLASS } from "@/lib/store-main-shell";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
 const CHECKOUT_REORDER_SOURCE_SESSION_KEY = "boss_web_checkout_reorder_source_order_id_v1";
+const CHECKOUT_PROMO_SESSION_KEY = "boss_web_checkout_promo_v1";
+
+type AppliedPromo = {
+  promotionCodeId: string;
+  code: string;
+  discountAud: number;
+  description: string | null;
+};
 
 /** Keep checkout readable without page-level zoom scaling. */
 const PAYMENT_PAGE_ZOOM_WRAP_CLASS = "mx-auto w-full max-w-xl";
@@ -58,6 +66,10 @@ export default function PaymentPage() {
   const [placed, setPlaced] = useState<{ orderNumber: string; trackUrl: string } | null>(null);
   const [payPending, startPayTransition] = useTransition();
   const [returningFromStripe, setReturningFromStripe] = useState(false);
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoPending, setPromoPending] = useState(false);
 
   useEffect(() => {
     const sync = () => setItems(getCartItems());
@@ -65,6 +77,18 @@ export default function PaymentPage() {
     const addr = getCookieValue("customer_delivery_address");
     setDeliveryAddress(addr);
     setDeliveryPostcode(extractAustralianPostcodeFromAddress(addr));
+    try {
+      const raw = sessionStorage.getItem(CHECKOUT_PROMO_SESSION_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as AppliedPromo;
+        if (parsed?.promotionCodeId && parsed.code && Number.isFinite(parsed.discountAud)) {
+          setAppliedPromo(parsed);
+          setPromoInput(parsed.code);
+        }
+      }
+    } catch {
+      // ignore
+    }
     return subscribeCartUpdates(sync);
   }, []);
 
@@ -110,7 +134,124 @@ export default function PaymentPage() {
       }),
     [productNetSubtotal, items, deliveryPostcode, estimatedWeightKg, hasPriorEmbroideryOrder],
   );
-  const { deliveryFeeAud: deliveryFee, logoSetupFeeAud: logoSetupFee, totalAud: payableTotal } = checkoutFees;
+  const { deliveryFeeAud: deliveryFee, logoSetupFeeAud: logoSetupFee, totalAud: checkoutTotal } = checkoutFees;
+  const promoDiscount = appliedPromo?.discountAud ?? 0;
+  const payableTotal = Math.max(0, checkoutTotal - promoDiscount);
+
+  useEffect(() => {
+    if (!appliedPromo || items.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/storefront/promo/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ code: appliedPromo.code, productSubtotalAud: productNetSubtotal }),
+        });
+        const data = (await res.json()) as {
+          ok?: boolean;
+          promotionCodeId?: string;
+          code?: string;
+          discountAud?: number;
+          description?: string | null;
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!res.ok || !data.ok || !data.promotionCodeId) {
+          setAppliedPromo(null);
+          setPromoError(data.error ?? "Discount code no longer applies to this order.");
+          try {
+            sessionStorage.removeItem(CHECKOUT_PROMO_SESSION_KEY);
+          } catch {
+            // ignore
+          }
+          return;
+        }
+        const next: AppliedPromo = {
+          promotionCodeId: data.promotionCodeId,
+          code: data.code ?? appliedPromo.code,
+          discountAud: data.discountAud ?? 0,
+          description: data.description ?? null,
+        };
+        setAppliedPromo(next);
+        try {
+          sessionStorage.setItem(CHECKOUT_PROMO_SESSION_KEY, JSON.stringify(next));
+        } catch {
+          // ignore
+        }
+      } catch {
+        if (!cancelled) setPromoError("Could not refresh discount code.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [appliedPromo?.code, productNetSubtotal, items.length]);
+
+  async function applyPromoCode() {
+    setPromoError(null);
+    const code = promoInput.trim();
+    if (!code) {
+      setPromoError("Enter a discount code.");
+      return;
+    }
+    setPromoPending(true);
+    try {
+      const res = await fetch("/api/storefront/promo/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ code, productSubtotalAud: productNetSubtotal }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        promotionCodeId?: string;
+        code?: string;
+        discountAud?: number;
+        description?: string | null;
+        error?: string;
+      };
+      if (!res.ok || !data.ok || !data.promotionCodeId) {
+        setAppliedPromo(null);
+        setPromoError(data.error ?? "Invalid discount code.");
+        try {
+          sessionStorage.removeItem(CHECKOUT_PROMO_SESSION_KEY);
+        } catch {
+          // ignore
+        }
+        return;
+      }
+      const next: AppliedPromo = {
+        promotionCodeId: data.promotionCodeId,
+        code: data.code ?? code,
+        discountAud: data.discountAud ?? 0,
+        description: data.description ?? null,
+      };
+      setAppliedPromo(next);
+      setPromoInput(next.code);
+      try {
+        sessionStorage.setItem(CHECKOUT_PROMO_SESSION_KEY, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+    } catch {
+      setPromoError("Could not apply discount code.");
+    } finally {
+      setPromoPending(false);
+    }
+  }
+
+  function removePromoCode() {
+    setAppliedPromo(null);
+    setPromoInput("");
+    setPromoError(null);
+    try {
+      sessionStorage.removeItem(CHECKOUT_PROMO_SESSION_KEY);
+    } catch {
+      // ignore
+    }
+  }
 
   const needsEmbroideryHistoryBeforePay = useMemo(() => {
     if (items.length === 0) return false;
@@ -142,6 +283,9 @@ export default function PaymentPage() {
           } else {
             sessionStorage.removeItem(CHECKOUT_REORDER_SOURCE_SESSION_KEY);
           }
+          if (appliedPromo) {
+            sessionStorage.setItem(CHECKOUT_PROMO_SESSION_KEY, JSON.stringify(appliedPromo));
+          }
         } catch {
           // ignore storage failures (private mode, etc)
         }
@@ -166,6 +310,7 @@ export default function PaymentPage() {
                 : {}),
             })),
             deliveryAddress,
+            ...(appliedPromo ? { promotionCodeId: appliedPromo.promotionCodeId } : {}),
           }),
         });
         const json = (await res.json().catch(() => ({}))) as { ok?: boolean; url?: string; error?: string; hint?: string };
@@ -207,8 +352,18 @@ export default function PaymentPage() {
       let placeOpts: PlaceStoreOrderOptions | undefined;
       try {
         const rs = sessionStorage.getItem(CHECKOUT_REORDER_SOURCE_SESSION_KEY)?.trim();
+        const promoRaw = sessionStorage.getItem(CHECKOUT_PROMO_SESSION_KEY);
+        let promotionCodeId: string | undefined;
+        if (promoRaw) {
+          const parsed = JSON.parse(promoRaw) as { promotionCodeId?: string };
+          if (parsed?.promotionCodeId && /^[0-9a-f-]{36}$/i.test(parsed.promotionCodeId)) {
+            promotionCodeId = parsed.promotionCodeId;
+          }
+        }
         if (rs && /^[0-9a-f-]{36}$/i.test(rs)) {
-          placeOpts = { reorderedFromStoreOrderId: rs };
+          placeOpts = { reorderedFromStoreOrderId: rs, ...(promotionCodeId ? { promotionCodeId } : {}) };
+        } else if (promotionCodeId) {
+          placeOpts = { promotionCodeId };
         }
       } catch {
         // ignore
@@ -222,6 +377,7 @@ export default function PaymentPage() {
           sessionStorage.removeItem("boss_web_checkout_cart_v1");
           sessionStorage.removeItem("boss_web_checkout_delivery_address_v1");
           sessionStorage.removeItem(CHECKOUT_REORDER_SOURCE_SESSION_KEY);
+          sessionStorage.removeItem(CHECKOUT_PROMO_SESSION_KEY);
         } catch {
           // ignore
         }
@@ -318,6 +474,17 @@ export default function PaymentPage() {
                 {deliveryPostcode ? (deliveryFee === 0 ? "Free" : toCurrency(deliveryFee)) : "—"}
               </span>
             </p>
+            {appliedPromo && promoDiscount > 0 ? (
+              <p className="flex justify-between text-emerald-800">
+                <span>
+                  Discount ({appliedPromo.code})
+                  {appliedPromo.description ? (
+                    <span className="block text-xs font-normal text-emerald-700/80">{appliedPromo.description}</span>
+                  ) : null}
+                </span>
+                <span className="font-semibold">−{toCurrency(promoDiscount)}</span>
+              </p>
+            ) : null}
             <p className="text-xs leading-snug text-brand-navy/55">
               Chargeable weight estimate: max (packed weight, cubic weight) per line, by product type.
             </p>
@@ -326,6 +493,44 @@ export default function PaymentPage() {
             <span className="text-base font-medium">Total payable</span>
             <span className="text-2xl font-medium text-brand-orange">{toCurrency(payableTotal)}</span>
           </p>
+          <div className="mt-4 border-t border-brand-navy/10 pt-4">
+            <p className="text-xs font-medium uppercase tracking-[0.1em] text-brand-navy/70">Discount code</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <input
+                type="text"
+                value={promoInput}
+                onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                placeholder="Enter code"
+                autoComplete="off"
+                spellCheck={false}
+                className="min-w-0 flex-1 rounded-lg border border-brand-navy/20 px-3 py-2 text-sm uppercase focus:border-brand-orange focus:outline-none focus:ring-1 focus:ring-brand-orange"
+              />
+              {appliedPromo ? (
+                <button
+                  type="button"
+                  onClick={removePromoCode}
+                  className="rounded-lg border border-brand-navy/20 px-3 py-2 text-sm font-semibold text-brand-navy hover:bg-brand-surface/80"
+                >
+                  Remove
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={promoPending || items.length === 0}
+                  onClick={() => void applyPromoCode()}
+                  className="rounded-lg bg-brand-navy px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
+                >
+                  {promoPending ? "Applying…" : "Apply"}
+                </button>
+              )}
+            </div>
+            {promoError ? <p className="mt-2 text-sm text-red-700">{promoError}</p> : null}
+            {appliedPromo && !promoError ? (
+              <p className="mt-2 text-sm text-emerald-800">
+                Code <span className="font-mono font-semibold">{appliedPromo.code}</span> applied.
+              </p>
+            ) : null}
+          </div>
         </div>
 
         <div className="grid gap-4 rounded-2xl border border-brand-navy/15 p-5">

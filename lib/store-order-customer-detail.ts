@@ -66,10 +66,12 @@ export async function getCustomerDetailForStoreOrderNumber(
   organisationName: string;
   logoLocations: string;
   checkoutMemos: StoreOrderCustomerMemoLine[];
+  /** `store_orders.id` when the order number matches; used for order barcode (scan code). */
+  storeOrderId: string | null;
 }> {
   const id = orderNumber.trim();
   if (!id) {
-    return { customerName: "", organisationName: "", logoLocations: "", checkoutMemos: [] };
+    return { customerName: "", organisationName: "", logoLocations: "", checkoutMemos: [], storeOrderId: null };
   }
 
   const { data: so, error } = await supabase
@@ -79,7 +81,7 @@ export async function getCustomerDetailForStoreOrderNumber(
     .maybeSingle();
 
   if (error || !so) {
-    return { customerName: "", organisationName: "", logoLocations: "", checkoutMemos: [] };
+    return { customerName: "", organisationName: "", logoLocations: "", checkoutMemos: [], storeOrderId: null };
   }
 
   const customerName = (so.customer_name ?? "").trim();
@@ -140,5 +142,11 @@ export async function getCustomerDetailForStoreOrderNumber(
     }
   }
 
-  return { customerName, organisationName, logoLocations, checkoutMemos };
+  return {
+    customerName,
+    organisationName,
+    logoLocations,
+    checkoutMemos,
+    storeOrderId: so.id,
+  };
 }

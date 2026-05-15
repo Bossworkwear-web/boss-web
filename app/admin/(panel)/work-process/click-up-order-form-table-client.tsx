@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { StoreOrderBarcode } from "@/app/components/store-order-barcode";
+import { storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
+
 import type { ClickUpOrderFormRow } from "./click-up-order-form-section";
 
 function rowKey(row: ClickUpOrderFormRow) {
@@ -98,6 +101,7 @@ export function ClickUpOrderFormTableClient({ rows }: { rows: ClickUpOrderFormRo
                 </th>
                 <th className="px-4 py-3">Store order date</th>
                 <th className="px-4 py-3">Customer order ID</th>
+                <th className="min-w-[9rem] px-4 py-3">Order barcode</th>
                 <th className="px-4 py-3">Company Name</th>
                 <th className="px-4 py-3">Customer name</th>
                 <th
@@ -115,6 +119,18 @@ export function ClickUpOrderFormTableClient({ rows }: { rows: ClickUpOrderFormRo
                   <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-800">{row.listDate}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-slate-800">{row.storeOrderDateDisplay}</td>
                   <td className="px-4 py-3 font-mono text-xs text-brand-navy">{row.customerOrderId}</td>
+                  <td className="px-4 py-3">
+                    {row.storeOrderId ? (
+                      <StoreOrderBarcode
+                        value={storeOrderScanPayloadFromId(row.storeOrderId)}
+                        compact
+                        showLabel={false}
+                        className="max-w-[10.5rem]"
+                      />
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
+                  </td>
                   <td className="max-w-[200px] truncate px-4 py-3 text-slate-700" title={row.organisationName}>
                     {row.organisationName}
                   </td>

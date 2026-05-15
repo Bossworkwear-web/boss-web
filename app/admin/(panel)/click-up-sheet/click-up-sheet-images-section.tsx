@@ -161,7 +161,6 @@ export function ClickUpSheetImagesSection({
           setError(result.error);
           return;
         }
-        window.dispatchEvent(new Event("customer-master-logo-updated"));
         setImages((prev) =>
           prev.map((img) =>
             img.is_mockup
@@ -346,7 +345,7 @@ export function ClickUpSheetImagesSection({
       return (
         <section className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 p-6 shadow-sm print:bg-white print:shadow-none">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
-          <p className="mt-2 text-sm text-slate-600">워크시트 날짜가 있을 때만 파일을 저장할 수 있습니다.</p>
+          <p className="click-up-sheet-print-hide mt-2 text-sm text-slate-600">워크시트 날짜가 있을 때만 파일을 저장할 수 있습니다.</p>
         </section>
       );
     }
@@ -354,7 +353,7 @@ export function ClickUpSheetImagesSection({
       return (
         <section className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 p-6 shadow-sm print:bg-white print:shadow-none">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
-          <p className="mt-2 text-sm text-slate-600">
+          <p className="click-up-sheet-print-hide mt-2 text-sm text-slate-600">
             재오더 등 이전 주문 목업을 보려면 <strong>Order ID</strong>를 입력하세요. 새 목업 파일은 Perth worksheet
             날짜를 선택한 뒤 저장할 수 있습니다.
           </p>
@@ -367,7 +366,7 @@ export function ClickUpSheetImagesSection({
   return (
     <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
-      <p className="mt-1 text-xs text-slate-600 print:hidden">
+      <p className="click-up-sheet-print-hide mt-1 text-xs text-slate-600">
         {isMockup ? (
           <>
             Production mock-ups (JPEG / PNG / GIF / WebP / PDF). Same Perth date and <strong>Order ID</strong> as the
@@ -483,7 +482,7 @@ export function ClickUpSheetImagesSection({
         </div>
       )}
       {images.length === 0 ? (
-        <p className="mt-4 text-sm text-slate-500">
+        <p className="click-up-sheet-print-hide mt-4 text-sm text-slate-500">
           {isMockup ? "No mock-up files yet. Set Order ID, then use Add mock-up." : "No reference images yet."}
         </p>
       ) : (
@@ -518,7 +517,7 @@ export function ClickUpSheetImagesSection({
               {isPdfUrl(img.public_url) ? (
                 <div
                   className={`flex flex-col items-center justify-center gap-2 bg-white px-3 text-center ${
-                    isMockup ? "min-h-[33rem] h-[33rem]" : "h-44"
+                    isMockup ? "click-up-sheet-print-mockup-pdf-frame min-h-[33rem] h-[33rem]" : "h-44"
                   }`}
                 >
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">PDF</span>
@@ -549,11 +548,11 @@ export function ClickUpSheetImagesSection({
                 />
               )}
               {decorateLabels.length > 0 ? (
-                <div className="flex flex-wrap items-center justify-center gap-2 border-t border-slate-100 bg-white px-2 py-3 text-center">
+                <div className="click-up-sheet-print-mockup-methods-row flex flex-wrap items-center justify-center gap-2 border-t border-slate-100 bg-white px-2 py-3 text-center">
                   {decorateLabels.map((m) => (
                     <span
                       key={m}
-                      className={`rounded-md px-3 py-1 text-[1.3rem] font-semibold leading-tight ${mockupDecorateMethodChipClass(m)}`}
+                      className={`click-up-sheet-print-mockup-chip rounded-md px-3 py-1 text-[1.3rem] font-semibold leading-tight ${mockupDecorateMethodChipClass(m)}`}
                     >
                       {m}
                     </span>
@@ -561,7 +560,7 @@ export function ClickUpSheetImagesSection({
                 </div>
               ) : null}
               {isMockup && img.mockup_memo?.trim() ? (
-                <div className="border-t border-slate-100 bg-white px-3 py-2 text-left">
+                <div className="click-up-sheet-print-mockup-memo border-t border-slate-100 bg-white px-3 py-2 text-left">
                   <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500">Memo</p>
                   <p className="mt-1 whitespace-pre-wrap text-xs text-slate-700">{img.mockup_memo.trim()}</p>
                 </div>

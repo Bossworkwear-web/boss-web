@@ -390,7 +390,7 @@ pre {
   }
 }
 
-/* Click up sheet: PRINT — layout/section grid (@page margin only in TS; orientation from print dialog) */
+/* Click up sheet: PRINT — @page margin 10mm from TS; orientation from print dialog */
 @media print {
   /*
    * Admin print bumps html to 120% (see above). Click up sheet: rem-based sheet UI scales from this root.
@@ -426,9 +426,9 @@ pre {
     background: #fff !important;
   }
 
-  /* Inset content (replaces @page margin) so @page margin can stay 0 for fewer browser header/footer artifacts */
+  /* @page margin 10mm is injected in click-up-sheet-workspace printSheet(); keep inner padding 0 to avoid double inset */
   body.click-up-sheet-print-mode .click-up-sheet-print-area {
-    padding: 6mm;
+    padding: 0;
     box-sizing: border-box;
     max-width: 100%;
   }
@@ -443,12 +443,6 @@ pre {
 
   body.click-up-sheet-print-mode .click-up-sheet-print-area h2 {
     font-size: 0.65rem !important;
-  }
-
-  body.click-up-sheet-print-mode .click-up-sheet-print-grid {
-    display: grid !important;
-    gap: 1.25rem !important;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 4fr) !important;
   }
 
   body.click-up-sheet-print-mode .click-up-sheet-print-span-2 {
@@ -476,8 +470,18 @@ pre {
     font-size: 0.9rem !important;
   }
 
+  body.click-up-sheet-print-mode .click-up-sheet-print-order-barcode {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-order-barcode svg {
+    max-width: 28rem !important;
+  }
+
   body.click-up-sheet-print-mode .click-up-sheet-print-image-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: calc(1rem * 0.7) !important;
   }
 
   body.click-up-sheet-print-mode .click-up-sheet-print-area input,
@@ -490,23 +494,101 @@ pre {
     max-width: 100% !important;
   }
 
-  /* Supplier table: fit printable width (screen uses min-w-[820px]) */
+  /* Supplier block: full-width stack below barcode + Order row (not inside 2-col print grid). */
+  body.click-up-sheet-print-mode .click-up-sheet-print-supplier-section {
+    width: 100% !important;
+    max-width: 100% !important;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-supplier-section .overflow-x-auto {
+    overflow: visible !important;
+    max-width: 100% !important;
+  }
+
+  /* Supplier table: fit printable width (screen uses min-w-[860px] + large rem type). */
   body.click-up-sheet-print-mode table.click-up-sheet-print-table {
     min-width: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
-    table-layout: fixed !important;
-    font-size: 15.35625pt !important;
-    line-height: 1.25 !important;
+    table-layout: auto !important;
+    border-collapse: collapse !important;
+    font-size: 7.5pt !important;
+    line-height: 1.2 !important;
+  }
+
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table thead {
+    font-size: 6.75pt !important;
   }
 
   body.click-up-sheet-print-mode table.click-up-sheet-print-table th,
   body.click-up-sheet-print-mode table.click-up-sheet-print-table td {
-    padding: 0.12rem 0.2rem !important;
+    padding: 0.12rem 0.22rem !important;
     vertical-align: top !important;
+    font-size: inherit !important;
     word-wrap: break-word !important;
-    overflow-wrap: anywhere !important;
+    overflow-wrap: break-word !important;
     hyphens: auto !important;
+  }
+
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table th:nth-child(1),
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table td:nth-child(1) {
+    width: 3.5% !important;
+  }
+
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table th:nth-child(2),
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table td:nth-child(2) {
+    width: 11% !important;
+  }
+
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table th:nth-child(3),
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table td:nth-child(3) {
+    width: 14% !important;
+  }
+
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table th:nth-child(4),
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table td:nth-child(4) {
+    width: 10% !important;
+  }
+
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table th:nth-child(5),
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table td:nth-child(5) {
+    width: 7% !important;
+  }
+
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table th:nth-child(6),
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table td:nth-child(6) {
+    width: 5% !important;
+  }
+
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table th:nth-child(7),
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table td:nth-child(7) {
+    width: 9% !important;
+  }
+
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table th:nth-child(8),
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table td:nth-child(8) {
+    width: 9% !important;
+  }
+
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table th:nth-child(9),
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table td:nth-child(9) {
+    width: 8% !important;
+  }
+
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table th:nth-child(10),
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table td:nth-child(10) {
+    width: 8% !important;
+  }
+
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table td .inline-flex {
+    display: inline !important;
+    flex-wrap: wrap !important;
+  }
+
+  body.click-up-sheet-print-mode table.click-up-sheet-print-table td span {
+    font-size: inherit !important;
   }
 
   body.click-up-sheet-print-mode .click-up-sheet-print-area textarea {
@@ -516,9 +598,55 @@ pre {
   }
 
   body.click-up-sheet-print-mode .click-up-sheet-print-image-grid img {
-    max-height: 63mm !important;
+    max-height: calc(63mm * 0.7) !important;
+    min-height: 0 !important;
     height: auto !important;
     object-fit: contain !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-mockup-pdf-frame {
+    min-height: calc(33rem * 0.7) !important;
+    height: calc(33rem * 0.7) !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-mockup-chip {
+    font-size: calc(1.3rem * 0.7) !important;
+    padding: calc(0.25rem * 0.7) calc(0.75rem * 0.7) !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-mockup-memo > p:first-child {
+    font-size: calc(0.65rem * 0.7) !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-mockup-memo > p.whitespace-pre-wrap {
+    font-size: calc(0.75rem * 0.7) !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-mockup-pdf-frame .text-xs {
+    font-size: calc(0.75rem * 0.7) !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-mockup-methods-row {
+    gap: calc(0.5rem * 0.7) !important;
+    padding: calc(0.75rem * 0.7) calc(0.5rem * 0.7) !important;
+  }
+
+  /* Helper / instructional copy — hide on print; keep headings, field values, tables, memos, images. */
+  body.click-up-sheet-print-mode .click-up-sheet-print-hide,
+  body.click-up-sheet-print-mode .click-up-sheet-print-area .click-up-sheet-print-hide {
+    display: none !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-area section > p.mt-1.text-xs,
+  body.click-up-sheet-print-mode .click-up-sheet-print-area section > p.mt-2.text-xs,
+  body.click-up-sheet-print-mode .click-up-sheet-print-area .click-up-sheet-print-supplier-section > p.mt-1,
+  body.click-up-sheet-print-mode .click-up-sheet-print-area section > p.mt-3.text-xs.text-amber-800,
+  body.click-up-sheet-print-mode .click-up-sheet-print-area .border-t.border-slate-100.pt-6 > p.mt-1.text-xs,
+  body.click-up-sheet-print-mode .click-up-sheet-print-area p.px-4.py-8.text-center.text-sm,
+  body.click-up-sheet-print-mode .click-up-sheet-print-area p.mt-4.text-sm.text-slate-500,
+  body.click-up-sheet-print-mode .click-up-sheet-print-area p.mt-3.text-sm.text-slate-500,
+  body.click-up-sheet-print-mode .click-up-sheet-print-area p[role="alert"] {
+    display: none !important;
   }
 
   body.click-up-sheet-print-mode .admin-panel-print-content-row {

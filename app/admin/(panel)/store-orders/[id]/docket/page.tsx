@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { DocketAutoprint } from "@/app/admin/(panel)/store-orders/[id]/docket/docket-autoprint";
 import { DocketPrintBar } from "@/app/admin/(panel)/store-orders/[id]/docket/docket-print-bar";
 import { resolveDocketShipFromAddress, resolveDocketShipFromName } from "@/lib/docket-ship-from";
+import { storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
 import { siteBaseUrl } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -75,7 +76,8 @@ export default async function DeliveryDocketPage({ params, searchParams }: Props
   const fromName = resolveDocketShipFromName();
   const fromAddress = resolveDocketShipFromAddress();
   const trackUrl = `${siteBaseUrl()}/orders/track/${order.tracking_token}`;
-  const barcodeUrl = `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(order.order_number)}&includetext&scale=3&height=12`;
+  const orderScanPayload = storeOrderScanPayloadFromId(order.id);
+  const barcodeUrl = `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(orderScanPayload)}&includetext&scale=3&height=12`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(trackUrl)}`;
 
   return (

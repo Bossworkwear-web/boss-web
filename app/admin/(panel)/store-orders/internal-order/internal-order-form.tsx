@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+
+import { stringifyJsonField } from "@/lib/safe-json-parse";
+
+import { CustomerQuoteImageDropzone } from "@/app/admin/(panel)/customer-quote/customer-quote-image-dropzone";
 
 import {
   createInternalOrderFromTemplate,
@@ -41,6 +45,8 @@ type Template = {
     depositCents: number;
     status: "unpaid" | "paid" | "processing" | "shipped" | "cancelled";
   };
+  quoteBoxImageUrls?: string[];
+  quoteBoxNote?: string;
   items: Array<{
     productId: string;
     productName: string;
@@ -134,7 +140,7 @@ const quoteTh =
   "border-x-0 border-t-0 border-b border-slate-900 bg-slate-100 px-2 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-slate-900";
 const quoteTd = "border-x-0 border-t-0 border-b border-slate-900 p-0 align-middle bg-white";
 
-/** Customer Quote toolbar (Print / Add product / Add size row): ~30% larger than previous text-xs px-3 py-2. */
+/** Customer Quote toolbar (Print): ~30% larger than previous text-xs px-3 py-2. */
 const customerQuoteToolbarBtn =
   "rounded-lg border border-white px-[0.975rem] py-[0.65rem] text-[0.975rem] leading-tight font-semibold shadow-sm";
 
@@ -158,6 +164,9 @@ export function InternalOrderForm({
 }) {
   const isQuote = variant === "customer-quote";
   const isInternalOrderQuote = isQuote && quoteSubmitContext === "internal-order";
+  const [saveQuotePending, startSaveQuoteTransition] = useTransition();
+  const quoteSaveReturnBase =
+    quoteSubmitContext === "internal-order" ? "/admin/store-orders/internal-order" : "/admin/customer-quote";
 
   const [baseOrderNumber, setBaseOrderNumber] = useState(template.baseOrderNumber);
   const [customerEmail, setCustomerEmail] = useState(template.customerEmail);
@@ -181,6 +190,10 @@ export function InternalOrderForm({
   const [items, setItems] = useState<Item[]>(() =>
     template.items.map((t, idx) => toItem(t, idx + 1)),
   );
+  const [quoteBoxImageUrls, setQuoteBoxImageUrls] = useState<string[]>(() => [
+    ...(template.quoteBoxImageUrls ?? []),
+  ]);
+  const [quoteBoxNote, setQuoteBoxNote] = useState(() => template.quoteBoxNote ?? "");
 
   useEffect(() => {
     setBaseOrderNumber(template.baseOrderNumber);
@@ -193,6 +206,8 @@ export function InternalOrderForm({
     setCarrier(template.carrier || "Australia Post");
     setDeliveryFeeCents(template.deliveryFeeCents ?? 0);
     setItems(template.items.map((t, idx) => toItem(t, idx + 1)));
+    setQuoteBoxImageUrls([...(template.quoteBoxImageUrls ?? [])]);
+    setQuoteBoxNote(template.quoteBoxNote ?? "");
     if (template.customerQuoteDraft) {
       setOrderDate(template.customerQuoteDraft.orderDate || new Date().toISOString().slice(0, 10));
       setDueDate(template.customerQuoteDraft.dueDate);
@@ -291,6 +306,8 @@ export function InternalOrderForm({
       currency,
       carrier,
       status,
+      quoteBoxImageUrls,
+      quoteBoxNote,
       items: items.map((row, idx) => {
         const g = row.quoteGroupId;
         const start = quoteGroupMeta.get(g)?.start ?? idx;
@@ -335,9 +352,13 @@ export function InternalOrderForm({
     currency,
     carrier,
     status,
+    quoteBoxImageUrls,
+    quoteBoxNote,
     items,
     quoteGroupMeta,
   ]);
+
+  const itemsJsonField = useMemo(() => stringifyJsonField(itemsPayload, "[]"), [itemsPayload]);
 
   function updateItem(idx: number, patch: Partial<Item>) {
     setItems((cur) => {
@@ -627,7 +648,7 @@ export function InternalOrderForm({
             <input type="hidden" name="carrier" value={carrier} />
             <input type="hidden" name="status" value={status} />
             <input type="hidden" name="delivery_fee_cents" value={String(deliveryFeeCents)} />
-            <input type="hidden" name="items_json" value={JSON.stringify(itemsPayload)} />
+            <input type="hidden" name="items_json" value={itemsJsonField} />
             <p className="text-xs text-slate-600">
               저장하면 새 주문이 생성됩니다. (기존 주문은 변경되지 않습니다.)
             </p>
@@ -672,7 +693,7 @@ export function InternalOrderForm({
               {isBlankStarter ? "Quote (no template)" : "Quote details"}
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-slate-600 print:hidden">
-              견적용 표입니다. 표 왼쪽 <strong>Add Line</strong> 열(또는 상단 버튼)으로 새 품목 그룹을 넣을 수 있습니다. Supplier·Item
+              견적용 표입니다. 표 왼쪽 <strong>Add Line</strong>으로 새 품목 그룹을 넣을 수 있습니다. Supplier·Item
               ID·colour·Note는 그룹 첫 행에만 입력하고, 사이즈 행은 <strong>Add size row</strong>로 이어 붙이세요.
             </p>
           </div>
@@ -684,20 +705,6 @@ export function InternalOrderForm({
               title="인쇄 대화상자 열기"
             >
               Print
-            </button>
-            <button
-              type="button"
-              onClick={addQuoteProductGroup}
-              className={`${customerQuoteToolbarBtn} bg-slate-50 text-brand-navy hover:bg-slate-100`}
-            >
-              + Add product
-            </button>
-            <button
-              type="button"
-              onClick={addQuoteSizeRow}
-              className={`${customerQuoteToolbarBtn} bg-slate-50 text-brand-navy hover:bg-slate-100`}
-            >
-              + Add size row
             </button>
           </div>
         </div>
@@ -733,6 +740,20 @@ export function InternalOrderForm({
               autoComplete="tel"
             />
           </div>
+          <div className="grid grid-cols-[minmax(7rem,9rem)_1fr] border-b border-white text-sm">
+            <div className="border-r border-white bg-slate-100" aria-hidden="true" />
+            <div className="min-h-3" aria-hidden="true" />
+          </div>
+          <div className="grid grid-cols-[minmax(7rem,9rem)_1fr] border-b border-white text-sm">
+            <div className="border-r border-white bg-slate-100 px-2 py-2 font-bold text-slate-900">Delivery address</div>
+            <textarea
+              className={`${quoteCellInput} min-h-[5rem] resize-y`}
+              rows={4}
+              value={deliveryAddress}
+              onChange={(e) => setDeliveryAddress(e.target.value)}
+              placeholder="Street / full ship-to address"
+            />
+          </div>
           <div className="grid grid-cols-[minmax(7rem,9rem)_1fr] text-sm">
             <div className="border-r border-white bg-slate-100 px-2 py-2 font-bold text-slate-900">Email</div>
             <input
@@ -745,31 +766,31 @@ export function InternalOrderForm({
           </div>
         </div>
 
-        <div className="mt-4">
-          <label className={labelClass}>Delivery address (street / full)</label>
-          <textarea
-            className={inputClass}
-            rows={3}
-            value={deliveryAddress}
-            onChange={(e) => setDeliveryAddress(e.target.value)}
-            placeholder="Ship-to lines only; company/contact/dates are added above automatically when saving."
-          />
-        </div>
-
         <div className="customer-quote-print-scroll mt-5 overflow-x-auto">
           <table className="customer-quote-items-table min-w-[980px] w-full border-collapse border-t border-slate-900 text-sm">
             <tbody>
               <tr>
-                <td rowSpan={2} className={`${quoteTd} w-[5.5rem] min-w-[5.5rem] align-middle bg-slate-50 p-2`}>
-                  <button
-                    type="button"
-                    onClick={addQuoteProductGroup}
-                    className="flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-brand-navy/40 bg-white px-1.5 py-3 text-center text-[11px] font-bold leading-tight text-brand-navy shadow-sm transition hover:border-brand-orange hover:bg-brand-orange/5"
-                    title="Add a new line (product group) to the table"
-                  >
-                    <span className="text-lg leading-none text-brand-orange">+</span>
-                    <span>Add Line</span>
-                  </button>
+                <td rowSpan={2} className={`${quoteTd} w-[5.5rem] min-w-[5.5rem] align-top bg-slate-50 p-2`}>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={addQuoteProductGroup}
+                      className="flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-brand-navy/40 bg-white px-1.5 py-3 text-center text-[11px] font-bold leading-tight text-brand-navy shadow-sm transition hover:border-brand-orange hover:bg-brand-orange/5"
+                      title="Add a new line (product group) to the table"
+                    >
+                      <span className="text-lg leading-none text-brand-orange">+</span>
+                      <span>Add Line</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addQuoteSizeRow}
+                      className="flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-brand-navy/40 bg-white px-1.5 py-2.5 text-center text-[10px] font-bold leading-tight text-brand-navy shadow-sm transition hover:border-brand-orange hover:bg-brand-orange/5 print:hidden"
+                      title="Add a size row to the current product group"
+                    >
+                      <span className="text-base leading-none text-brand-orange">+</span>
+                      <span>Add size row</span>
+                    </button>
+                  </div>
                 </td>
                 <td colSpan={3} className={quoteTd}>
                   <div className="flex flex-wrap items-center gap-2 px-2 py-2">
@@ -933,7 +954,7 @@ export function InternalOrderForm({
               {items.length === 0 ? (
                 <tr>
                   <td colSpan={10} className={`${quoteTd} px-4 py-8 text-center text-slate-600`}>
-                    행이 없습니다. 왼쪽 열의 <strong>Add Line</strong> 또는 상단 <strong>Add product</strong>로 시작하세요.
+                    행이 없습니다. 왼쪽 열의 <strong>Add Line</strong>으로 시작하세요.
                   </td>
                 </tr>
               ) : null}
@@ -1065,6 +1086,33 @@ export function InternalOrderForm({
           <code className="rounded bg-slate-100 px-1">total</code>은 TOTAL Balance와 같습니다.
         </p>
 
+        <div className="mt-5 border-2 border-white p-3 print:border-slate-200">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 md:items-start">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 print:hidden">
+                Quote images &amp; note
+              </p>
+              <div className="mt-2">
+                <CustomerQuoteImageDropzone
+                  quoteRequestId={quoteRequestId}
+                  imageUrls={quoteBoxImageUrls}
+                  onImageUrlsChange={setQuoteBoxImageUrls}
+                />
+              </div>
+            </div>
+            <div className="flex min-w-0 flex-col">
+              <label className={labelClass}>Note</label>
+              <textarea
+                className={`${inputClass} min-h-[10rem] flex-1 md:min-h-[12rem]`}
+                rows={4}
+                value={quoteBoxNote}
+                onChange={(e) => setQuoteBoxNote(e.target.value)}
+                placeholder="Internal note for this quote (visible when reopened; included on Save Quote)"
+              />
+            </div>
+          </div>
+        </div>
+
         <form
           action={createInternalOrderFromTemplate}
           className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-4 print:hidden"
@@ -1075,7 +1123,6 @@ export function InternalOrderForm({
             value={isInternalOrderQuote ? "internal-quote" : "customer-quote"}
           />
           <input type="hidden" name="quote_request_id" value={quoteRequestId ?? ""} />
-          <input type="hidden" name="customer_quote_sheet_json" value={JSON.stringify(customerQuoteSheetPayload)} />
           <input type="hidden" name="base_order_number" value={baseOrderNumber} />
           <input type="hidden" name="customer_email" value={customerEmail} />
           <input type="hidden" name="customer_name" value={customerName} />
@@ -1086,7 +1133,7 @@ export function InternalOrderForm({
           <input type="hidden" name="quote_setup_fee_cents" value={String(setupFeeCents)} />
           <input type="hidden" name="quote_delivery_fee_cents" value={String(quoteDeliveryFeeCents)} />
           <input type="hidden" name="quote_deposit_cents" value={String(depositCents)} />
-          <input type="hidden" name="items_json" value={JSON.stringify(itemsPayload)} />
+          <input type="hidden" name="items_json" value={itemsJsonField} />
           <p className="mr-auto max-w-xl text-xs text-slate-600">
             {isInternalOrderQuote ? (
               <>
@@ -1101,12 +1148,21 @@ export function InternalOrderForm({
           </p>
           {!isInternalOrderQuote ? (
             <button
-              type="submit"
-              formAction={saveCustomerQuoteSheet}
+              type="button"
               className="rounded-xl border border-emerald-800 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 disabled:opacity-60"
-              disabled={items.length === 0}
+              disabled={items.length === 0 || saveQuotePending || !customerQuoteSheetPayload}
+              onClick={() => {
+                if (!customerQuoteSheetPayload) return;
+                startSaveQuoteTransition(() => {
+                  void saveCustomerQuoteSheet(
+                    customerQuoteSheetPayload,
+                    quoteRequestId,
+                    quoteSaveReturnBase,
+                  );
+                });
+              }}
             >
-              Save Quote
+              {saveQuotePending ? "Saving…" : "Save Quote"}
             </button>
           ) : null}
           <button

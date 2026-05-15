@@ -11,9 +11,17 @@ type Props = {
   compact?: boolean;
   /** When false, omit the “Order barcode” caption (still has aria-label on svg). */
   showLabel?: boolean;
+  /** Double bar height, bar width, and text for labels / print sheets. */
+  large?: boolean;
 };
 
-export function StoreOrderBarcode({ value, className, compact = false, showLabel = true }: Props) {
+export function StoreOrderBarcode({
+  value,
+  className,
+  compact = false,
+  showLabel = true,
+  large = false,
+}: Props) {
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   useEffect(() => {
@@ -23,6 +31,7 @@ export function StoreOrderBarcode({ value, className, compact = false, showLabel
     while (svg.firstChild) {
       svg.removeChild(svg.firstChild);
     }
+    const m = large ? 2 : 1;
     try {
       JsBarcode(
         svg,
@@ -33,26 +42,26 @@ export function StoreOrderBarcode({ value, className, compact = false, showLabel
               displayValue: true,
               lineColor: "#0f172a",
               background: "#ffffff",
-              width: 0.9,
-              height: 28,
-              margin: 2,
-              fontSize: 7,
+              width: 0.9 * m,
+              height: 28 * m,
+              margin: 2 * m,
+              fontSize: 7 * m,
             }
           : {
               format: "CODE128",
               displayValue: true,
               lineColor: "#0f172a",
               background: "#ffffff",
-              width: 1.15,
-              height: 44,
-              margin: 4,
-              fontSize: 10,
+              width: 1.15 * m,
+              height: 44 * m,
+              margin: 4 * m,
+              fontSize: 10 * m,
             },
       );
     } catch {
       /* invalid payload for encoder */
     }
-  }, [value, compact]);
+  }, [value, compact, large]);
 
   if (!value.trim()) {
     return null;
@@ -61,7 +70,9 @@ export function StoreOrderBarcode({ value, className, compact = false, showLabel
   return (
     <div className={className ?? ""}>
       {showLabel ? (
-        <p className="production-pack-print-barcode-label mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500">
+        <p
+          className={`production-pack-print-barcode-label mb-1 font-semibold uppercase tracking-wide text-slate-500 ${large ? "text-[1.3rem]" : "text-[0.65rem]"}`}
+        >
           Order barcode
         </p>
       ) : null}

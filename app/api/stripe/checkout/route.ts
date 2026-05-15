@@ -6,6 +6,7 @@ import { totalEstimatedShippingWeightKg } from "@/lib/delivery-shipping-weight";
 import { computeStorefrontCheckoutFees } from "@/lib/storefront-cart-checkout-fees";
 import { hasPriorEmbroideryOrderForCustomerEmail } from "@/lib/storefront-prior-embroidery-order";
 import { createSupabaseAdminClient } from "@/lib/supabase";
+import { validatePromotionCodeForCheckout } from "@/lib/promotion-codes";
 import { storefrontCartNetProductSubtotalAfterVolumeAud, storefrontVolumeAdjustedCartLines } from "@/lib/storefront-volume-discount";
 
 type CartItem = {
@@ -58,7 +59,7 @@ export async function POST(req: Request) {
     process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "") ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}` : "http://localhost:3000");
 
-  let body: { items?: CartItem[]; deliveryAddress?: string | null } = {};
+  let body: { items?: CartItem[]; deliveryAddress?: string | null; promotionCodeId?: string | null } = {};
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -85,11 +86,44 @@ export async function POST(req: Request) {
   }
 
   let hasPriorEmbroidery = false;
+  let supabase;
   try {
-    const supabase = createSupabaseAdminClient();
+    supabase = createSupabaseAdminClient();
     hasPriorEmbroidery = await hasPriorEmbroideryOrderForCustomerEmail(supabase, customerEmail);
   } catch {
     return Response.json({ ok: false, error: "Checkout is temporarily unavailable." }, { status: 503 });
+  }
+
+  const promotionCodeId = (body.promotionCodeId ?? "").trim();
+  let promoDiscountCents = 0;
+  let promoCodeLabel = "";
+  let validatedPromoId: string | null = null;
+
+  if (promotionCodeId) {
+    const { data: promoRow } = await supabase
+      .from("promotion_codes")
+      .select("code")
+      .eq("id", promotionCodeId)
+      .maybeSingle();
+
+    if (!promoRow?.code) {
+      return Response.json({ ok: false, error: "Discount code is no longer valid." }, { status: 400 });
+    }
+
+    const promoCheck = await validatePromotionCodeForCheckout(supabase, {
+      codeInput: promoRow.code,
+      customerEmail,
+      productSubtotalAud: subtotal,
+    });
+    if (!promoCheck.ok) {
+      return Response.json({ ok: false, error: promoCheck.error }, { status: 400 });
+    }
+    if (promoCheck.promotionCodeId !== promotionCodeId) {
+      return Response.json({ ok: false, error: "Discount code is no longer valid." }, { status: 400 });
+    }
+    promoDiscountCents = dollarsToCents(promoCheck.discountAud);
+    promoCodeLabel = promoCheck.code;
+    validatedPromoId = promoCheck.promotionCodeId;
   }
 
   const feeItems = items.map((it) => ({
@@ -106,14 +140,27 @@ export async function POST(req: Request) {
   });
   const deliveryFee = fees.deliveryFeeAud;
   const logoSetupFee = fees.logoSetupFeeAud;
-  const total = fees.totalAud;
+  const totalBeforePromo = fees.totalAud;
+  const total = Math.max(0, totalBeforePromo - promoDiscountCents / 100);
 
   try {
+    let discounts: { coupon: string }[] | undefined;
+    if (promoDiscountCents > 0 && validatedPromoId) {
+      const coupon = await stripe.coupons.create({
+        amount_off: promoDiscountCents,
+        currency: "aud",
+        duration: "once",
+        name: `Discount ${promoCodeLabel}`.slice(0, 40),
+      });
+      discounts = [{ coupon: coupon.id }];
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       currency: "aud",
       success_url: `${site}/payment?status=stripe_success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${site}/payment?status=stripe_cancelled`,
+      ...(discounts ? { discounts } : {}),
       line_items: [
         ...items.map((it, idx) => ({
           quantity: it.quantity,
@@ -150,6 +197,12 @@ export async function POST(req: Request) {
       ],
       metadata: {
         boss_web_total_cents: String(dollarsToCents(total)),
+        ...(validatedPromoId
+          ? {
+              promotion_code_id: validatedPromoId,
+              promotion_discount_cents: String(promoDiscountCents),
+            }
+          : {}),
       },
     });
 

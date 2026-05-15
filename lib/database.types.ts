@@ -832,6 +832,8 @@ export type Database = {
           hold_process: boolean;
           hold_note: string | null;
           reordered_from_store_order_id: string | null;
+          promotion_code_id: string | null;
+          promotion_discount_cents: number;
         };
         Insert: {
           id?: string;
@@ -854,6 +856,8 @@ export type Database = {
           hold_process?: boolean;
           hold_note?: string | null;
           reordered_from_store_order_id?: string | null;
+          promotion_code_id?: string | null;
+          promotion_discount_cents?: number;
         };
         Update: {
           id?: string;
@@ -876,6 +880,8 @@ export type Database = {
           hold_process?: boolean;
           hold_note?: string | null;
           reordered_from_store_order_id?: string | null;
+          promotion_code_id?: string | null;
+          promotion_discount_cents?: number;
         };
         Relationships: [
           {
@@ -1000,6 +1006,106 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [];
+      };
+      promotion_codes: {
+        Row: {
+          id: string;
+          code: string;
+          description: string | null;
+          discount_type: string;
+          discount_value: number;
+          min_subtotal_aud: number;
+          starts_at: string | null;
+          ends_at: string | null;
+          max_redemptions: number | null;
+          redemption_count: number;
+          max_redemptions_per_customer: number | null;
+          status: string;
+          sent_to_email: string | null;
+          sent_at: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          code: string;
+          description?: string | null;
+          discount_type: string;
+          discount_value: number;
+          min_subtotal_aud?: number;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          max_redemptions?: number | null;
+          redemption_count?: number;
+          max_redemptions_per_customer?: number | null;
+          status?: string;
+          sent_to_email?: string | null;
+          sent_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          code?: string;
+          description?: string | null;
+          discount_type?: string;
+          discount_value?: number;
+          min_subtotal_aud?: number;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          max_redemptions?: number | null;
+          redemption_count?: number;
+          max_redemptions_per_customer?: number | null;
+          status?: string;
+          sent_to_email?: string | null;
+          sent_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      promotion_code_redemptions: {
+        Row: {
+          id: string;
+          promotion_code_id: string;
+          store_order_id: string | null;
+          customer_email: string;
+          discount_cents: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          promotion_code_id: string;
+          store_order_id?: string | null;
+          customer_email: string;
+          discount_cents?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          promotion_code_id?: string;
+          store_order_id?: string | null;
+          customer_email?: string;
+          discount_cents?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "promotion_code_redemptions_promotion_code_id_fkey";
+            columns: ["promotion_code_id"];
+            referencedRelation: "promotion_codes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "promotion_code_redemptions_store_order_id_fkey";
+            columns: ["store_order_id"];
+            referencedRelation: "store_orders";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       incoming_goods_receipts: {
         Row: {

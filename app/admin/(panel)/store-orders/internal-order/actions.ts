@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { assertAdminSession } from "@/lib/admin-auth";
+import { parseJsonOrNull } from "@/lib/safe-json-parse";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 export type InternalOrderTemplate = {
@@ -29,6 +30,10 @@ export type InternalOrderTemplate = {
     depositCents: number;
     status: "unpaid" | "paid" | "processing" | "shipped" | "cancelled";
   };
+  /** Images attached in the Quote box (public storage URLs). */
+  quoteBoxImageUrls?: string[];
+  /** Note below images in the Quote box. */
+  quoteBoxNote?: string;
   items: Array<{
     productId: string;
     productName: string;
@@ -62,6 +67,8 @@ export type AdminCustomerQuoteSheetV1 = {
   currency: string;
   carrier: string;
   status: "unpaid" | "paid" | "processing" | "shipped" | "cancelled";
+  quoteBoxImageUrls?: string[];
+  quoteBoxNote?: string;
   items: Array<{
     productId: string;
     productName: string;
@@ -96,13 +103,12 @@ function normalizeNullableText(raw: unknown): string | null {
 function normalizePlacementsJson(raw: unknown): string {
   const s = String(raw ?? "").trim();
   if (!s) return "[]";
-  try {
-    const parsed = JSON.parse(s);
-    return JSON.stringify(parsed);
-  } catch {
+  const parsed = parseJsonOrNull(s);
+  if (parsed === null) {
     // Keep as-is; DB insert will fail if invalid.
     return s;
   }
+  return JSON.stringify(parsed);
 }
 
 function escapeRegExp(literal: string): string {
@@ -186,11 +192,11 @@ export async function createInternalOrderFromTemplate(formData: FormData): Promi
   let deliveryFeeCents = Math.max(0, safeInt(formData.get("delivery_fee_cents"), 0));
 
   const itemsRaw = normalizeText(formData.get("items_json"));
+  const parsedItems = parseJsonOrNull(itemsRaw);
   let items: InternalOrderTemplate["items"] = [];
   try {
-    const parsed = JSON.parse(itemsRaw) as unknown;
-    if (!Array.isArray(parsed)) throw new Error("items_json must be an array");
-    items = parsed.map((r) => {
+    if (!parsedItems || !Array.isArray(parsedItems)) throw new Error("items_json must be an array");
+    items = parsedItems.map((r) => {
       const rec = r as Record<string, unknown>;
       const gender = normalizeNullableText(rec.gender);
       const baseNotes = normalizeNullableText(rec.notes);
@@ -321,17 +327,7 @@ export async function createInternalOrderFromTemplate(formData: FormData): Promi
   redirect(`${returnBase}?created=${encodeURIComponent(newOrderNumber)}`);
 }
 
-function parseAdminCustomerQuoteSheetFromForm(formData: FormData): AdminCustomerQuoteSheetV1 {
-  const raw = normalizeText(formData.get("customer_quote_sheet_json"));
-  if (!raw) {
-    throw new Error("missing_sheet");
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw) as unknown;
-  } catch {
-    throw new Error("invalid_sheet_json");
-  }
+function parseAdminCustomerQuoteSheetFromUnknown(parsed: unknown): AdminCustomerQuoteSheetV1 {
   if (!parsed || typeof parsed !== "object") {
     throw new Error("invalid_sheet");
   }
@@ -385,8 +381,37 @@ function parseAdminCustomerQuoteSheetFromForm(formData: FormData): AdminCustomer
     currency: normalizeText(o.currency) || "AUD",
     carrier: normalizeText(o.carrier) || "Australia Post",
     status,
+    quoteBoxImageUrls: parseQuoteBoxImageUrls(o.quoteBoxImageUrls),
+    quoteBoxNote: normalizeText(o.quoteBoxNote),
     items,
   };
+}
+
+function parseAdminCustomerQuoteSheetFromForm(formData: FormData): AdminCustomerQuoteSheetV1 {
+  const raw = normalizeText(formData.get("customer_quote_sheet_json"));
+  if (!raw) {
+    throw new Error("missing_sheet");
+  }
+  const parsed = parseJsonOrNull(raw);
+  if (parsed === null) {
+    throw new Error("invalid_sheet_json");
+  }
+  return parseAdminCustomerQuoteSheetFromUnknown(parsed);
+}
+
+function normalizeAdminCustomerQuoteSheet(sheet: AdminCustomerQuoteSheetV1): AdminCustomerQuoteSheetV1 {
+  return parseAdminCustomerQuoteSheetFromUnknown(sheet);
+}
+
+function parseQuoteBoxImageUrls(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const x of raw) {
+    if (typeof x !== "string") continue;
+    const u = x.trim();
+    if (u && !out.includes(u)) out.push(u);
+  }
+  return out;
 }
 
 function adminSheetToInternalTemplate(sheet: AdminCustomerQuoteSheetV1): InternalOrderTemplate {
@@ -408,6 +433,8 @@ function adminSheetToInternalTemplate(sheet: AdminCustomerQuoteSheetV1): Interna
       depositCents: sheet.depositCents,
       status: sheet.status === "paid" || sheet.status === "unpaid" ? sheet.status : "unpaid",
     },
+    quoteBoxImageUrls: sheet.quoteBoxImageUrls ?? [],
+    quoteBoxNote: sheet.quoteBoxNote ?? "",
     items: sheet.items.map((it) => ({
       productId: it.productId,
       productName: it.productName,
@@ -425,55 +452,57 @@ function adminSheetToInternalTemplate(sheet: AdminCustomerQuoteSheetV1): Interna
   };
 }
 
+function resolveQuoteSaveReturnBase(returnBaseInput: string | null | undefined): string {
+  const allowedReturn = new Set(["/admin/customer-quote", "/admin/store-orders/internal-order"]);
+  const raw = normalizeText(returnBaseInput);
+  return allowedReturn.has(raw) ? raw : "/admin/customer-quote";
+}
+
 /** Save Customer Quote spreadsheet to `quote_requests` (list + reopen). Does not create a store order. */
-export async function saveCustomerQuoteSheet(formData: FormData): Promise<void> {
+export async function saveCustomerQuoteSheet(
+  sheet: AdminCustomerQuoteSheetV1,
+  quoteRequestId: string | null = null,
+  returnBaseInput?: string | null,
+): Promise<void> {
   try {
     await assertAdminSession();
   } catch {
     redirect("/admin/login");
   }
 
-  const allowedReturn = new Set(["/admin/customer-quote", "/admin/store-orders/internal-order"]);
-  const returnBaseRaw = normalizeText(formData.get("return_after_quote_save"));
-  const returnBase = allowedReturn.has(returnBaseRaw) ? returnBaseRaw : "/admin/customer-quote";
-  let sheet: AdminCustomerQuoteSheetV1;
-  try {
-    sheet = parseAdminCustomerQuoteSheetFromForm(formData);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "invalid_sheet";
-    redirect(`${returnBase}?error=${encodeURIComponent(msg)}`);
-  }
+  const returnBase = resolveQuoteSaveReturnBase(returnBaseInput);
+  const normalized = normalizeAdminCustomerQuoteSheet(sheet);
 
-  if (!sheet.customerEmail || !sheet.customerName || !sheet.deliveryAddress.trim()) {
+  if (!normalized.customerEmail || !normalized.customerName || !normalized.deliveryAddress.trim()) {
     redirect(`${returnBase}?error=missing_fields`);
   }
-  if (sheet.items.length === 0) {
+  if (normalized.items.length === 0) {
     redirect(`${returnBase}?error=no_items`);
   }
 
   const supabase = createSupabaseAdminClient();
-  const existingId = normalizeText(formData.get("quote_request_id"));
+  const existingId = normalizeText(quoteRequestId ?? "");
 
-  const companyName = sheet.companyName.trim() || sheet.customerName.trim() || "Quote draft";
-  const first = sheet.items[0]!;
+  const companyName = normalized.companyName.trim() || normalized.customerName.trim() || "Quote draft";
+  const first = normalized.items[0]!;
   const legacyProductId = isUuid(first.productId) ? first.productId : null;
   const legacyQty =
-    sheet.items.reduce((s, it) => s + Math.max(0, safeInt(it.quantity, 0)), 0) || null;
+    normalized.items.reduce((s, it) => s + Math.max(0, safeInt(it.quantity, 0)), 0) || null;
 
   if (existingId && isUuid(existingId)) {
     const { error: upErr } = await supabase
       .from("quote_requests")
       .update({
         company_name: companyName,
-        contact_name: sheet.customerName,
-        email: sheet.customerEmail,
-        phone: sheet.clientContact.trim() ? sheet.clientContact.trim() : null,
+        contact_name: normalized.customerName,
+        email: normalized.customerEmail,
+        phone: normalized.clientContact.trim() ? normalized.clientContact.trim() : null,
         product_id: legacyProductId,
         quantity: legacyQty,
         service_type: first.serviceType,
         product_color: first.color,
         notes: first.notes,
-        admin_customer_quote_sheet: sheet,
+        admin_customer_quote_sheet: normalized,
       })
       .eq("id", existingId);
     if (upErr) {
@@ -489,16 +518,16 @@ export async function saveCustomerQuoteSheet(formData: FormData): Promise<void> 
     .from("quote_requests")
     .insert({
       company_name: companyName,
-      contact_name: sheet.customerName,
-      email: sheet.customerEmail,
-      phone: sheet.clientContact.trim() ? sheet.clientContact.trim() : null,
+      contact_name: normalized.customerName,
+      email: normalized.customerEmail,
+      phone: normalized.clientContact.trim() ? normalized.clientContact.trim() : null,
       product_id: legacyProductId,
       quantity: legacyQty,
       service_type: first.serviceType,
       product_color: first.color,
       notes: first.notes,
       lead_source: "admin_customer_quote",
-      admin_customer_quote_sheet: sheet,
+      admin_customer_quote_sheet: normalized,
     })
     .select("id")
     .single();

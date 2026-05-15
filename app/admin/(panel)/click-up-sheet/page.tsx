@@ -1,4 +1,5 @@
 import { completeOrdersDocFromSearchParam } from "@/lib/complete-orders-doc-query";
+import { storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
 import {
   getCustomerDetailForStoreOrderNumber,
   type StoreOrderCustomerMemoLine,
@@ -10,7 +11,6 @@ import {
   listClickUpSheetMockupsIncludingReorderPrior,
   listCustomerReferenceVisualsForStoreOrderNumber,
   loadSupplierOrderLinesForClickUpSheet,
-  getCustomerMasterCompanyLogoForStoreOrderNumber,
   type ClickUpSheetImageDto,
   type ClickUpSupplierLineRow,
   type CustomerReferenceVisualDto,
@@ -34,6 +34,7 @@ export default async function AdminClickUpSheetPage({
   let initialOrganisationName = "";
   let initialLogoLocations = "";
   let initialCheckoutMemos: StoreOrderCustomerMemoLine[] = [];
+  let initialOrderScanPayload: string | null = null;
 
   if (initialCustomerOrderId) {
     try {
@@ -42,6 +43,7 @@ export default async function AdminClickUpSheetPage({
       initialOrganisationName = detail.organisationName;
       initialLogoLocations = detail.logoLocations;
       initialCheckoutMemos = detail.checkoutMemos;
+      initialOrderScanPayload = detail.storeOrderId ? storeOrderScanPayloadFromId(detail.storeOrderId) : null;
     } catch {
       // Supabase not configured or network
     }
@@ -51,21 +53,12 @@ export default async function AdminClickUpSheetPage({
   let initialMockupImages: ClickUpSheetImageDto[] = [];
   let initialReferenceImages: ClickUpSheetImageDto[] = [];
   let initialCustomerReferenceItems: CustomerReferenceVisualDto[] = [];
-  let initialCustomerMasterLogoUrl: string | null = null;
 
   if (initialCustomerOrderId) {
     try {
       const refRes = await listCustomerReferenceVisualsForStoreOrderNumber(initialCustomerOrderId);
       if (refRes.ok) {
         initialCustomerReferenceItems = refRes.items;
-      }
-    } catch {
-      // Supabase not configured
-    }
-    try {
-      const masterRes = await getCustomerMasterCompanyLogoForStoreOrderNumber(initialCustomerOrderId);
-      if (masterRes.ok) {
-        initialCustomerMasterLogoUrl = masterRes.public_url;
       }
     } catch {
       // Supabase not configured
@@ -122,7 +115,7 @@ export default async function AdminClickUpSheetPage({
       initialMockupImages={initialMockupImages}
       initialReferenceImages={initialReferenceImages}
       initialCustomerReferenceItems={initialCustomerReferenceItems}
-      initialCustomerMasterLogoUrl={initialCustomerMasterLogoUrl}
+      initialOrderScanPayload={initialOrderScanPayload}
       completeOrdersDocumentsView={completeOrdersDocumentsView}
     />
   );

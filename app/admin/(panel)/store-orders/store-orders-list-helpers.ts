@@ -1,7 +1,14 @@
 /** Perth (AWST, no DST) — matches list grouping. */
 export const STORE_ORDERS_TZ = "Australia/Perth";
 
-export const STORE_ORDERS_PAGE_SIZE = 50;
+/** Default calendar-day window when no from/to filter (matches Supplier orders). */
+export const ADMIN_STORE_ORDER_DAY_WINDOW = 60;
+
+/** Safety cap when loading orders for the list. */
+export const STORE_ORDERS_FETCH_LIMIT = 2000;
+
+/** Day groups shown per screen (matches Supplier orders). */
+export const STORE_ORDERS_DAYS_PER_PAGE = 7;
 
 export type StoreOrderShipFilter = "all" | "pending" | "shipped";
 
@@ -10,7 +17,28 @@ export type StoreOrderListQuery = {
   from: string;
   to: string;
   q: string;
-  page: number;
+};
+
+export type StoreOrderListRow = {
+  id: string;
+  order_number: string;
+  status: string;
+  customer_email: string;
+  customer_name: string;
+  total_cents: number;
+  delivery_fee_cents: number;
+  currency: string;
+  tracking_number: string | null;
+  created_at: string;
+  invoice_reference: string | null;
+  hold_process: boolean;
+  hold_note: string | null;
+};
+
+export type StoreOrderDayGroup = {
+  dayKey: string;
+  dayHeading: string;
+  orders: StoreOrderListRow[];
 };
 
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -26,9 +54,7 @@ export function parseStoreOrderListQuery(sp: Record<string, string | string[] | 
   const from = YMD_RE.test(g("from")) ? g("from") : "";
   const to = YMD_RE.test(g("to")) ? g("to") : "";
   const q = g("q").slice(0, 120);
-  const pageRaw = Number.parseInt(g("page"), 10);
-  const page = Number.isFinite(pageRaw) && pageRaw >= 1 ? pageRaw : 1;
-  return { ship, from, to, q, page };
+  return { ship, from, to, q };
 }
 
 export function buildStoreOrdersListHref(query: StoreOrderListQuery, patch?: Partial<StoreOrderListQuery>): string {
@@ -45,9 +71,6 @@ export function buildStoreOrdersListHref(query: StoreOrderListQuery, patch?: Par
   }
   if (next.q) {
     p.set("q", next.q);
-  }
-  if (next.page > 1) {
-    p.set("page", String(next.page));
   }
   const s = p.toString();
   return s ? `/admin/store-orders?${s}` : "/admin/store-orders";
@@ -71,4 +94,100 @@ export function perthCalendarAddDays(ymd: string, deltaDays: number): string {
   const t = new Date(`${ymd}T00:00:00+08:00`);
   t.setUTCDate(t.getUTCDate() + deltaDays);
   return t.toLocaleDateString("en-CA", { timeZone: STORE_ORDERS_TZ });
+}
+
+export function resolveStoreOrdersListDateRange(query: StoreOrderListQuery): { fromYmd: string; toYmd: string } {
+  const today = perthTodayYmd();
+  const fromYmd =
+    query.from || perthCalendarAddDays(today, -(ADMIN_STORE_ORDER_DAY_WINDOW - 1));
+  const toYmd = query.to || today;
+  return { fromYmd, toYmd };
+}
+
+function parseOrderDate(iso: string): Date | null {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function calendarDayKey(iso: string): string {
+  try {
+    const d = parseOrderDate(iso);
+    if (!d) {
+      return "unknown-date";
+    }
+    return d.toLocaleDateString("en-CA", { timeZone: STORE_ORDERS_TZ });
+  } catch {
+    return parseOrderDate(iso)?.toISOString().slice(0, 10) ?? "unknown-date";
+  }
+}
+
+export function formatStoreOrderDayHeading(sampleIso: string): string {
+  try {
+    const d = parseOrderDate(sampleIso);
+    if (!d) {
+      return "Unknown date";
+    }
+    return d.toLocaleDateString("en-AU", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: STORE_ORDERS_TZ,
+    });
+  } catch {
+    return parseOrderDate(sampleIso)?.toISOString().slice(0, 10) ?? "Unknown date";
+  }
+}
+
+export function formatPaymentDateForXero(iso: string): string {
+  try {
+    const d = parseOrderDate(iso);
+    if (!d) {
+      return "—";
+    }
+    return d.toLocaleDateString("en-AU", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: STORE_ORDERS_TZ,
+    });
+  } catch {
+    return "—";
+  }
+}
+
+export function formatOrderRowDateTime(iso: string): string {
+  try {
+    const d = parseOrderDate(iso);
+    if (!d) {
+      return "—";
+    }
+    return d.toLocaleString("en-AU", {
+      dateStyle: "short",
+      timeStyle: "short",
+      timeZone: STORE_ORDERS_TZ,
+    });
+  } catch {
+    return parseOrderDate(iso)?.toISOString().replace("T", " ").slice(0, 16) ?? "—";
+  }
+}
+
+export function groupStoreOrdersByCalendarDay(rows: StoreOrderListRow[]): StoreOrderDayGroup[] {
+  const map = new Map<string, StoreOrderListRow[]>();
+  for (const r of rows) {
+    const key = calendarDayKey(r.created_at);
+    const list = map.get(key);
+    if (list) {
+      list.push(r);
+    } else {
+      map.set(key, [r]);
+    }
+  }
+  return [...map.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([dayKey, orders]) => ({
+      dayKey,
+      dayHeading: formatStoreOrderDayHeading(orders[0]!.created_at),
+      orders,
+    }));
 }

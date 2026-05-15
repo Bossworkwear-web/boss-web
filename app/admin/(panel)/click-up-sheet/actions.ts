@@ -12,6 +12,7 @@ import {
   placementsFromDb,
   type StoreOrderCustomerMemoLine,
 } from "@/lib/store-order-customer-detail";
+import { storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
 import {
   guardCustomerOrderNumberNotInCompleteOrdersQueue,
   guardStoreOrderNotInCompleteOrdersQueue,
@@ -176,6 +177,8 @@ export type LookupStoreOrderCustomerResult =
       organisationName: string;
       logoLocations: string;
       checkoutMemos: StoreOrderCustomerMemoLine[];
+      /** Code128 payload (32-char hex); same barcode as Production / QC / Dispatch. */
+      orderScanPayload: string | null;
     }
   | { ok: false; error: string };
 
@@ -197,6 +200,7 @@ export async function lookupCustomerByStoreOrderNumber(
       organisationName: detail.organisationName,
       logoLocations: detail.logoLocations,
       checkoutMemos: detail.checkoutMemos,
+      orderScanPayload: detail.storeOrderId ? storeOrderScanPayloadFromId(detail.storeOrderId) : null,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Lookup failed";
@@ -955,47 +959,6 @@ export async function setCustomerMasterCompanyLogoFromOrderAsset(args: {
     return { ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Update failed";
-    return { ok: false, error: msg };
-  }
-}
-
-export async function getCustomerMasterCompanyLogoForStoreOrderNumber(
-  orderNumber: string,
-): Promise<{ ok: true; public_url: string | null } | { ok: false; error: string }> {
-  try {
-    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
-  } catch {
-    return { ok: false, error: "Unauthorized" };
-  }
-
-  const on = orderNumber.trim();
-  if (!on) {
-    return { ok: true, public_url: null };
-  }
-
-  try {
-    const supabase = createSupabaseAdminClient();
-    const email = await customerEmailForStoreOrderNumber(supabase, on);
-    if (!email) {
-      return { ok: true, public_url: null };
-    }
-    const emailLower = email.toLowerCase();
-    const { data, error } = await supabase
-      .from("customer_master_company_logo")
-      .select("storage_bucket, storage_path")
-      .eq("customer_email", emailLower)
-      .maybeSingle();
-    if (error) {
-      return { ok: false, error: error.message };
-    }
-    const bucket = String((data as { storage_bucket?: string | null })?.storage_bucket ?? "").trim();
-    const path = String((data as { storage_path?: string | null })?.storage_path ?? "").trim();
-    if (!bucket || !path) {
-      return { ok: true, public_url: null };
-    }
-    return { ok: true, public_url: publicStorageObjectUrl(bucket, path) };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Lookup failed";
     return { ok: false, error: msg };
   }
 }

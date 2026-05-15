@@ -1,103 +1,30 @@
 import Link from "next/link";
 
-import { StoreOrderHoldForm } from "@/app/admin/(panel)/store-orders/store-order-hold-form";
-import { StoreOrderInvoiceReferenceForm } from "@/app/admin/(panel)/store-orders/store-order-invoice-reference-form";
+import { StoreOrdersByDayClient } from "@/app/admin/(panel)/store-orders/store-orders-by-day-client";
 import {
+  ADMIN_STORE_ORDER_DAY_WINDOW,
   buildStoreOrdersListHref,
+  groupStoreOrdersByCalendarDay,
   parseStoreOrderListQuery,
   perthCalendarAddDays,
   perthDayEndIsoUtc,
   perthDayStartIsoUtc,
   perthTodayYmd,
-  STORE_ORDERS_PAGE_SIZE,
-  STORE_ORDERS_TZ,
-  type StoreOrderListQuery,
+  resolveStoreOrdersListDateRange,
+  STORE_ORDERS_FETCH_LIMIT,
+  type StoreOrderListRow,
 } from "@/app/admin/(panel)/store-orders/store-orders-list-helpers";
-import { formatMoneyFromCents } from "@/lib/store-order-utils";
+import type { StoreOrderXeroProductLine } from "@/app/admin/(panel)/store-orders/store-order-xero-lines";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-type StoreOrderRow = {
-  id: string;
-  order_number: string;
-  status: string;
-  customer_email: string;
-  customer_name: string;
-  total_cents: number;
-  currency: string;
-  tracking_number: string | null;
-  created_at: string;
-  invoice_reference: string | null;
-  hold_process: boolean;
-  hold_note: string | null;
-};
-
-function parseOrderDate(iso: string): Date | null {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function calendarDayKey(iso: string): string {
-  try {
-    const d = parseOrderDate(iso);
-    if (!d) {
-      return "unknown-date";
-    }
-    return d.toLocaleDateString("en-CA", { timeZone: STORE_ORDERS_TZ });
-  } catch {
-    return parseOrderDate(iso)?.toISOString().slice(0, 10) ?? "unknown-date";
-  }
-}
-
-function formatStoreOrderDayHeading(sampleIso: string): string {
-  try {
-    const d = parseOrderDate(sampleIso);
-    if (!d) {
-      return "Unknown date";
-    }
-    return d.toLocaleDateString("en-AU", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      timeZone: STORE_ORDERS_TZ,
-    });
-  } catch {
-    return parseOrderDate(sampleIso)?.toISOString().slice(0, 10) ?? "Unknown date";
-  }
-}
-
-function formatOrderRowDateTime(iso: string): string {
-  try {
-    const d = parseOrderDate(iso);
-    if (!d) {
-      return "—";
-    }
-    return d.toLocaleString("en-AU", {
-      dateStyle: "short",
-      timeStyle: "short",
-      timeZone: STORE_ORDERS_TZ,
-    });
-  } catch {
-    return parseOrderDate(iso)?.toISOString().replace("T", " ").slice(0, 16) ?? "—";
-  }
-}
-
-function groupOrdersByCalendarDay(rows: StoreOrderRow[]): { dayKey: string; orders: StoreOrderRow[] }[] {
-  const map = new Map<string, StoreOrderRow[]>();
-  for (const r of rows) {
-    const key = calendarDayKey(r.created_at);
-    const list = map.get(key);
-    if (list) {
-      list.push(r);
-    } else {
-      map.set(key, [r]);
-    }
-  }
-  return [...map.entries()]
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([dayKey, orders]) => ({ dayKey, orders }));
+function formatGeneratedAt(date: Date) {
+  return date.toLocaleString("en-AU", {
+    dateStyle: "long",
+    timeStyle: "short",
+    timeZone: "Australia/Perth",
+  });
 }
 
 type PageProps = {
@@ -107,15 +34,20 @@ type PageProps = {
 export default async function AdminStoreOrdersPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const listQuery = parseStoreOrderListQuery(sp);
-  const offset = (listQuery.page - 1) * STORE_ORDERS_PAGE_SIZE;
+  const { fromYmd, toYmd } = resolveStoreOrdersListDateRange(listQuery);
+  const generatedAt = new Date();
 
-  let rows: StoreOrderRow[] = [];
+  let rows: StoreOrderListRow[] = [];
+  let itemsByOrderId: Record<string, StoreOrderXeroProductLine[]> = {};
   let loadError: string | null = null;
-  let totalCount: number | null = null;
+  let truncated = false;
 
   try {
     const supabase = createSupabaseAdminClient();
     const selectCandidates = [
+      "id, order_number, status, customer_email, customer_name, total_cents, delivery_fee_cents, currency, tracking_number, created_at, invoice_reference, hold_process, hold_note",
+      "id, order_number, status, customer_email, customer_name, total_cents, delivery_fee_cents, currency, tracking_number, created_at, invoice_reference",
+      "id, order_number, status, customer_email, customer_name, total_cents, delivery_fee_cents, currency, tracking_number, created_at",
       "id, order_number, status, customer_email, customer_name, total_cents, currency, tracking_number, created_at, invoice_reference, hold_process, hold_note",
       "id, order_number, status, customer_email, customer_name, total_cents, currency, tracking_number, created_at, invoice_reference",
       "id, order_number, status, customer_email, customer_name, total_cents, currency, tracking_number, created_at",
@@ -123,25 +55,20 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
 
     let data: any[] | null = null;
     let error: { message?: string; code?: string } | null = null;
-    let count: number | null = null;
 
     for (const select of selectCandidates) {
       let query = supabase
         .from("store_orders")
-        .select(select, { count: "exact" })
-        .order("created_at", { ascending: false });
+        .select(select)
+        .gte("created_at", perthDayStartIsoUtc(fromYmd))
+        .lte("created_at", perthDayEndIsoUtc(toYmd))
+        .order("created_at", { ascending: false })
+        .limit(STORE_ORDERS_FETCH_LIMIT);
 
       if (listQuery.ship === "pending") {
         query = query.neq("status", "shipped");
       } else if (listQuery.ship === "shipped") {
         query = query.eq("status", "shipped");
-      }
-
-      if (listQuery.from) {
-        query = query.gte("created_at", perthDayStartIsoUtc(listQuery.from));
-      }
-      if (listQuery.to) {
-        query = query.lte("created_at", perthDayEndIsoUtc(listQuery.to));
       }
 
       const searchTerm = listQuery.q.replace(/[%*,()]/g, "").trim().slice(0, 80);
@@ -152,16 +79,13 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
         );
       }
 
-      query = query.range(offset, offset + STORE_ORDERS_PAGE_SIZE - 1);
-
       const result = await query;
       if (!result.error) {
         data = result.data as any[] | null;
-        count = typeof result.count === "number" ? result.count : null;
         error = null;
         break;
       }
-      error = result.error as any;
+      error = result.error as { message?: string; code?: string };
     }
 
     if (error) {
@@ -175,27 +99,81 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
           invoice_reference?: string | null;
           hold_process?: boolean | null;
           hold_note?: string | null;
+          delivery_fee_cents?: number;
         };
         return {
           ...r,
+          delivery_fee_cents: Number(rec.delivery_fee_cents) || 0,
           invoice_reference: rec.invoice_reference ?? null,
           hold_process: Boolean(rec.hold_process),
           hold_note: rec.hold_note != null && String(rec.hold_note).trim() !== "" ? String(rec.hold_note) : null,
         };
-      }) as StoreOrderRow[];
-      totalCount = count;
+      }) as StoreOrderListRow[];
+
+      truncated = rows.length >= STORE_ORDERS_FETCH_LIMIT;
+
+      const orderIds = rows.map((r) => r.id);
+      if (orderIds.length > 0) {
+        const { data: itemRows, error: itemsErr } = await supabase
+          .from("store_order_items")
+          .select("order_id, product_id, product_name, quantity, unit_price_cents, line_total_cents, sort_order")
+          .in("order_id", orderIds)
+          .order("sort_order", { ascending: true });
+
+        if (!itemsErr && itemRows) {
+          const productIds = [
+            ...new Set(
+              itemRows
+                .map((raw) => String((raw as { product_id?: string }).product_id ?? "").trim())
+                .filter(Boolean),
+            ),
+          ];
+          const supplierByProductId = new Map<string, string>();
+          if (productIds.length > 0) {
+            const { data: products } = await supabase
+              .from("products")
+              .select("id, supplier_name")
+              .in("id", productIds);
+            for (const p of products ?? []) {
+              const pid = String((p as { id?: string }).id ?? "").trim();
+              if (!pid) continue;
+              supplierByProductId.set(pid, String((p as { supplier_name?: string }).supplier_name ?? "").trim());
+            }
+          }
+
+          const map: Record<string, StoreOrderXeroProductLine[]> = {};
+          for (const raw of itemRows) {
+            const orderId = String((raw as { order_id?: string }).order_id ?? "");
+            if (!orderId) continue;
+            const productId = String((raw as { product_id?: string }).product_id ?? "").trim();
+            const line: StoreOrderXeroProductLine = {
+              productId,
+              supplierName: productId ? (supplierByProductId.get(productId) ?? "") : "",
+              productName: String((raw as { product_name?: string }).product_name ?? ""),
+              quantity: Number((raw as { quantity?: number }).quantity) || 1,
+              unitPriceCentsInclGst: Number((raw as { unit_price_cents?: number }).unit_price_cents) || 0,
+              lineTotalCentsInclGst: Number((raw as { line_total_cents?: number }).line_total_cents) || 0,
+            };
+            if (map[orderId]) {
+              map[orderId]!.push(line);
+            } else {
+              map[orderId] = [line];
+            }
+          }
+          itemsByOrderId = map;
+        }
+      }
     }
   } catch {
     loadError = "Supabase is not configured or the store_orders table is missing. Run the latest migration.";
   }
 
-  const byDay = groupOrdersByCalendarDay(rows);
-  const totalPages =
-    totalCount != null ? Math.max(1, Math.ceil(totalCount / STORE_ORDERS_PAGE_SIZE)) : 1;
+  const dayGroups = groupStoreOrdersByCalendarDay(rows);
   const hasActiveFilters =
     listQuery.ship !== "all" || Boolean(listQuery.from) || Boolean(listQuery.to) || Boolean(listQuery.q.trim());
   const todayPerth = perthTodayYmd();
   const weekStartPerth = perthCalendarAddDays(todayPerth, -6);
+  const dateRangeLabel = listQuery.from || listQuery.to ? `${fromYmd} → ${toYmd}` : `last ${ADMIN_STORE_ORDER_DAY_WINDOW} days (${fromYmd} → ${toYmd})`;
 
   return (
     <div className="space-y-6">
@@ -211,15 +189,16 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
           </Link>
         </div>
         <p className="mt-2 max-w-2xl text-sm text-slate-600">
-          After payment, orders appear here. Print a <strong>delivery docket</strong> for the Post Office or to tape on
-          the box. Shipped status is set when you complete an order from{" "}
+          After payment, orders appear here with a <strong>line-item breakdown (ex GST)</strong> for Xero. Shipped status
+          is set when you complete an order from{" "}
           <Link href="/admin/dispatch" className="font-semibold text-brand-orange hover:underline">
             Dispatch
           </Link>
-          ; tracking on file (if any) is shown below.
+          ; tracking on file (if any) is shown in the list.
         </p>
         <p className="mt-2 text-xs text-slate-500">
-          Orders are grouped by calendar day (Australia / Perth). Use filters below when the list grows.
+          Orders are grouped by payment date (Australia / Perth). Use <strong>Previous</strong> / <strong>Next</strong> to
+          browse day groups ({ADMIN_STORE_ORDER_DAY_WINDOW}-day default window when no date filter).
         </p>
       </header>
 
@@ -232,7 +211,7 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
           <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3 text-xs font-semibold text-slate-600">
             <span className="uppercase tracking-wide">Quick</span>
             <Link
-              href={buildStoreOrdersListHref({ ship: "pending", from: "", to: "", q: "", page: 1 })}
+              href={buildStoreOrdersListHref({ ship: "pending", from: "", to: "", q: "" })}
               className={`rounded-full border px-3 py-1.5 transition ${
                 listQuery.ship === "pending" && !listQuery.from && !listQuery.to && !listQuery.q.trim()
                   ? "border-brand-navy bg-brand-navy text-white"
@@ -242,10 +221,7 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
               Needs shipping
             </Link>
             <Link
-              href={buildStoreOrdersListHref(
-                { ship: "all", from: weekStartPerth, to: todayPerth, q: "", page: 1 },
-                {},
-              )}
+              href={buildStoreOrdersListHref({ ship: "all", from: weekStartPerth, to: todayPerth, q: "" })}
               className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-brand-navy transition hover:border-brand-orange"
             >
               Last 7 days
@@ -258,7 +234,6 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
             </Link>
           </div>
           <form method="get" className="mt-3 flex flex-wrap items-end gap-3">
-            <input type="hidden" name="page" value="1" />
             <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
               Fulfillment
               <select
@@ -306,150 +281,24 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
               Apply
             </button>
           </form>
-          {totalCount != null ? (
-            <p className="mt-3 text-xs text-slate-500">
-              Showing {rows.length === 0 ? 0 : offset + 1}–{offset + rows.length} of {totalCount} matching
-              order{totalCount === 1 ? "" : "s"}
-              {hasActiveFilters ? " (filtered)" : ""} · {STORE_ORDERS_PAGE_SIZE} per page
-            </p>
-          ) : null}
+          <p className="mt-3 text-xs text-slate-500">
+            Date range: {dateRangeLabel}
+            {hasActiveFilters ? " (filtered)" : ""}
+            {truncated ? ` · Showing first ${STORE_ORDERS_FETCH_LIMIT} orders; narrow the date range if needed.` : ""}
+          </p>
         </section>
       ) : null}
 
-      {rows.length === 0 && !loadError ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500 shadow-sm">
-          {hasActiveFilters ? "No orders match these filters." : "No orders yet."}
-        </div>
-      ) : null}
-
-      <div className="space-y-6">
-        {byDay.map(({ dayKey, orders }) => (
-          <div
-            key={dayKey}
-            className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
-          >
-            <div className="border-b border-slate-200 bg-slate-100 px-4 py-3">
-              <p className="text-sm font-semibold text-brand-navy">
-                {formatStoreOrderDayHeading(orders[0]!.created_at)}
-              </p>
-              <p className="text-xs text-slate-600">
-                {orders.length} order{orders.length === 1 ? "" : "s"}
-              </p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-[1040px] w-full border-collapse text-left text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    <th className="px-4 py-3">Customer order ID</th>
-                    <th className="px-4 py-3">Customer</th>
-                    <th className="px-4 py-3">Total</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="min-w-[12rem] px-4 py-3">Hold / note</th>
-                    <th className="px-4 py-3">Ship / docket</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.map((r) => (
-                    <tr key={r.id} className="border-b border-slate-100 align-top last:border-b-0">
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/admin/store-orders/${r.id}/ordered-items-list`}
-                          className="font-mono font-semibold text-brand-navy hover:underline"
-                        >
-                          {r.order_number}
-                        </Link>
-                        <p className="text-xs text-slate-500">{formatOrderRowDateTime(r.created_at)}</p>
-                        <StoreOrderInvoiceReferenceForm
-                          orderId={r.id}
-                          initialReference={r.invoice_reference}
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="font-medium">{r.customer_name}</p>
-                        <p className="text-xs text-slate-600">{r.customer_email}</p>
-                      </td>
-                      <td className="px-4 py-3 tabular-nums">{formatMoneyFromCents(r.total_cents, r.currency)}</td>
-                      <td className="px-4 py-3 capitalize">{r.status}</td>
-                      <td className="px-4 py-3 align-top">
-                        <StoreOrderHoldForm
-                          orderId={r.id}
-                          initialHoldProcess={r.hold_process}
-                          initialHoldNote={r.hold_note}
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="space-y-3">
-                          {r.tracking_number ? (
-                            <p className="text-sm">
-                              <span className="text-slate-500">Tracking: </span>
-                              <span className="font-mono font-semibold">{r.tracking_number}</span>
-                            </p>
-                          ) : (
-                            <p className="text-xs text-slate-500">No tracking on file</p>
-                          )}
-                          <a
-                            href={`/admin/store-orders/${r.id}/docket`}
-                            className="inline-block py-[0.4rem] text-[1.12rem] font-semibold leading-tight text-brand-orange hover:underline"
-                          >
-                            Print delivery docket
-                          </a>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {!loadError && totalPages > 1 ? (
-        <PaginationBar listQuery={listQuery} totalPages={totalPages} />
+      {!loadError ? (
+        <StoreOrdersByDayClient
+          dayGroups={dayGroups}
+          itemsByOrderId={itemsByOrderId}
+          loadedOrderCount={rows.length}
+          dateRangeLabel={dateRangeLabel}
+          pageOpenedLabel={formatGeneratedAt(generatedAt)}
+          pageOpenedIso={generatedAt.toISOString()}
+        />
       ) : null}
     </div>
-  );
-}
-
-function PaginationBar({
-  listQuery,
-  totalPages,
-}: {
-  listQuery: StoreOrderListQuery;
-  totalPages: number;
-}) {
-  const { page } = listQuery;
-  return (
-    <nav
-      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm"
-      aria-label="Order list pages"
-    >
-      <span className="text-slate-600">
-        Page <span className="font-semibold text-brand-navy">{page}</span> of{" "}
-        <span className="font-semibold text-brand-navy">{totalPages}</span>
-      </span>
-      <div className="flex flex-wrap gap-2">
-        {page > 1 ? (
-          <Link
-            href={buildStoreOrdersListHref(listQuery, { page: page - 1 })}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 font-medium text-brand-navy hover:border-brand-orange"
-          >
-            Previous
-          </Link>
-        ) : (
-          <span className="rounded-lg border border-slate-100 px-3 py-1.5 text-slate-400">Previous</span>
-        )}
-        {page < totalPages ? (
-          <Link
-            href={buildStoreOrdersListHref(listQuery, { page: page + 1 })}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 font-medium text-brand-navy hover:border-brand-orange"
-          >
-            Next
-          </Link>
-        ) : (
-          <span className="rounded-lg border border-slate-100 px-3 py-1.5 text-slate-400">Next</span>
-        )}
-      </div>
-    </nav>
   );
 }

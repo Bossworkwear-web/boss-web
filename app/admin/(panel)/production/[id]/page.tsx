@@ -225,10 +225,18 @@ export default async function AdminProductionOrderPage({
                 Order ID: {order.order_number}
               </p>
             </div>
-            <StoreOrderBarcode value={orderScanPayload} className="shrink-0 print:max-w-[min(100%,14rem)]" />
+            <StoreOrderBarcode
+              large
+              value={orderScanPayload}
+              className="shrink-0 max-w-[min(100%,36rem)] print:max-w-[min(100%,28rem)]"
+            />
           </div>
         ) : (
-          <StoreOrderBarcode value={orderScanPayload} className="print:max-w-[min(100%,14rem)]" />
+          <StoreOrderBarcode
+            large
+            value={orderScanPayload}
+            className="max-w-[min(100%,36rem)] print:max-w-[min(100%,28rem)]"
+          />
         )}
       </header>
 
