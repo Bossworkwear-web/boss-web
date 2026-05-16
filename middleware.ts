@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 import { ADMIN_PATHNAME_HEADER } from "./lib/admin-constants";
+import { homeLegacyQueryRedirectUrl } from "./lib/home-legacy-query-redirect";
 
 /** Must stay in sync with `lib/admin-constants.ts` — middleware imports via relative path (no `@/`). */
 const ADMIN_SESSION_COOKIE = "boss_admin_session";
@@ -17,6 +18,14 @@ function nextWithAdminPathname(request: NextRequest, pathname: string) {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (pathname === "/") {
+    const dest = homeLegacyQueryRedirectUrl(request.nextUrl.searchParams);
+    if (dest) {
+      return NextResponse.redirect(new URL(dest, request.url));
+    }
+    return NextResponse.next();
+  }
 
   if (!pathname.startsWith("/admin")) {
     return NextResponse.next();
@@ -60,5 +69,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin", "/admin/:path*"],
+  matcher: ["/", "/admin", "/admin/:path*"],
 };

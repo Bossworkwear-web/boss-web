@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRightIcon } from "@/app/components/icons";
@@ -100,7 +101,16 @@ const MAIN_CATEGORY_IMAGE_MAP: Record<string, string> = {
 };
 
 /** Home category grid — matches `/service` imagery. */
-const IN_STORE_SERVICE_CARD_IMAGE = "/service_Emb.png";
+const IN_STORE_SERVICE_CARD_IMAGE = "/service_Emb.jpg";
+
+function CategoryPromoImage({ src, alt }: { src: string; alt: string }) {
+  return (
+    <div className="relative h-[6.545rem] w-full overflow-hidden">
+      <Image src={src} alt={alt} fill className="object-cover object-center" sizes="(max-width: 640px) 100vw, 25vw" />
+      <div className="absolute inset-0 bg-brand-navy/20" aria-hidden />
+    </div>
+  );
+}
 
 function toStoreProduct(item: ProductRow): StoreProduct {
   const raw = typeof item.slug === "string" && item.slug.trim().length > 0 ? item.slug.trim() : null;
@@ -514,12 +524,7 @@ export function ProductShowcase({
                     key={main.slug}
                     className="group overflow-hidden rounded-2xl border border-brand-navy/10 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
                   >
-                    <div
-                      className="h-[6.545rem] w-full bg-cover bg-center"
-                      style={{
-                        backgroundImage: `linear-gradient(0deg, rgba(0,31,63,0.2), rgba(0,31,63,0.2)), url("${imageSrc}")`,
-                      }}
-                    />
+                    <CategoryPromoImage src={imageSrc} alt={`${main.label} category`} />
 
                     <div className="flex flex-row items-center justify-between gap-[0.357rem] p-[1.624rem] sm:gap-[0.476rem]">
                       <p className="min-w-0 flex-1 truncate text-left text-[1.638rem] font-semibold uppercase leading-snug tracking-[0.1em] text-brand-navy/65">
@@ -540,12 +545,7 @@ export function ProductShowcase({
                 key="in-store-service"
                 className="group overflow-hidden rounded-2xl border border-brand-navy/10 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
               >
-                <div
-                  className="h-[6.545rem] w-full bg-cover bg-center"
-                  style={{
-                    backgroundImage: `linear-gradient(0deg, rgba(0,31,63,0.2), rgba(0,31,63,0.2)), url("${IN_STORE_SERVICE_CARD_IMAGE}")`,
-                  }}
-                />
+                <CategoryPromoImage src={IN_STORE_SERVICE_CARD_IMAGE} alt="In-store service" />
 
                 <div className="flex flex-row items-center justify-between gap-[0.357rem] p-[1.624rem] sm:gap-[0.476rem]">
                   <p className="min-w-0 flex-1 truncate text-left text-[1.638rem] font-semibold uppercase leading-snug tracking-[0.1em] text-brand-navy/65">

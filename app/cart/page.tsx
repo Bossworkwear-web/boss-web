@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ImageUrlLightbox } from "@/app/components/image-url-lightbox";
 import { ArrowLeftIcon, CartIcon } from "@/app/components/icons";
 import { TopNav } from "@/app/components/top-nav";
+import { readResponseJson } from "@/lib/safe-json-parse";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 import { STORE_GOOGLE_MAPS_QUERY, storeGoogleMapsSearchHref } from "@/lib/store-google-maps-url";
 import { extractAustralianPostcodeFromAddress } from "@/lib/customer-delivery-estimate";
@@ -203,8 +204,8 @@ export default function CartPage() {
           if (!cancelled) setHasPriorEmbroideryOrder(null);
           return;
         }
-        const data = (await res.json()) as { hasPriorEmbroideryOrder?: boolean };
-        if (!cancelled) setHasPriorEmbroideryOrder(Boolean(data.hasPriorEmbroideryOrder));
+        const data = await readResponseJson<{ hasPriorEmbroideryOrder?: boolean }>(res);
+        if (!cancelled) setHasPriorEmbroideryOrder(Boolean(data?.hasPriorEmbroideryOrder));
       } catch {
         if (!cancelled) setHasPriorEmbroideryOrder(null);
       }

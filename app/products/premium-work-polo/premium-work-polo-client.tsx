@@ -55,6 +55,12 @@ import {
 } from "@/lib/supplier-size-chart-links";
 import { placementLogoLocationSrc } from "@/lib/placement-logo-location";
 import { storefrontVolumeDiscountRateFromSubtotalAud } from "@/lib/storefront-volume-discount";
+import {
+  filterPlacementsForSpecialDealPackage,
+  resolveActiveSpecialDealPackageForProduct,
+  type StorefrontSpecialDealPackage,
+} from "@/lib/storefront-special-deal-packages";
+import { specialDealPackageNote } from "@/lib/storefront-special-deal-package-cart";
 import { syncSidebarNavFromProductIfNeeded } from "@/lib/sidebar-nav";
 import {
   isStorefrontYesChefCh234mPdp,
@@ -2026,6 +2032,29 @@ export function PremiumWorkPoloClient({
       ),
     [product.name, product.slug, product.supplierName, productCode, productName],
   );
+
+  const activeDealPackage = useMemo((): StorefrontSpecialDealPackage | null => {
+    const productMeta = {
+      slug: product.slug ?? null,
+      displayProductCode: productCode || null,
+      name: product.name,
+    };
+    const fromUrl = resolveActiveSpecialDealPackageForProduct(searchParams.get("deal"), productMeta);
+    if (fromUrl) {
+      return fromUrl;
+    }
+    const cartEditId = searchParams.get("cartEdit")?.trim();
+    if (!cartEditId) {
+      return null;
+    }
+    const line = getCartItems().find((row) => row.id === cartEditId);
+    if (!line?.specialDealPackageId) {
+      return null;
+    }
+    return resolveActiveSpecialDealPackageForProduct(line.specialDealPackageId, productMeta);
+  }, [searchParams, product.slug, product.name, productCode]);
+
+  const dealMaxLogoFiles = activeDealPackage?.maxLogos ?? MAX_LOGO_FILES;
   const slugLowerForBrand = (product.slug ?? "").trim().toLowerCase();
   const nameLowerForBrand = (product.name ?? "").trim().toLowerCase();
   const supLowerForBrand = (product.supplierName ?? "").trim().toLowerCase();
@@ -2193,6 +2222,13 @@ export function PremiumWorkPoloClient({
     [placements]
   );
 
+  const placementOptionsForUi = useMemo(() => {
+    if (!activeDealPackage) {
+      return placementOptions;
+    }
+    return filterPlacementsForSpecialDealPackage(placementOptions);
+  }, [activeDealPackage, placementOptions]);
+
   useEffect(() => {
     setPlacementAssignments((prev) => {
       let changed = false;
@@ -2210,6 +2246,24 @@ export function PremiumWorkPoloClient({
       return changed ? next : prev;
     });
   }, [placementOptions]);
+
+  useEffect(() => {
+    if (!activeDealPackage) {
+      return;
+    }
+    const allowedIds = new Set(placementOptionsForUi.map((o) => o.id));
+    setPlacementAssignments((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const id of Object.keys(next)) {
+        if (!allowedIds.has(id) && next[id]) {
+          next[id] = null;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [activeDealPackage, placementOptionsForUi]);
 
   const [selectedServices, setSelectedServices] = useState<Record<DecoratedServiceType, boolean>>({
     Embroidery: false,
@@ -2278,7 +2332,7 @@ export function PremiumWorkPoloClient({
     setLogoAttachments((prev) => {
       const next = [...prev];
       for (const file of incoming) {
-        if (next.length >= MAX_LOGO_FILES) {
+        if (next.length >= dealMaxLogoFiles) {
           break;
         }
         if (!isAllowedLogoFile(file) || file.size > MAX_LOGO_BYTES) {
@@ -2383,6 +2437,14 @@ export function PremiumWorkPoloClient({
     setLogoAttachments(logoAttachmentsFlushReducer);
   }, [colorOptions, product.id, product.sizeOptions]);
 
+  useEffect(() => {
+    if (!activeDealPackage || searchParams.get("cartEdit")?.trim()) {
+      return;
+    }
+    setSelectedServices({ Embroidery: true, Printing: false });
+    setPlacementAssignments({});
+  }, [activeDealPackage, searchParams]);
+
   /** Refs keep a fixed dependency list (avoids Fast Refresh errors if hook dep count changes across edits). */
   useEffect(() => {
     const cartEditId = searchParams.get("cartEdit")?.trim();
@@ -2460,6 +2522,9 @@ export function PremiumWorkPoloClient({
   const isPlainSelected = !isEmbroiderySelected && !isPrintingSelected;
 
   const perItemPrice = useMemo(() => {
+    if (activeDealPackage) {
+      return activeDealPackage.totalAud / activeDealPackage.units;
+    }
     let placementCostCents = 0;
     for (const [placementId, service] of Object.entries(placementAssignments)) {
       if (service !== "Embroidery" && service !== "Printing") {
@@ -2476,7 +2541,7 @@ export function PremiumWorkPoloClient({
     }
     const perItemCents = cents(product.basePrice) + placementCostCents;
     return perItemCents / 100;
-  }, [placementAssignments, placementOptions, product.basePrice]);
+  }, [activeDealPackage, placementAssignments, placementOptions, product.basePrice]);
 
   const totalPieces = useMemo(() => {
     let sum = 0;
@@ -2496,10 +2561,16 @@ export function PremiumWorkPoloClient({
     if (totalPieces <= 0) {
       return 0;
     }
+    if (activeDealPackage && totalPieces === activeDealPackage.units) {
+      return activeDealPackage.totalAud;
+    }
+    if (activeDealPackage) {
+      return 0;
+    }
     const gross = perItemPrice * totalPieces;
     const rate = storefrontVolumeDiscountRateFromSubtotalAud(gross);
     return Math.round(gross * (1 - rate) * 100) / 100;
-  }, [perItemPrice, totalPieces]);
+  }, [activeDealPackage, perItemPrice, totalPieces]);
 
   function assignPlacement(id: string, service: DecoratedServiceType) {
     if (ppePlainOnly) {
@@ -2517,14 +2588,24 @@ export function PremiumWorkPoloClient({
 
     setPlacementAssignments((prev) => {
       const current = prev[id] ?? null;
+      const nextAssign = current === service ? null : service;
+      if (activeDealPackage) {
+        if (!nextAssign) {
+          return {};
+        }
+        return { [id]: nextAssign };
+      }
       return {
         ...prev,
-        [id]: current === service ? null : service,
+        [id]: nextAssign,
       };
     });
   }
 
   function handleServiceChange(service: ServiceType) {
+    if (activeDealPackage && service === "Plain") {
+      return;
+    }
     if (ppePlainOnly && service !== "Plain") {
       return;
     }
@@ -2532,6 +2613,20 @@ export function PremiumWorkPoloClient({
       setSelectedServices({ Embroidery: false, Printing: false });
       setPlacementAssignments({});
       setOrderNotes("");
+      return;
+    }
+
+    if (activeDealPackage && (service === "Embroidery" || service === "Printing")) {
+      setSelectedServices((prev) => {
+        const turningOn = service === "Embroidery" ? !prev.Embroidery : !prev.Printing;
+        if (!turningOn) {
+          return { ...prev, [service]: false };
+        }
+        return service === "Embroidery"
+          ? { Embroidery: true, Printing: false }
+          : { Embroidery: false, Printing: true };
+      });
+      setPlacementAssignments({});
       return;
     }
 
@@ -2577,8 +2672,6 @@ export function PremiumWorkPoloClient({
     }
 
     const pieceQtySum = lines.reduce((s, l) => s + l.qty, 0);
-    /** List-price batch total (cents). Volume discount is applied at cart / checkout on full-cart subtotal. */
-    const grossBatchCents = pieceQtySum > 0 ? Math.round(perItemPrice * pieceQtySum * 100) : 0;
 
     if (logoAttachments.length > 0 && !readBrowserCookie("customer_email").trim()) {
       setCartMessage("Please sign in and save your email in account details to attach logo files.");
@@ -2592,6 +2685,38 @@ export function PremiumWorkPoloClient({
       })
       .filter((item): item is string => Boolean(item));
 
+    if (activeDealPackage) {
+      if (!isEmbroiderySelected && !isPrintingSelected) {
+        setCartMessage("Choose logo embroidery or printing for this deal.");
+        return;
+      }
+      if (pieceQtySum !== activeDealPackage.units) {
+        setCartMessage(
+          `This deal includes exactly ${activeDealPackage.units} shirts — adjust sizes to total ${activeDealPackage.units}.`,
+        );
+        return;
+      }
+      if (placementLabels.length < 1) {
+        setCartMessage("Select one logo placement for this deal.");
+        return;
+      }
+      if (placementLabels.length > activeDealPackage.maxPlacements) {
+        setCartMessage(`This deal includes ${activeDealPackage.maxPlacements} logo placement only.`);
+        return;
+      }
+      if (logoAttachments.length > activeDealPackage.maxLogos) {
+        setCartMessage(`Upload ${activeDealPackage.maxLogos} logo file for this deal.`);
+        return;
+      }
+    }
+
+    /** List-price batch total (cents). Volume discount is applied at cart / checkout on full-cart subtotal. */
+    const grossBatchCents = activeDealPackage
+      ? Math.round(activeDealPackage.totalAud * 100)
+      : pieceQtySum > 0
+        ? Math.round(perItemPrice * pieceQtySum * 100)
+        : 0;
+
     const serviceLabel = isPlainSelected
       ? "Plain"
       : [isEmbroiderySelected ? "Embroidery" : "", isPrintingSelected ? "Printing" : ""]
@@ -2603,7 +2728,8 @@ export function PremiumWorkPoloClient({
       logoAttachments.length > 0
         ? `\n\n[Logo files with this line: ${logoAttachments.map((a) => `${a.file.name} (${Math.round(a.file.size / 1024)} KB)`).join(", ")}]`
         : "";
-    const notesForCart = (trimmedNotes + logoExtra).trim().slice(0, 2000);
+    const dealNote = activeDealPackage ? `\n\n${specialDealPackageNote(activeDealPackage)}` : "";
+    const notesForCart = (trimmedNotes + dealNote + logoExtra).trim().slice(0, 2000);
     const fallbackHero = galleryImages.find((u) => typeof u === "string" && u.trim().length > 0)?.trim();
 
     setCartSubmitBusy(true);
@@ -2654,6 +2780,7 @@ export function PremiumWorkPoloClient({
           totalPrice: lineTotalAud,
           notes: notesForCart.length > 0 ? notesForCart : undefined,
           ...(sharedRefUrls && sharedRefUrls.length > 0 ? { referenceImageUrls: sharedRefUrls } : {}),
+          ...(activeDealPackage ? { specialDealPackageId: activeDealPackage.id } : {}),
         };
       }
 
@@ -2790,7 +2917,11 @@ export function PremiumWorkPoloClient({
           </div>
           <div className="text-left sm:text-right">
             <p className="product-detail-per-item text-[1.26rem] font-light text-slate-300">
-              Per item: {toCurrency(perItemPrice)}
+              {activeDealPackage
+                ? totalPieces === activeDealPackage.units
+                  ? `Package (${activeDealPackage.units} shirts + 1 logo)`
+                  : `Select ${activeDealPackage.units} shirts for package price`
+                : `Per item: ${toCurrency(perItemPrice)}`}
             </p>
             <p className="product-detail-total mt-1 inline-block text-[2.7rem] font-light text-brand-orange tabular-nums">
               {toCurrency(totalPrice)}
@@ -2846,9 +2977,11 @@ export function PremiumWorkPoloClient({
         </button>
         {cartMessage && <p className="mt-2 text-[1.08rem] text-slate-200">{cartMessage}</p>}
       </div>
-      <p className="product-detail-volume-promo px-1">
-        Buy more, Get more discount up to 20%
-      </p>
+      {!activeDealPackage ? (
+        <p className="product-detail-volume-promo px-1">
+          Buy more, Get more discount up to 20%
+        </p>
+      ) : null}
     </>
   );
 
@@ -3073,6 +3206,18 @@ export function PremiumWorkPoloClient({
         </section>
 
         <section className="space-y-5 sm:space-y-6 lg:space-y-7">
+          {activeDealPackage ? (
+            <div className="rounded-2xl border border-brand-orange/35 bg-gradient-to-r from-brand-orange/15 to-brand-navy/5 px-4 py-4 sm:px-5">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-orange">Special deal</p>
+              <p className="mt-1 text-[1.15rem] font-semibold leading-snug text-brand-navy sm:text-[1.25rem]">
+                Buy 5 work shirts with logo print or embroidery — {toCurrency(activeDealPackage.totalAud)} total
+              </p>
+              <p className="mt-2 text-sm text-brand-navy/75">
+                Choose colours and sizes totalling {activeDealPackage.units} shirts, place your logo on the left chest
+                (LC), upload {activeDealPackage.maxLogos} logo file, then add to cart.
+              </p>
+            </div>
+          ) : null}
           <header className="space-y-2">
             <p className="text-[1.08rem] font-semibold uppercase tracking-[0.12em] text-brand-navy/70">
               {product.category}
@@ -3170,8 +3315,9 @@ export function PremiumWorkPoloClient({
               2. Size &amp; quantity
             </h2>
             <p className="text-[1.08rem] text-brand-navy/65">
-              Quantities are saved per colour. Switch colour to enter a different breakdown — your other colours stay as
-              you left them. Add to cart adds every colour and size with a quantity greater than zero.
+              {activeDealPackage
+                ? `This deal includes exactly ${activeDealPackage.units} shirts in total. Split them across colours and sizes below (${totalPieces} of ${activeDealPackage.units} selected).`
+                : "Quantities are saved per colour. Switch colour to enter a different breakdown — your other colours stay as you left them. Add to cart adds every colour and size with a quantity greater than zero."}
             </p>
             <p className="text-[1.02rem] font-semibold text-brand-navy/80">
               Editing: <span className="text-brand-orange">{selectedColor || "—"}</span>
@@ -3245,14 +3391,19 @@ export function PremiumWorkPoloClient({
                 const buttonArtSrc = isActive
                   ? SERVICE_TYPE_BUTTON_IMAGE_SELECTED[service]
                   : SERVICE_TYPE_BUTTON_IMAGE[service];
+                const plainDisabled = Boolean(activeDealPackage);
                 return (
                   <button
                     key={service}
                     type="button"
+                    disabled={plainDisabled}
                     aria-label="Plain"
                     aria-pressed={isActive}
+                    aria-disabled={plainDisabled}
                     onClick={() => handleServiceChange(service)}
                     className={`relative justify-self-center w-[40%] max-w-full overflow-hidden rounded-[2rem] border-0 bg-transparent p-0 transition-shadow duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-orange sm:rounded-[2.35rem] ${
+                      plainDisabled ? "cursor-not-allowed opacity-40" : ""
+                    } ${
                       isActive
                         ? "shadow-[0_10px_28px_-8px_rgba(0,31,63,0.3)]"
                         : SERVICE_TYPE_BUTTON_SHADOW_IDLE[service]
@@ -3325,8 +3476,13 @@ export function PremiumWorkPoloClient({
                 <h2 className="text-[1.26rem] font-medium uppercase tracking-[0.1em] text-brand-navy/75">
                   4. Placement Selector
                 </h2>
+                {activeDealPackage ? (
+                  <p className="text-[1.02rem] text-brand-navy/70">
+                    This deal includes one logo on the <strong>left chest (LC)</strong> only.
+                  </p>
+                ) : null}
                 <div className="grid gap-2 overflow-visible">
-                  {placementOptions.map((option) => {
+                  {placementOptionsForUi.map((option) => {
                     const assignedService = placementAssignments[option.id] ?? null;
                     const diagramSrc = placementLogoLocationSrc(option.id, option.label, {
                       diagramAbbr: option.diagramAbbr,
@@ -3374,7 +3530,7 @@ export function PremiumWorkPoloClient({
                                   : "border-brand-navy/20 bg-white text-brand-navy hover:border-brand-orange"
                               }`}
                             >
-                              Emb +{toCurrencyExact(option.embroideryCost)}
+                              {activeDealPackage ? "Emb" : `Emb +${toCurrencyExact(option.embroideryCost)}`}
                             </button>
                           ) : (
                             <span
@@ -3398,7 +3554,7 @@ export function PremiumWorkPoloClient({
                                 : "border-brand-navy/20 bg-white text-brand-navy hover:border-blue-500 hover:text-blue-600"
                             }`}
                           >
-                            Print +{toCurrencyExact(option.printingCost)}
+                            {activeDealPackage ? "Print" : `Print +${toCurrencyExact(option.printingCost)}`}
                           </button>
                         ) : (
                           <span className="block" aria-hidden />
@@ -3446,8 +3602,11 @@ export function PremiumWorkPoloClient({
                     Illustrator (AI)
                   </p>
                   <p className="mt-2 max-w-md text-[0.95rem] leading-snug text-brand-navy/55">
-                    Up to {MAX_LOGO_FILES} files, {Math.round(MAX_LOGO_BYTES / (1024 * 1024))} MB each. Names are saved
-                    on the cart line when you add to cart (binary files stay in this browser until checkout).
+                    {activeDealPackage
+                      ? `This deal includes ${activeDealPackage.maxLogos} logo file. ${Math.round(MAX_LOGO_BYTES / (1024 * 1024))} MB max.`
+                      : `Up to ${MAX_LOGO_FILES} files, ${Math.round(MAX_LOGO_BYTES / (1024 * 1024))} MB each.`}{" "}
+                    Names are saved on the cart line when you add to cart (binary files stay in this browser until
+                    checkout).
                   </p>
                 </label>
                 {logoAttachments.length > 0 ? (

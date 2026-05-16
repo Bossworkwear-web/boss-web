@@ -41,6 +41,9 @@ const nextConfig: NextConfig = {
     : undefined,
   images: {
     formats: ["image/avif", "image/webp"],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],
+    imageSizes: [32, 48, 64, 96, 128, 256, 384],
+    minimumCacheTTL: 60 * 60 * 24 * 30,
     remotePatterns: supabaseImageRemotePatterns(),
   },
   async headers() {
@@ -66,7 +69,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["pdfkit"],
   ...(useCustomTurbopackRoot ? { turbopack: { root: projectRoot } } : {}),
   experimental: {
-    optimizePackageImports: ["@supabase/supabase-js"],
+    optimizePackageImports: ["@supabase/supabase-js", "@supabase/ssr", "stripe"],
     // Allow uploading larger files via Server Actions (default is 1MB).
     // Needed for Admin → Production file uploads.
     serverActions: {

@@ -22,6 +22,7 @@ import {
   type CartItem,
 } from "@/lib/cart";
 import { STORE_MAIN_SHELL_CLASS } from "@/lib/store-main-shell";
+import { parseStoredJsonOrNull, readResponseJson } from "@/lib/safe-json-parse";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
 const CHECKOUT_REORDER_SOURCE_SESSION_KEY = "boss_web_checkout_reorder_source_order_id_v1";
@@ -77,17 +78,10 @@ export default function PaymentPage() {
     const addr = getCookieValue("customer_delivery_address");
     setDeliveryAddress(addr);
     setDeliveryPostcode(extractAustralianPostcodeFromAddress(addr));
-    try {
-      const raw = sessionStorage.getItem(CHECKOUT_PROMO_SESSION_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as AppliedPromo;
-        if (parsed?.promotionCodeId && parsed.code && Number.isFinite(parsed.discountAud)) {
-          setAppliedPromo(parsed);
-          setPromoInput(parsed.code);
-        }
-      }
-    } catch {
-      // ignore
+    const parsed = parseStoredJsonOrNull(sessionStorage.getItem(CHECKOUT_PROMO_SESSION_KEY)) as AppliedPromo | null;
+    if (parsed?.promotionCodeId && parsed.code && Number.isFinite(parsed.discountAud)) {
+      setAppliedPromo(parsed);
+      setPromoInput(parsed.code);
     }
     return subscribeCartUpdates(sync);
   }, []);
@@ -106,8 +100,8 @@ export default function PaymentPage() {
           if (!cancelled) setHasPriorEmbroideryOrder(null);
           return;
         }
-        const data = (await res.json()) as { hasPriorEmbroideryOrder?: boolean };
-        if (!cancelled) setHasPriorEmbroideryOrder(Boolean(data.hasPriorEmbroideryOrder));
+        const data = await readResponseJson<{ hasPriorEmbroideryOrder?: boolean }>(res);
+        if (!cancelled) setHasPriorEmbroideryOrder(Boolean(data?.hasPriorEmbroideryOrder));
       } catch {
         if (!cancelled) setHasPriorEmbroideryOrder(null);
       }
@@ -149,18 +143,18 @@ export default function PaymentPage() {
           credentials: "include",
           body: JSON.stringify({ code: appliedPromo.code, productSubtotalAud: productNetSubtotal }),
         });
-        const data = (await res.json()) as {
+        const data = await readResponseJson<{
           ok?: boolean;
           promotionCodeId?: string;
           code?: string;
           discountAud?: number;
           description?: string | null;
           error?: string;
-        };
+        }>(res);
         if (cancelled) return;
-        if (!res.ok || !data.ok || !data.promotionCodeId) {
+        if (!res.ok || !data?.ok || !data.promotionCodeId) {
           setAppliedPromo(null);
-          setPromoError(data.error ?? "Discount code no longer applies to this order.");
+          setPromoError(data?.error ?? "Discount code no longer applies to this order.");
           try {
             sessionStorage.removeItem(CHECKOUT_PROMO_SESSION_KEY);
           } catch {
@@ -204,17 +198,17 @@ export default function PaymentPage() {
         credentials: "include",
         body: JSON.stringify({ code, productSubtotalAud: productNetSubtotal }),
       });
-      const data = (await res.json()) as {
+      const data = await readResponseJson<{
         ok?: boolean;
         promotionCodeId?: string;
         code?: string;
         discountAud?: number;
         description?: string | null;
         error?: string;
-      };
-      if (!res.ok || !data.ok || !data.promotionCodeId) {
+      }>(res);
+      if (!res.ok || !data?.ok || !data.promotionCodeId) {
         setAppliedPromo(null);
-        setPromoError(data.error ?? "Invalid discount code.");
+        setPromoError(data?.error ?? "Invalid discount code.");
         try {
           sessionStorage.removeItem(CHECKOUT_PROMO_SESSION_KEY);
         } catch {
@@ -339,8 +333,7 @@ export default function PaymentPage() {
     let payloadItems = items;
     if (!Array.isArray(payloadItems) || payloadItems.length === 0) {
       try {
-        const raw = sessionStorage.getItem("boss_web_checkout_cart_v1");
-        const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+        const parsed = parseStoredJsonOrNull(sessionStorage.getItem("boss_web_checkout_cart_v1"));
         if (Array.isArray(parsed)) {
           payloadItems = parsed as CartItem[];
         }
@@ -352,13 +345,12 @@ export default function PaymentPage() {
       let placeOpts: PlaceStoreOrderOptions | undefined;
       try {
         const rs = sessionStorage.getItem(CHECKOUT_REORDER_SOURCE_SESSION_KEY)?.trim();
-        const promoRaw = sessionStorage.getItem(CHECKOUT_PROMO_SESSION_KEY);
+        const parsed = parseStoredJsonOrNull(sessionStorage.getItem(CHECKOUT_PROMO_SESSION_KEY)) as {
+          promotionCodeId?: string;
+        } | null;
         let promotionCodeId: string | undefined;
-        if (promoRaw) {
-          const parsed = JSON.parse(promoRaw) as { promotionCodeId?: string };
-          if (parsed?.promotionCodeId && /^[0-9a-f-]{36}$/i.test(parsed.promotionCodeId)) {
-            promotionCodeId = parsed.promotionCodeId;
-          }
+        if (parsed?.promotionCodeId && /^[0-9a-f-]{36}$/i.test(parsed.promotionCodeId)) {
+          promotionCodeId = parsed.promotionCodeId;
         }
         if (rs && /^[0-9a-f-]{36}$/i.test(rs)) {
           placeOpts = { reorderedFromStoreOrderId: rs, ...(promotionCodeId ? { promotionCodeId } : {}) };

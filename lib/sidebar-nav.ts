@@ -1,4 +1,5 @@
 import { PPE_EXCLUSIVE_SUB_SLUGS } from "@/lib/catalog";
+import { parseJsonOrNull } from "@/lib/safe-json-parse";
 import { fashionBizListingGenderAudience } from "@/lib/fashion-biz-gender-route";
 import {
   isHealthCareCatalogListing,
@@ -104,7 +105,10 @@ export function readSidebarNavClient(): SidebarNavPersist | null {
     if (!raw) {
       return null;
     }
-    const parsed = JSON.parse(raw) as unknown;
+    const parsed = parseJsonOrNull(raw);
+    if (parsed === null) {
+      return null;
+    }
     if (
       parsed &&
       typeof parsed === "object" &&

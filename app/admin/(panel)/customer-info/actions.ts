@@ -33,6 +33,84 @@ type CustomerSearchHit = {
   profileId: string | null;
 };
 
+export type CustomerListRow = CustomerSearchHit & {
+  orderCount: number;
+  hasProfile: boolean;
+};
+
+export async function listAllCustomersForCustomerInfo(): Promise<
+  { ok: true; customers: CustomerListRow[] } | { ok: false; error: string }
+> {
+  try {
+    await assertAdminSession();
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const byEmail = new Map<string, CustomerListRow>();
+
+    const { data: profs, error: profErr } = await supabase
+      .from("customer_profiles")
+      .select("id, customer_name, organisation, email_address, contact_number, created_at")
+      .order("created_at", { ascending: false });
+    if (profErr) {
+      return { ok: false, error: profErr.message };
+    }
+
+    for (const r of profs ?? []) {
+      const email = String(r.email_address ?? "").trim().toLowerCase();
+      if (!email) continue;
+      byEmail.set(email, {
+        email,
+        name: (r.customer_name ?? "").trim() || null,
+        phone: (r.contact_number ?? "").trim() || null,
+        organisation: (r.organisation ?? "").trim() || null,
+        profileId: String(r.id ?? "").trim() || null,
+        orderCount: 0,
+        hasProfile: true,
+      });
+    }
+
+    const { data: orders, error: ordErr } = await supabase
+      .from("store_orders")
+      .select("customer_email, customer_name")
+      .order("created_at", { ascending: false });
+    if (ordErr) {
+      return { ok: false, error: ordErr.message };
+    }
+
+    for (const r of orders ?? []) {
+      const email = String(r.customer_email ?? "").trim().toLowerCase();
+      if (!email) continue;
+      const existing = byEmail.get(email);
+      if (existing) {
+        existing.orderCount += 1;
+        if (!existing.name && (r.customer_name ?? "").trim()) {
+          existing.name = String(r.customer_name).trim();
+        }
+      } else {
+        byEmail.set(email, {
+          email,
+          name: (r.customer_name ?? "").trim() || null,
+          phone: null,
+          organisation: null,
+          profileId: null,
+          orderCount: 1,
+          hasProfile: false,
+        });
+      }
+    }
+
+    const customers = [...byEmail.values()].sort((a, b) => a.email.localeCompare(b.email));
+    return { ok: true, customers };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Load failed";
+    return { ok: false, error: msg };
+  }
+}
+
 export async function searchCustomersForCustomerInfo(
   queryRaw: string,
 ): Promise<{ ok: true; hits: CustomerSearchHit[] } | { ok: false; error: string }> {

@@ -10,6 +10,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const staticPaths = [
     "",
     "/service",
+    "/special-deals",
     "/contact-us",
     "/terms-and-conditions",
     "/privacy-policy",

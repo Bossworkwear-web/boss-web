@@ -3,6 +3,7 @@ import {
   distanceKmFromCompanyBase,
 } from "@/lib/customer-delivery-estimate";
 import { STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
+import { cartHasSpecialDealPackage } from "@/lib/storefront-special-deal-package-cart";
 
 /** Product subtotal (excl. delivery & logo setup) must be at or above this for logo-setup waiver promo. */
 export const STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD = 500;
@@ -36,7 +37,7 @@ export function cartHasEmbroideryLogoReferenceUploads(
 
 export type StorefrontCheckoutFeesInput = {
   subtotalAud: number;
-  items: { serviceType: string; referenceImageUrls?: string[] }[];
+  items: { serviceType: string; referenceImageUrls?: string[]; specialDealPackageId?: string }[];
   deliveryPostcode: string | null;
   estimatedWeightKg: number;
   /** Guest cart: delivery & logo setup shown as $0 until signed in. */
@@ -82,7 +83,9 @@ export function computeStorefrontCheckoutFees(input: StorefrontCheckoutFeesInput
   let logoSetupFeeAud = 0;
   let logoSetupApplies = false;
 
-  if (isCustomerSignedIn && historyKnown && hasEmb) {
+  const logoIncludedInPackageDeal = cartHasSpecialDealPackage(items);
+
+  if (isCustomerSignedIn && historyKnown && hasEmb && !logoIncludedInPackageDeal) {
     /** Promo override: at/above subtotal threshold, logo setup is always waived. */
     if (!promoSubtotalHit && (firstEmbroideryLogoSetupUnderPromo || returningCustomerNewLogoSetup)) {
       logoSetupFeeAud = logoSetupFeeInclGstAud();

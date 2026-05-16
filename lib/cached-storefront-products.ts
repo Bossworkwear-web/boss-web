@@ -12,7 +12,7 @@ let devCache:
 
 /**
  * Single Supabase round-trip for all storefront category grids + home showcase filtering.
- * Cached ~60s so concurrent navigations reuse one payload (still `force-dynamic` pages).
+ * Cached ~60s so concurrent navigations reuse one payload (home uses `revalidate = 60`).
  */
 async function fetchActiveProductsBrowseRows(): Promise<CategoryBrowseProductRow[]> {
   let supabase: ReturnType<typeof createSupabaseClient>;

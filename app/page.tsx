@@ -1,52 +1,20 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import Image from "next/image";
 import { HomeCompanyIntro } from "@/app/components/home-company-intro";
 import { HomeHero } from "@/app/components/home-hero";
 import { ProductShowcase } from "@/app/components/product-showcase";
 import { TopNav } from "@/app/components/top-nav";
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
-import { getMainCategory } from "@/lib/catalog";
 import { getStorefrontShowcaseProducts } from "@/lib/storefront-showcase-products";
-import { firstQueryString } from "@/lib/url-search-params-string";
 
-export const dynamic = "force-dynamic";
+/** Align with `getCachedActiveProductsBrowseRows` (~60s). */
+export const revalidate = 60;
 
-type HomePageProps = {
-  searchParams: Promise<{ q?: string; category?: string }>;
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
 };
 
-export async function generateMetadata({ searchParams }: HomePageProps): Promise<Metadata> {
-  const params = await searchParams;
-  const q = firstQueryString(params.q);
-  const categoryParam = firstQueryString(params.category);
-  if (q) {
-    return {
-      robots: { index: false, follow: true },
-      description: `Product search: ${q}`,
-    };
-  }
-  if (categoryParam) {
-    return {
-      robots: { index: false, follow: true },
-    };
-  }
-  return {
-    alternates: { canonical: "/" },
-  };
-}
-
-export default async function Home({ searchParams }: HomePageProps) {
-  const params = await searchParams;
-  const queryRaw = firstQueryString(params.q);
-  if (queryRaw) {
-    redirect(`/search?q=${encodeURIComponent(queryRaw)}`);
-  }
-
-  const categoryParam = firstQueryString(params.category);
-  if (categoryParam && getMainCategory(categoryParam)) {
-    redirect(`/categories/${encodeURIComponent(categoryParam)}`);
-  }
-
+export default async function Home() {
   const products = await getStorefrontShowcaseProducts();
 
   return (
@@ -57,21 +25,22 @@ export default async function Home({ searchParams }: HomePageProps) {
         <HomeCompanyIntro />
         <section className="bg-white pt-[1.5cm]">
           <div className="mx-auto flex w-full max-w-[2614px] flex-col items-center px-4 pb-2 sm:px-6">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src="/BossWW_image.jpg"
               alt="Boss WW"
+              width={400}
+              height={400}
               className="h-[7cm] w-[7cm] rounded-2xl object-cover"
-              loading="eager"
-              decoding="async"
+              priority
+              sizes="280px"
             />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src="/supplier_logo_1.jpg"
               alt="Supplier logo"
+              width={1200}
+              height={200}
               className="mt-[1.5cm] h-auto w-[21cm] max-w-full object-contain"
-              loading="lazy"
-              decoding="async"
+              sizes="(max-width: 768px) 100vw, 794px"
             />
           </div>
         </section>

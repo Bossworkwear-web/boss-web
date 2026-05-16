@@ -10,11 +10,13 @@ import {
   deleteCustomerSpecialRequest,
   deleteClickUpSheetImageForCustomerInfo,
   getCustomerInfoPayload,
+  listAllCustomersForCustomerInfo,
   replaceCustomerMasterLogo,
   searchCustomersForCustomerInfo,
   updateCustomerProfile,
   upsertCustomerSpecialRequest,
   type CustomerInfoPayload,
+  type CustomerListRow,
 } from "./actions";
 
 function audFromCents(cents: number): string {
@@ -25,6 +27,8 @@ function audFromCents(cents: number): string {
 export function CustomerInfoClient() {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Array<{ email: string; name: string | null; phone: string | null; organisation: string | null }>>([]);
+  const [allCustomers, setAllCustomers] = useState<CustomerListRow[]>([]);
+  const [listLoaded, setListLoaded] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
   const [payload, setPayload] = useState<CustomerInfoPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +91,25 @@ export function CustomerInfoClient() {
   useEffect(() => {
     setShowLoginPassword(false);
   }, [payload?.profile?.id]);
+
+  function refreshCustomerList() {
+    startTransition(() => {
+      void (async () => {
+        const res = await listAllCustomersForCustomerInfo();
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setAllCustomers(res.customers);
+        setListLoaded(true);
+      })();
+    });
+  }
+
+  useEffect(() => {
+    refreshCustomerList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
+  }, []);
 
   function runSearch() {
     setError(null);
@@ -202,6 +225,14 @@ export function CustomerInfoClient() {
     });
   }
 
+  const listFilter = q.trim().toLowerCase();
+  const filteredCustomers = listFilter
+    ? allCustomers.filter((c) => {
+        const hay = [c.email, c.name ?? "", c.organisation ?? "", c.phone ?? ""].join(" ").toLowerCase();
+        return hay.includes(listFilter);
+      })
+    : allCustomers;
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -219,6 +250,80 @@ export function CustomerInfoClient() {
           </p>
         </div>
       </header>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">All customers</h2>
+            <p className="mt-1 text-xs text-slate-600">
+              {listLoaded
+                ? `${allCustomers.length} customer${allCustomers.length === 1 ? "" : "s"} (profiles and checkout emails).`
+                : "Loading…"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={refreshCustomerList}
+            disabled={pending}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Refresh list
+          </button>
+        </div>
+        {listLoaded && filteredCustomers.length > 0 ? (
+          <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Organisation</th>
+                  <th className="px-4 py-3">Phone</th>
+                  <th className="px-4 py-3 text-right">Orders</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredCustomers.map((c) => (
+                  <tr
+                    key={c.email}
+                    className={selectedEmail === c.email ? "bg-brand-orange/5" : "hover:bg-slate-50/80"}
+                  >
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => loadCustomer(c.email)}
+                        className="font-medium text-brand-navy hover:underline"
+                      >
+                        {c.email}
+                      </button>
+                      {!c.hasProfile ? (
+                        <span className="ml-2 text-[0.65rem] font-semibold uppercase text-amber-700">Orders only</span>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">{(c.name ?? "").trim() || "—"}</td>
+                    <td className="px-4 py-3 text-slate-700">{(c.organisation ?? "").trim() || "—"}</td>
+                    <td className="px-4 py-3 text-slate-700">{(c.phone ?? "").trim() || "—"}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-slate-700">{c.orderCount}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => loadCustomer(c.email)}
+                        disabled={pending}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        Open
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : listLoaded ? (
+          <p className="mt-4 text-sm text-slate-600">No customers yet.</p>
+        ) : null}
+      </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Search</h2>

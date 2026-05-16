@@ -16,8 +16,6 @@ const boldonse = Boldonse({
   adjustFontFallback: false,
 });
 
-export const dynamic = "force-dynamic";
-
 export default function ServicePage() {
   return (
     <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
@@ -27,7 +25,7 @@ export default function ServicePage() {
           <header className="relative left-1/2 z-0 mb-10 w-screen max-w-[100vw] -translate-x-1/2 overflow-hidden shadow-[0_8px_40px_-12px_rgba(0,31,63,0.25)]">
             <div className="relative aspect-[16/9] min-h-[12.5rem] w-full sm:min-h-[17.5rem] sm:max-h-[min(58vh,36rem)]">
               <Image
-                src="/service_main.png"
+                src="/service_main.jpg"
                 alt="In-Store Service at Boss Workwear — bring your garments for embroidery and printing."
                 fill
                 priority
@@ -256,7 +254,7 @@ export default function ServicePage() {
               <figure className="mx-auto w-full max-w-[min(100%,calc(86.4rem*0.7*0.7))] shrink-0">
                 <div className="flex min-h-[4.9rem] items-center justify-center overflow-hidden py-2 sm:min-h-[5.88rem] sm:py-3">
                   <Image
-                    src="/Rush_option.png"
+                    src="/Rush_option.jpg"
                     alt="Rush and express turnaround options."
                     width={1024}
                     height={1024}

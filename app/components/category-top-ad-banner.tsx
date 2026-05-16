@@ -17,7 +17,9 @@ export function CategoryTopAdBanner({
         className="relative overflow-hidden border-b border-brand-navy/10 bg-white shadow-sm"
         aria-label="Promotion"
       >
-        <img src={src} alt={alt} className="block h-auto w-full bg-white object-contain" decoding="async" />
+        <div className="relative aspect-[21/9] w-full min-h-[8rem] sm:min-h-[10rem]">
+          <Image src={src} alt={alt} fill className="object-contain object-center" sizes="100vw" />
+        </div>
         <div className="pointer-events-none absolute right-2 top-2 z-10 sm:right-3 sm:top-3 md:right-4 md:top-4">
           <Image
             src={waOwnedMarkSrc}

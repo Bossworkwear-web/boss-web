@@ -35,14 +35,14 @@ const LINKS = [
 
 const GREEN_NAV_END_HREF = "/admin/incoming-goods";
 
-const GREEN_NAV_HREFS = new Set(
+const GREEN_NAV_HREFS = new Set<string>(
   LINKS.slice(0, LINKS.findIndex((l) => l.href === GREEN_NAV_END_HREF) + 1).map((l) => l.href),
 );
 
 const CYAN_NAV_START_HREF = "/admin/production";
 const CYAN_NAV_END_HREF = "/admin/complete-orders";
 
-const CYAN_NAV_HREFS = new Set(
+const CYAN_NAV_HREFS = new Set<string>(
   LINKS.slice(
     LINKS.findIndex((l) => l.href === CYAN_NAV_START_HREF),
     LINKS.findIndex((l) => l.href === CYAN_NAV_END_HREF) + 1,
@@ -52,7 +52,7 @@ const CYAN_NAV_HREFS = new Set(
 const RED_NAV_START_HREF = "/admin/warehouse";
 const RED_NAV_END_HREF = "/admin/clearance-stock";
 
-const RED_NAV_HREFS = new Set(
+const RED_NAV_HREFS = new Set<string>(
   LINKS.slice(
     LINKS.findIndex((l) => l.href === RED_NAV_START_HREF),
     LINKS.findIndex((l) => l.href === RED_NAV_END_HREF) + 1,
@@ -62,7 +62,7 @@ const RED_NAV_HREFS = new Set(
 const YELLOW_NAV_START_HREF = "/admin/crm";
 const YELLOW_NAV_END_HREF = "/admin/reports";
 
-const YELLOW_NAV_HREFS = new Set(
+const YELLOW_NAV_HREFS = new Set<string>(
   LINKS.slice(
     LINKS.findIndex((l) => l.href === YELLOW_NAV_START_HREF),
     LINKS.findIndex((l) => l.href === YELLOW_NAV_END_HREF) + 1,
@@ -72,7 +72,7 @@ const YELLOW_NAV_HREFS = new Set(
 const PURPLE_NAV_START_HREF = "/admin/accounting";
 const PURPLE_NAV_END_HREF = "/admin/site";
 
-const PURPLE_NAV_HREFS = new Set(
+const PURPLE_NAV_HREFS = new Set<string>(
   LINKS.slice(
     LINKS.findIndex((l) => l.href === PURPLE_NAV_START_HREF),
     LINKS.findIndex((l) => l.href === PURPLE_NAV_END_HREF) + 1,

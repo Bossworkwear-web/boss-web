@@ -39,6 +39,106 @@ type CategoryNavListProps = {
 };
 
 const SERVICE_HREF = "/service";
+const SPECIAL_DEALS_HREF = "/special-deals";
+
+function isSpecialDealsPath(pathname: string) {
+  return pathname === SPECIAL_DEALS_HREF || pathname.startsWith(`${SPECIAL_DEALS_HREF}/`);
+}
+
+function isServicePath(pathname: string) {
+  return pathname === SERVICE_HREF || pathname.startsWith(`${SERVICE_HREF}/`);
+}
+
+/** Special Deals + In-Store Service — second header row (desktop) or drawer footer (mobile). */
+function StoreSecondaryNavLinks({
+  pathname,
+  variant,
+  onNavigate,
+}: {
+  pathname: string;
+  variant: "header-row" | "sidebar-bottom";
+  onNavigate?: () => void;
+}) {
+  const pillBase =
+    "inline-flex shrink-0 items-center rounded-full px-2.5 py-1.5 text-[1.075rem] font-semibold leading-snug transition sm:px-3 sm:py-2 sm:text-[1.235rem]";
+  const pillIdle = "text-brand-navy/90 hover:bg-brand-surface hover:text-brand-navy";
+  const pillActive = "bg-brand-navy text-white";
+
+  const sidebarRowClass = (active: boolean) =>
+    `flex min-h-[44px] w-full items-center rounded-lg px-2.5 py-2 font-semibold transition ${
+      active ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-surface hover:text-brand-navy"
+    }`;
+
+  const specialDealsLink =
+    variant === "header-row" ? (
+      <Link
+        href={SPECIAL_DEALS_HREF}
+        className={`${pillBase} ${isSpecialDealsPath(pathname) ? pillActive : pillIdle}`}
+        aria-current={isSpecialDealsPath(pathname) ? "page" : undefined}
+      >
+        Special Deals
+      </Link>
+    ) : (
+      <Link
+        href={SPECIAL_DEALS_HREF}
+        onClick={() => onNavigate?.()}
+        className={sidebarRowClass(isSpecialDealsPath(pathname))}
+        aria-current={isSpecialDealsPath(pathname) ? "page" : undefined}
+      >
+        Special Deals
+      </Link>
+    );
+
+  const serviceLink =
+    variant === "header-row" ? (
+      <Link
+        href={SERVICE_HREF}
+        className={`${pillBase} ${isServicePath(pathname) ? pillActive : pillIdle}`}
+        aria-current={isServicePath(pathname) ? "page" : undefined}
+      >
+        In-Store Service
+      </Link>
+    ) : (
+      <Link
+        href={SERVICE_HREF}
+        onClick={() => onNavigate?.()}
+        className={sidebarRowClass(isServicePath(pathname))}
+        aria-current={isServicePath(pathname) ? "page" : undefined}
+      >
+        In-Store Service
+      </Link>
+    );
+
+  if (variant === "header-row") {
+    return (
+      <div className="relative inline-flex flex-col items-center pt-1.5">
+        <span
+          className="pointer-events-none absolute left-1/2 top-0 h-px w-[200%] max-w-[min(96vw,52rem)] -translate-x-1/2 bg-brand-navy/10"
+          aria-hidden
+        />
+        <nav
+          aria-label="More store pages"
+          className="flex w-auto max-w-full flex-wrap items-center justify-center gap-1 sm:gap-1.5"
+        >
+          {specialDealsLink}
+          {serviceLink}
+        </nav>
+      </div>
+    );
+  }
+
+  return (
+    <nav
+      aria-label="More store pages"
+      className="shrink-0 border-t border-brand-navy/10 px-4 pb-4 pt-4"
+    >
+      <div className="flex flex-col gap-1.5">
+        {specialDealsLink}
+        {serviceLink}
+      </div>
+    </nav>
+  );
+}
 
 /** Vertical list — mobile drawer / overlay menu. */
 function CategoryNavList({
@@ -80,18 +180,6 @@ function CategoryNavList({
         );
       })}
       <div className="mt-4 border-t border-brand-navy/10 pt-4">
-        <Link
-          href={SERVICE_HREF}
-          onClick={() => onNavigate?.()}
-          className={`mb-2 flex min-h-[44px] w-full items-center rounded-lg px-2.5 py-2 font-semibold transition ${
-            pathname === SERVICE_HREF || pathname.startsWith(`${SERVICE_HREF}/`)
-              ? "bg-brand-navy text-white"
-              : "text-brand-navy hover:bg-brand-surface hover:text-brand-navy"
-          }`}
-          aria-current={pathname === SERVICE_HREF ? "page" : undefined}
-        >
-          In-Store Service
-        </Link>
         <Link
           href="/contact-us"
           onClick={() => onNavigate?.()}
@@ -178,17 +266,6 @@ function CategoryInlineNav({
           </div>
         );
       })}
-      <div className="flex shrink-0 items-center">
-        <Link
-          href={SERVICE_HREF}
-          className={`${pillBase} ${
-            pathname === SERVICE_HREF || pathname.startsWith(`${SERVICE_HREF}/`) ? pillActive : pillIdle
-          }`}
-          aria-current={pathname === SERVICE_HREF ? "page" : undefined}
-        >
-          In-Store Service
-        </Link>
-      </div>
     </nav>
   );
 }
@@ -534,8 +611,8 @@ export function TopNavClient({
         <nav
           className={`mx-auto flex w-full max-w-none flex-col gap-y-1 py-2.5 sm:gap-y-[0.3125rem] sm:py-3.5 ${SITE_PAGE_INSET_X_CLASS}`}
         >
-          <div className="flex w-full items-center gap-2 sm:gap-3">
-            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <div className="flex w-full items-center gap-2 sm:gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-start lg:gap-3">
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3 lg:justify-self-start">
               <button
                 type="button"
                 onClick={() => setMobileNavOpen(true)}
@@ -559,16 +636,18 @@ export function TopNavClient({
               </Link>
             </div>
 
-            <div className="hidden min-w-0 flex-1 justify-center px-2 lg:flex">
+            <div className="hidden min-w-0 flex-col items-center justify-center gap-0 px-2 lg:flex lg:justify-self-center">
               <CategoryInlineNav
                 pathname={pathname}
                 productSidebarNav={productSidebarNav}
                 navSubsByMain={navSubsByMain}
                 mainCategories={mainCategories}
               />
+              <StoreSecondaryNavLinks pathname={pathname} variant="header-row" />
             </div>
 
-            <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 md:gap-3">
+            <div className="ml-auto flex shrink-0 flex-col items-end gap-1 sm:gap-1.5 lg:ml-0 lg:justify-self-end">
+              <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 md:gap-3">
               {customerName ? (
                 <>
                   <Link
@@ -619,15 +698,13 @@ export function TopNavClient({
                   </span>
                 )}
               </Link>
+              </div>
+              <HeaderSearchToggle
+                open={searchOpen}
+                onOpen={() => setSearchOpen(true)}
+                onClose={() => setSearchOpen(false)}
+              />
             </div>
-          </div>
-
-          <div className="flex min-h-[3.75rem] w-full items-center justify-center pt-1 sm:min-h-[4rem] sm:pt-[0.3125rem]">
-            <HeaderSearchToggle
-              open={searchOpen}
-              onOpen={() => setSearchOpen(true)}
-              onClose={() => setSearchOpen(false)}
-            />
           </div>
         </nav>
       </section>
@@ -665,6 +742,11 @@ export function TopNavClient({
                 onNavigate={() => setMobileNavOpen(false)}
               />
             </div>
+            <StoreSecondaryNavLinks
+              pathname={pathname}
+              variant="sidebar-bottom"
+              onNavigate={() => setMobileNavOpen(false)}
+            />
           </div>
         </div>
       ) : null}

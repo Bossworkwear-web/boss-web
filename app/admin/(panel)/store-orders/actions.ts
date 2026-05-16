@@ -4,6 +4,7 @@ import { refresh, revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { assertAdminSession } from "@/lib/admin-auth";
+import { deleteStoreOrderById, type DeleteStoreOrderResult } from "@/lib/admin-delete-store-order";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 export type MoveStoreOrderToWarehouseResult = { ok: true } | { ok: false; error: string };
@@ -189,124 +190,14 @@ export async function moveStoreOrderToWarehouseCompleted(orderId: string): Promi
   return { ok: true };
 }
 
-export type DeleteStoreOrderResult = { ok: true } | { ok: false; error: string };
+export type { DeleteStoreOrderResult };
 
-const CLICK_UP_SHEET_IMAGES_BUCKET = "click-up-sheet-images";
-const PRODUCTION_ORDER_ASSETS_TABLE = "production_order_assets";
-const DEFAULT_PRODUCTION_ASSETS_BUCKET = "production-order-assets";
-
-function isMissingTableError(message: string): boolean {
-  const m = message.toLowerCase();
-  return m.includes("could not find the table") || m.includes("schema cache");
-}
-
-/**
- * Click up sheet rows + bucket objects (no FK to store_orders — must clear by order number).
- */
-async function deleteClickUpSheetImagesForCustomerOrderId(
-  supabase: ReturnType<typeof createSupabaseAdminClient>,
-  customerOrderId: string,
-): Promise<void> {
-  if (!customerOrderId) {
-    return;
-  }
-  const { data: rows, error } = await supabase
-    .from("click_up_sheet_images")
-    .select("storage_path")
-    .eq("customer_order_id", customerOrderId);
-
-  if (error) {
-    if (!isMissingTableError(error.message)) {
-      console.error("[deleteStoreOrder] click_up_sheet_images select:", error.message);
-    }
-    return;
-  }
-
-  const paths = (rows ?? [])
-    .map((r: { storage_path?: string }) => (r.storage_path ?? "").trim())
-    .filter(Boolean);
-  if (paths.length > 0) {
-    const { error: rmErr } = await supabase.storage.from(CLICK_UP_SHEET_IMAGES_BUCKET).remove(paths);
-    if (rmErr) {
-      console.error("[deleteStoreOrder] click_up_sheet_images storage remove:", rmErr.message);
-    }
-  }
-
-  const { error: delErr } = await supabase
-    .from("click_up_sheet_images")
-    .delete()
-    .eq("customer_order_id", customerOrderId);
-  if (delErr && !isMissingTableError(delErr.message)) {
-    console.error("[deleteStoreOrder] click_up_sheet_images delete:", delErr.message);
-  }
-}
-
-/**
- * Production pack assets linked by store_orders.id (storage + rows) before deleting the order.
- */
-async function deleteProductionOrderAssetsForStoreOrderId(
-  supabase: ReturnType<typeof createSupabaseAdminClient>,
-  storeOrderUuid: string,
-): Promise<void> {
-  const { data: assets, error } = await supabase
-    .from(PRODUCTION_ORDER_ASSETS_TABLE)
-    .select("storage_bucket, storage_path")
-    .eq("order_id", storeOrderUuid);
-
-  if (error) {
-    if (!isMissingTableError(error.message)) {
-      console.error("[deleteStoreOrder] production_order_assets select:", error.message);
-    }
-    return;
-  }
-
-  const byBucket = new Map<string, string[]>();
-  for (const raw of assets ?? []) {
-    const row = raw as { storage_bucket?: string | null; storage_path?: string | null };
-    const path = (row.storage_path ?? "").trim();
-    if (!path) {
-      continue;
-    }
-    const bucket = (row.storage_bucket ?? DEFAULT_PRODUCTION_ASSETS_BUCKET).trim() || DEFAULT_PRODUCTION_ASSETS_BUCKET;
-    if (!byBucket.has(bucket)) {
-      byBucket.set(bucket, []);
-    }
-    byBucket.get(bucket)!.push(path);
-  }
-
-  for (const [bucket, objectPaths] of byBucket) {
-    const { error: rmErr } = await supabase.storage.from(bucket).remove(objectPaths);
-    if (rmErr) {
-      console.error("[deleteStoreOrder] production_order_assets storage remove:", bucket, rmErr.message);
-    }
-  }
-
-  const { error: delErr } = await supabase
-    .from(PRODUCTION_ORDER_ASSETS_TABLE)
-    .delete()
-    .eq("order_id", storeOrderUuid);
-  if (delErr && !isMissingTableError(delErr.message)) {
-    console.error("[deleteStoreOrder] production_order_assets delete:", delErr.message);
-  }
-}
-
-/**
- * Hard-delete a storefront order.
- * - `store_order_items`: ON DELETE CASCADE from `store_orders`
- * - `supplier_order_lines`: same customer order id (BOS_…)
- * - `click_up_sheet_images`: same customer_order_id text + storage objects
- * - `production_order_assets`: same order_id UUID + storage objects (if table exists)
- */
+/** Hard-delete a storefront order and related rows (see `lib/admin-delete-store-order.ts`). */
 export async function deleteStoreOrder(orderId: string): Promise<DeleteStoreOrderResult> {
   try {
     await assertAdminSession();
   } catch {
     return { ok: false, error: "Unauthorized" };
-  }
-
-  const id = orderId.trim();
-  if (!/^[0-9a-f-]{36}$/i.test(id)) {
-    return { ok: false, error: "Invalid order." };
   }
 
   let supabase: ReturnType<typeof createSupabaseAdminClient>;
@@ -316,37 +207,9 @@ export async function deleteStoreOrder(orderId: string): Promise<DeleteStoreOrde
     return { ok: false, error: "Database not configured." };
   }
 
-  const { data: row, error: fetchErr } = await supabase
-    .from("store_orders")
-    .select("id, order_number, tracking_token")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (fetchErr || !row) {
-    return { ok: false, error: "Order not found." };
-  }
-
-  const orderNumber = (row.order_number ?? "").trim();
-
-  await deleteProductionOrderAssetsForStoreOrderId(supabase, id);
-
-  if (orderNumber.length > 0) {
-    await deleteClickUpSheetImagesForCustomerOrderId(supabase, orderNumber);
-  }
-
-  if (orderNumber.length > 0) {
-    const { error: supErr } = await supabase
-      .from("supplier_order_lines")
-      .delete()
-      .eq("customer_order_id", orderNumber);
-    if (supErr) {
-      console.error("[deleteStoreOrder] supplier_order_lines cleanup:", supErr.message);
-    }
-  }
-
-  const { error: delErr } = await supabase.from("store_orders").delete().eq("id", id);
-  if (delErr) {
-    return { ok: false, error: delErr.message };
+  const res = await deleteStoreOrderById(supabase, orderId);
+  if (!res.ok) {
+    return res;
   }
 
   revalidatePath("/admin/store-orders");
@@ -355,8 +218,10 @@ export async function deleteStoreOrder(orderId: string): Promise<DeleteStoreOrde
   revalidatePath("/customer");
   revalidatePath("/admin/warehouse/worker/store-orders");
   revalidatePath("/admin/warehouse/worker/order-mockups");
-  if (row.tracking_token) {
-    revalidatePath(`/orders/track/${row.tracking_token}`);
+  revalidatePath("/admin/customer-info");
+  revalidatePath("/admin/crm");
+  if (res.trackingToken) {
+    revalidatePath(`/orders/track/${res.trackingToken}`);
   }
-  return { ok: true };
+  return { ok: true, trackingToken: res.trackingToken };
 }

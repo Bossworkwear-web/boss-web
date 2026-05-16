@@ -76,7 +76,7 @@ export default async function DeliveryDocketPage({ params, searchParams }: Props
   const fromName = resolveDocketShipFromName();
   const fromAddress = resolveDocketShipFromAddress();
   const trackUrl = `${siteBaseUrl()}/orders/track/${order.tracking_token}`;
-  const orderScanPayload = storeOrderScanPayloadFromId(order.id);
+  const orderScanPayload = storeOrderScanPayloadFromId(id);
   const barcodeUrl = `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(orderScanPayload)}&includetext&scale=3&height=12`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(trackUrl)}`;
 

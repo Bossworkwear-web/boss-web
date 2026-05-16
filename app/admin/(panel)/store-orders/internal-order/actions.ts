@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { assertAdminSession } from "@/lib/admin-auth";
-import { parseJsonOrNull } from "@/lib/safe-json-parse";
+import { parseJsonOrNull, parsePlacementsJsonValue } from "@/lib/safe-json-parse";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 export type InternalOrderTemplate = {
@@ -304,13 +304,7 @@ export async function createInternalOrderFromTemplate(formData: FormData): Promi
     service_type: it.serviceType,
     color: it.color,
     size: it.size,
-    placements: (() => {
-      try {
-        return JSON.parse(it.placementsJson) as unknown;
-      } catch {
-        return [];
-      }
-    })(),
+    placements: parsePlacementsJsonValue(it.placementsJson),
     notes: it.notes,
     sort_order: idx,
   }));

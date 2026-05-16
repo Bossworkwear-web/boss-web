@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 
-import { stringifyJsonField } from "@/lib/safe-json-parse";
+import { isNextNavigationError, stringifyJsonField } from "@/lib/safe-json-parse";
 
 import { CustomerQuoteImageDropzone } from "@/app/admin/(panel)/customer-quote/customer-quote-image-dropzone";
 
@@ -165,6 +165,7 @@ export function InternalOrderForm({
   const isQuote = variant === "customer-quote";
   const isInternalOrderQuote = isQuote && quoteSubmitContext === "internal-order";
   const [saveQuotePending, startSaveQuoteTransition] = useTransition();
+  const [saveQuoteError, setSaveQuoteError] = useState<string | null>(null);
   const quoteSaveReturnBase =
     quoteSubmitContext === "internal-order" ? "/admin/store-orders/internal-order" : "/admin/customer-quote";
 
@@ -604,6 +605,12 @@ export function InternalOrderForm({
                         rows={2}
                         value={it.placementsJson}
                         onChange={(e) => updateItem(idx, { placementsJson: e.target.value })}
+                        onBlur={(e) => {
+                          const t = e.target.value.trim();
+                          if (!t) {
+                            updateItem(idx, { placementsJson: "[]" });
+                          }
+                        }}
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -1153,17 +1160,32 @@ export function InternalOrderForm({
               disabled={items.length === 0 || saveQuotePending || !customerQuoteSheetPayload}
               onClick={() => {
                 if (!customerQuoteSheetPayload) return;
-                startSaveQuoteTransition(() => {
-                  void saveCustomerQuoteSheet(
-                    customerQuoteSheetPayload,
-                    quoteRequestId,
-                    quoteSaveReturnBase,
-                  );
+                setSaveQuoteError(null);
+                startSaveQuoteTransition(async () => {
+                  try {
+                    await saveCustomerQuoteSheet(
+                      customerQuoteSheetPayload,
+                      quoteRequestId,
+                      quoteSaveReturnBase,
+                    );
+                  } catch (e) {
+                    if (isNextNavigationError(e)) {
+                      throw e;
+                    }
+                    setSaveQuoteError(
+                      e instanceof Error ? e.message : "Could not save quote. Refresh and try again.",
+                    );
+                  }
                 });
               }}
             >
               {saveQuotePending ? "Saving…" : "Save Quote"}
             </button>
+          ) : null}
+          {saveQuoteError ? (
+            <p className="w-full basis-full text-sm text-red-700" role="alert">
+              {saveQuoteError}
+            </p>
           ) : null}
           <button
             type="submit"

@@ -28,6 +28,8 @@ export type CartItem = {
   notes?: string;
   /** Public Supabase Storage URLs for customer reference images (same line as logos). */
   referenceImageUrls?: string[];
+  /** Fixed package from Special Deals (`storefront-special-deal-packages`). */
+  specialDealPackageId?: string;
 };
 
 const CART_STORAGE_KEY = "boss_web_cart_items";

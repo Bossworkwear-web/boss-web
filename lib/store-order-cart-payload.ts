@@ -22,4 +22,5 @@ export type StoreOrderCartLine = {
   imageUrl?: string;
   /** Restored from `products` when reordering — correct `/products/[slug]` for Edit. */
   productPathSlug?: string;
+  specialDealPackageId?: string;
 };

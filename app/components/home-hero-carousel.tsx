@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 
 const SLIDE_INTERVAL_MS = 5500;
@@ -41,12 +42,14 @@ export function HomeHeroCarousel() {
           } pointer-events-none`}
           aria-hidden={i !== index}
         >
-          <img
+          <Image
             src={slide.src}
             alt={slide.alt}
-            decoding={i === 0 ? "sync" : "async"}
-            loading={i === 0 ? "eager" : "lazy"}
+            width={1920}
+            height={1080}
+            priority={i === 0}
             fetchPriority={i === 0 ? "high" : "low"}
+            sizes="100vw"
             className="h-auto max-h-[min(78vh,1080px)] w-full max-w-none object-contain"
           />
         </div>

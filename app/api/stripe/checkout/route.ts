@@ -7,6 +7,7 @@ import { computeStorefrontCheckoutFees } from "@/lib/storefront-cart-checkout-fe
 import { hasPriorEmbroideryOrderForCustomerEmail } from "@/lib/storefront-prior-embroidery-order";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { validatePromotionCodeForCheckout } from "@/lib/promotion-codes";
+import { validateSpecialDealPackageCartLines } from "@/lib/storefront-special-deal-package-cart";
 import { storefrontCartNetProductSubtotalAfterVolumeAud, storefrontVolumeAdjustedCartLines } from "@/lib/storefront-volume-discount";
 
 type CartItem = {
@@ -18,6 +19,8 @@ type CartItem = {
   category?: string | null;
   serviceType?: string;
   referenceImageUrls?: string[];
+  placements?: string[];
+  specialDealPackageId?: string;
 };
 
 function dollarsToCents(d: number): number {
@@ -70,6 +73,21 @@ export async function POST(req: Request) {
   const check = assertCart(items);
   if (!check.ok) {
     return Response.json({ ok: false, error: check.error }, { status: 400 });
+  }
+
+  const dealCheck = validateSpecialDealPackageCartLines(
+    items.map((it) => ({
+      specialDealPackageId: it.specialDealPackageId,
+      quantity: it.quantity,
+      totalPrice: it.totalPrice,
+      unitPrice: it.unitPrice,
+      serviceType: it.serviceType ?? "",
+      placements: it.placements,
+      referenceImageUrls: it.referenceImageUrls,
+    })),
+  );
+  if (!dealCheck.ok) {
+    return Response.json({ ok: false, error: dealCheck.error }, { status: 400 });
   }
 
   const deliveryAddress = (body.deliveryAddress ?? "").trim();

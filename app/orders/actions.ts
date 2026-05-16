@@ -21,6 +21,7 @@ import {
   recordPromotionRedemption,
   validatePromotionCodeForCheckout,
 } from "@/lib/promotion-codes";
+import { validateSpecialDealPackageCartLines } from "@/lib/storefront-special-deal-package-cart";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 const CHECKOUT_REFERENCE_BUCKET = "production-order-assets";
@@ -247,6 +248,11 @@ export async function placeStoreOrder(
     ) {
       return { ok: false, error: "Invalid cart line." };
     }
+  }
+
+  const dealCheck = validateSpecialDealPackageCartLines(items);
+  if (!dealCheck.ok) {
+    return { ok: false, error: dealCheck.error };
   }
 
   const postcode = extractAustralianPostcodeFromAddress(deliveryAddress);
