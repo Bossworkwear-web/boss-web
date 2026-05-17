@@ -384,6 +384,43 @@ pre {
   }
 }
 
+/* Category hero: WA Owned — 50% of legacy 3.2rem (51px) / 3.84rem (61px) / 4.48rem (72px) */
+img.category-top-ad-wa-mark {
+  display: block !important;
+  width: 51px !important;
+  max-width: 51px !important;
+  height: auto !important;
+}
+
+@media (min-width: 640px) {
+  img.category-top-ad-wa-mark {
+    width: 61px !important;
+    max-width: 61px !important;
+  }
+}
+
+@media (min-width: 768px) {
+  img.category-top-ad-wa-mark {
+    width: 72px !important;
+    max-width: 72px !important;
+  }
+}
+
+/* Home company intro: WA Owned — 30% smaller than legacy 7.84rem (125px) / 8.96rem (143px) */
+.home-company-intro-wa-mark {
+  display: block;
+  width: 88px;
+  max-width: 88px;
+  height: auto;
+}
+
+@media (min-width: 768px) {
+  .home-company-intro-wa-mark {
+    width: 100px;
+    max-width: 100px;
+  }
+}
+
 /* Product detail: title — medium (500); 20% smaller than legacy 3.3696 / 4.212rem */
 .product-detail-page .product-detail-title {
   font-weight: 500 !important;

@@ -1,5 +1,3 @@
-import Image from "next/image";
-
 import { SITE_PAGE_INNER_SHELL_CLASS } from "@/lib/site-layout";
 
 const sectionHeadingClass =
@@ -17,13 +15,14 @@ export function HomeCompanyIntro() {
       <div className={`${SITE_PAGE_INNER_SHELL_CLASS} py-12 sm:py-16`}>
         <header className="text-center">
           <div className="mb-5 flex justify-center sm:mb-6">
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element -- fixed px width; next/image span ignored max-width */}
+            <img
               src="/WA-Owned_Black.png"
               alt="WA Owned"
-              width={215}
-              height={78}
-              className="h-auto w-[min(6.72rem,40vw)] max-w-full object-contain sm:w-[7.84rem] md:w-[8.96rem]"
-              sizes="(max-width: 768px) 40vw, 9rem"
+              width={151}
+              height={55}
+              className="home-company-intro-wa-mark h-auto object-contain"
+              decoding="async"
             />
           </div>
           <h2 className="text-[2.4375rem] font-medium leading-tight text-brand-navy sm:text-[2.925rem] lg:text-[3.575rem]">
