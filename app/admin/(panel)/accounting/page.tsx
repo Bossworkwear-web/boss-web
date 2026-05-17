@@ -128,6 +128,12 @@ export default async function AdminAccountingPage({ searchParams }: { searchPara
           Record <strong>expenses</strong> and <strong>refunds</strong> below for a lightweight in-app log. Day-to-day
           books can still live in <strong>Xero</strong>; use descriptions and the Xero updated flag to stay aligned.
         </p>
+        <Link
+          href="/admin/accounting/refunds"
+          className="mt-4 inline-flex rounded-xl border border-brand-orange/40 bg-brand-orange/5 px-4 py-2.5 text-sm font-semibold text-brand-navy transition hover:bg-brand-orange/10"
+        >
+          Stripe refunds report →
+        </Link>
       </header>
 
       {banner ? (

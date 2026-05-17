@@ -4,6 +4,8 @@ import { loadDashboardStoreOrderPeriodStats } from "@/lib/admin-dashboard-store-
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
+import { buildRefundsReportHref } from "@/lib/admin-store-order-refunds-report";
+
 import { buildStoreOrdersListHref } from "./store-orders/store-orders-list-helpers";
 
 const LOW_STOCK = 10;
@@ -230,6 +232,11 @@ export default async function AdminDashboardPage() {
           <li>
             <Link href="/admin/accounting" className="hover:underline">
               Accounting (Xero workflow) →
+            </Link>
+          </li>
+          <li>
+            <Link href="/admin/accounting/refunds" className="hover:underline">
+              Refunds (Stripe report) →
             </Link>
           </li>
           <li>

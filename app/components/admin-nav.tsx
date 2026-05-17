@@ -28,6 +28,7 @@ const LINKS = [
   { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/reports", label: "Reports" },
   { href: "/admin/accounting", label: "Accounting" },
+  { href: "/admin/accounting/refunds", label: "Refunds" },
   { href: "/admin/customer-invoices", label: "Customer Invoices" },
   { href: "/admin/accounting/access-control", label: "Access control" },
   { href: "/admin/site", label: "Site & content" },

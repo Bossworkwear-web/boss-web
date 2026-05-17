@@ -36,11 +36,7 @@ import {
 import { uploadStoreCheckoutReferenceImages } from "@/app/orders/actions";
 import { addCartItem, getCartItems, removeCartItem, updateCartItem, type CartItem } from "@/lib/cart";
 import { productPathSegment } from "@/lib/product-path-slug";
-import {
-  bisleyPdpDisplayProductNameWithApexPrefix,
-  productCardDisplayLines,
-  productDetailDescriptionBody,
-} from "@/lib/product-card-copy";
+import { bisleyPdpDisplayProductNameWithApexPrefix, productCardDisplayLines } from "@/lib/product-card-copy";
 import {
   getSizeGuideBundle,
   inferSizeGuideKind,
@@ -1907,10 +1903,12 @@ function ProductDescriptionFormattedBlock({ block }: { block: string }) {
         if (!trimmed) {
           return <div key={i} className="h-1 min-h-1 shrink-0" aria-hidden />;
         }
-        /** Tab/space-indented `- item` (e.g. Biz Collection Features sub-lines) — smaller dash, no big bullet. */
-        const indentedHyphen = /^(\s+)-\s+(.*)$/.exec(rawLine);
-        if (indentedHyphen && indentedHyphen[1].length > 0) {
-          const text = indentedHyphen[2].trim();
+        /** Tab-indented feature sub-lines (`\t-\titem` or `\t- item`) — smaller dash, no big bullet. */
+        const tabHyphenTab = /^\t-\t(.*)$/.exec(rawLine);
+        const indentedHyphen =
+          tabHyphenTab ?? (/^(\s+)-\s+(.*)$/.exec(rawLine) as RegExpExecArray | null);
+        if (indentedHyphen) {
+          const text = (tabHyphenTab ? tabHyphenTab[1] : indentedHyphen[2]).trim();
           return (
             <div
               key={i}
@@ -1939,48 +1937,6 @@ function ProductDescriptionFormattedBlock({ block }: { block: string }) {
       })}
     </div>
   );
-}
-
-function bizCollectionFormatFabricBullets(block: string): string {
-  const out: string[] = [];
-  const lines = block.split(/\r?\n/);
-  for (const raw of lines) {
-    const idx = raw.toLowerCase().indexOf("fabric:");
-    if (idx < 0) {
-      out.push(raw);
-      continue;
-    }
-    const before = raw.slice(0, idx);
-    const after = raw.slice(idx + "fabric:".length);
-    const head = `${before}Fabric:`.trimEnd();
-    if (head.trim().length > 0) {
-      out.push(head);
-    } else {
-      out.push("Fabric:");
-    }
-
-    const semi = after.indexOf(";");
-    const fabricPart = (semi >= 0 ? after.slice(0, semi) : after).trim();
-    const tailPart = (semi >= 0 ? after.slice(semi + 1) : "").trim();
-
-    const items = fabricPart
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    if (items.length === 0 && fabricPart.length > 0) {
-      out.push(`\t- ${fabricPart}`);
-    } else {
-      for (const it of items) {
-        out.push(`\t- ${it}`);
-      }
-    }
-
-    if (tailPart.length > 0) {
-      out.push(tailPart);
-    }
-  }
-  return out.join("\n");
 }
 
 export function PremiumWorkPoloClient({
@@ -2055,14 +2011,6 @@ export function PremiumWorkPoloClient({
   }, [searchParams, product.slug, product.name, productCode]);
 
   const dealMaxLogoFiles = activeDealPackage?.maxLogos ?? MAX_LOGO_FILES;
-  const slugLowerForBrand = (product.slug ?? "").trim().toLowerCase();
-  const nameLowerForBrand = (product.name ?? "").trim().toLowerCase();
-  const supLowerForBrand = (product.supplierName ?? "").trim().toLowerCase();
-  /** Fashion-Biz slugs use `…-bizcollection-{style}`; supplier row is sometimes not literally "Biz Collection". */
-  const isBizCollection =
-    supLowerForBrand.includes("biz collection") ||
-    slugLowerForBrand.includes("bizcollection") ||
-    nameLowerForBrand.includes("biz collection");
   const brandAndModelLine = useMemo(() => {
     if (product.displayBrandSkuLine && product.displayBrandSkuLine.trim().length > 0) {
       return product.displayBrandSkuLine.trim();
@@ -2087,17 +2035,9 @@ export function PremiumWorkPoloClient({
   }, [product.displayBrandSkuLine, product.name, product.slug, product.supplierName, productCode]);
   const displayDescription = useMemo(() => {
     const base =
-      typeof serverPdpDescriptionFromRsc === "string"
-        ? serverPdpDescriptionFromRsc
-        : typeof product.pdpDescriptionBody === "string"
-          ? product.pdpDescriptionBody
-          : productDetailDescriptionBody(
-      product.description,
-      productName,
-      product.supplierName,
-      product.slug,
-      product.name,
-            );
+      (typeof serverPdpDescriptionFromRsc === "string" && serverPdpDescriptionFromRsc) ||
+      (typeof product.pdpDescriptionBody === "string" && product.pdpDescriptionBody) ||
+      "";
     if (!base) {
       return base;
     }
@@ -2105,15 +2045,7 @@ export function PremiumWorkPoloClient({
       return syzmikFormatDescriptionFeaturesColonAndCommas(syzmikFormatDescriptionSemicolonLineBreaks(base));
     }
     return base;
-  }, [
-    product.description,
-    product.name,
-    product.pdpDescriptionBody,
-    productName,
-    product.supplierName,
-    product.slug,
-    serverPdpDescriptionFromRsc,
-  ]);
+  }, [product.pdpDescriptionBody, product.slug, product.supplierName, serverPdpDescriptionFromRsc]);
 
   const displayFeatures = useMemo(() => {
     const base = typeof product.features === "string" ? product.features : "";
@@ -3218,10 +3150,7 @@ export function PremiumWorkPoloClient({
                   .map((block) => block.trim())
                   .filter(Boolean)
                   .map((block, i) => (
-                    <ProductDescriptionFormattedBlock
-                      key={i}
-                      block={isBizCollection ? bizCollectionFormatFabricBullets(block) : block}
-                    />
+                    <ProductDescriptionFormattedBlock key={i} block={block} />
                   ))}
               </div>
             </div>

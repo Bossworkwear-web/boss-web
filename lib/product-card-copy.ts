@@ -995,45 +995,142 @@ export function productCardDisplayLines(
   return { productName, productCode };
 }
 
-function isBizCollectionStorefrontListing(supplierName?: string | null, listingName?: string | null): boolean {
+/** Biz Collection, Biz Care, Yes Chef — sum CSV `stringified_description` PDP layout (semicolon rows, feature bullets). */
+function isFashionBizSumCsvStorefrontListing(
+  supplierName?: string | null,
+  listingName?: string | null,
+): boolean {
   const sup = String(supplierName ?? "").trim().toLowerCase();
-  if (sup === "biz collection") {
+  if (sup === "biz collection" || sup === "biz care" || sup === "yes chef") {
     return true;
   }
-  return /\bbiz collection\b/i.test(String(listingName ?? "").trim());
+  const listing = String(listingName ?? "").trim();
+  return (
+    /\bbiz collection\b/i.test(listing) ||
+    /\bbiz care\b/i.test(listing) ||
+    /\byes\s*chef\b/i.test(listing)
+  );
 }
 
-/** Sum CSV `stringified_description` is often one line with `;` between clauses — split into rows for the PDP. */
-function bizCollectionBreakSemicolonsToLines(s: string): string {
-  if (!s.includes(";")) {
-    return s;
+/**
+ * Sum CSV bodies use `;` between Sizes / Fabric / Features — split only on those boundaries so
+ * Fabric specs like `…Elastane; Mid-weight Twill; 215 GSM` stay on one line for comma bullets.
+ */
+function fashionBizBreakSemicolonsToLines(s: string): string {
+  const text = s.trim();
+  if (!text.includes(";")) {
+    return text;
   }
-  return s
+  const lines: string[] = [];
+  const featuresMatch = /;\s*(Features:)/i.exec(text);
+  const beforeFeatures = featuresMatch ? text.slice(0, featuresMatch.index).trim() : text;
+  const featuresPart = featuresMatch
+    ? `${featuresMatch[1]}${text.slice(featuresMatch.index + featuresMatch[0].length)}`.trim()
+    : "";
+
+  const fabricMatch = /;\s*(Fabric:)/i.exec(beforeFeatures);
+  const beforeFabric = fabricMatch ? beforeFeatures.slice(0, fabricMatch.index).trim() : beforeFeatures;
+  const fabricPart = fabricMatch
+    ? `${fabricMatch[1]}${beforeFeatures.slice(fabricMatch.index + fabricMatch[0].length)}`.trim()
+    : "";
+
+  for (const part of [beforeFabric, fabricPart, featuresPart]) {
+    const trimmed = part.trim();
+    if (trimmed) {
+      lines.push(trimmed);
+    }
+  }
+  if (lines.length > 0) {
+    return lines.join("\n");
+  }
+  return text
     .split(/;\s*/)
     .map((p) => p.trim())
     .filter(Boolean)
     .join("\n");
 }
 
-/** After `Features:`, split comma-separated phrases onto new lines with tab + hyphen for PDP nesting. */
+const FASHION_BIZ_DETAIL_LABEL_LINE_RE = /^(Sizes|Fabric|Features):/i;
+
+/** After `Features:`, split comma-separated phrases — one line per item with tab + hyphen + tab. */
 function bizCollectionFormatFeaturesCommaBullets(s: string): string {
-  return s
-    .split(/\r?\n/)
-    .map((line) => {
-      const m = /^(\s*)(Features:\s*)(.+)$/i.exec(line);
-      if (!m) return line;
-      const rest = m[3].trim();
-      if (!rest.includes(",")) return line;
-      const items = rest
-        .split(",")
-        .map((x) => x.trim())
-        .filter(Boolean);
-      if (items.length <= 1) return line;
-      const prefix = m[1] ?? "";
-      const bullets = items.map((item) => `${prefix}\t- ${item}`).join("\n");
-      return `${prefix}Features:\n${bullets}`;
-    })
-    .join("\n");
+  const lines = s.split(/\r?\n/);
+  const out: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i] ?? "";
+    const m = /^(\s*)Features:\s*(.*)$/i.exec(line);
+    if (!m) {
+      out.push(line);
+      i += 1;
+      continue;
+    }
+    const prefix = m[1] ?? "";
+    let featureText = String(m[2] ?? "").trim();
+    i += 1;
+    while (i < lines.length) {
+      const next = (lines[i] ?? "").trim();
+      if (!next || FASHION_BIZ_DETAIL_LABEL_LINE_RE.test(next)) {
+        break;
+      }
+      featureText = `${featureText} ${next}`.replace(/\s+/g, " ").trim();
+      i += 1;
+    }
+    featureText = featureText.replace(/\.\s*,/g, ",").trim();
+    if (!featureText.includes(",")) {
+      out.push(featureText ? `${prefix}Features: ${featureText}` : `${prefix}Features:`);
+      continue;
+    }
+    const items = featureText
+      .split(",")
+      .map((x) => x.trim().replace(/^\.+/, "").trim())
+      .filter(Boolean);
+    if (items.length <= 1) {
+      out.push(`${prefix}Features: ${items[0] ?? featureText}`);
+      continue;
+    }
+    out.push(`${prefix}Features:`);
+    for (const item of items) {
+      out.push(`${prefix}\t-\t${item}`);
+    }
+  }
+  return out.join("\n");
+}
+
+/** `Fabric:` line — comma-separated specs on tab-indented sub-lines (matches Features sub-lines). */
+function fashionBizFormatFabricLineBullets(text: string): string {
+  const out: string[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const idx = raw.toLowerCase().indexOf("fabric:");
+    if (idx < 0) {
+      out.push(raw);
+      continue;
+    }
+    const before = raw.slice(0, idx);
+    const after = raw.slice(idx + "fabric:".length);
+    const head = `${before}Fabric:`.trimEnd();
+    out.push(head.trim().length > 0 ? head : "Fabric:");
+
+    const body = after.replace(/;\s*/g, ", ").trim();
+    const items = body
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (items.length === 0 && body.length > 0) {
+      out.push(`\t-\t${body}`);
+    } else {
+      for (const it of items) {
+        out.push(`\t-\t${it}`);
+      }
+    }
+  }
+  return out.join("\n");
+}
+
+function fashionBizFormatPdpDescriptionLayout(s: string): string {
+  return fashionBizFormatFabricLineBullets(
+    bizCollectionFormatFeaturesCommaBullets(fashionBizBreakSemicolonsToLines(s)),
+  );
 }
 
 function mergeBizCollectionCsvDetailIntoPdpBody(opts: {
@@ -1046,11 +1143,10 @@ function mergeBizCollectionCsvDetailIntoPdpBody(opts: {
   finish: (s: string) => string;
 }): string {
   const { out, listingName, productName, rawDescriptionBody, supplierName, storeSlug, finish } = opts;
-  if (!isBizCollectionStorefrontListing(supplierName, listingName)) {
+  if (!isFashionBizSumCsvStorefrontListing(supplierName, listingName)) {
     return finish(out);
   }
-  const pack = (s: string) =>
-    bizCollectionFormatFeaturesCommaBullets(bizCollectionBreakSemicolonsToLines(finish(s)));
+  const pack = (s: string) => fashionBizFormatPdpDescriptionLayout(finish(s));
   const code = fashionBizStyleCodeFromListing(listingName, storeSlug);
   if (!code) {
     return pack(out);
@@ -1128,7 +1224,7 @@ export function computePdpDescriptionBodyFromDetailFields(p: PdpDescriptionCompu
 
 /**
  * Product detail: description copy without repeating the marketing title block (first paragraph).
- * For Biz Collection, when the DB text is empty or only echoes the listing name / short title,
+ * For Biz Collection / Biz Care / Yes Chef, when the DB text is empty or only echoes the listing name / short title,
  * fills from sum-CSV `stringified_description` (see `lib/biz-care-collection-style-details.generated.ts`).
  */
 export function productDetailDescriptionBody(

@@ -19,6 +19,8 @@ type Props = {
   stripeCheckoutSessionId: string | null;
   stripePaymentIntentId: string | null;
   refundedAt: string | null;
+  /** When true, refund panel starts expanded (e.g. order detail page). */
+  defaultOpen?: boolean;
 };
 
 export function StoreOrderRefundPanel({
@@ -31,6 +33,7 @@ export function StoreOrderRefundPanel({
   stripeCheckoutSessionId,
   stripePaymentIntentId,
   refundedAt,
+  defaultOpen = false,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -38,6 +41,7 @@ export function StoreOrderRefundPanel({
   const [error, setError] = useState<string | null>(null);
   const [sessionInput, setSessionInput] = useState(stripeCheckoutSessionId ?? "");
   const [partialAud, setPartialAud] = useState("");
+  const [panelOpen, setPanelOpen] = useState(defaultOpen);
 
   const refundableCents = Math.max(0, totalCents - refundedCents);
   const hasStripePayment = Boolean(stripePaymentIntentId?.trim());
@@ -57,134 +61,181 @@ export function StoreOrderRefundPanel({
     });
   }
 
-  return (
-    <div className="no-print mt-6 rounded-xl border border-amber-200/80 bg-amber-50/60 p-4">
-      <h2 className="text-sm font-semibold text-brand-navy">Stripe refund (to card)</h2>
-      <p className="mt-1 text-xs text-slate-600">
-        Refunds return to the customer&apos;s card via Stripe. Order{" "}
-        <span className="font-mono font-semibold">{orderNumber}</span>
-        {hasStripePayment ? (
-          <>
-            {" "}
-            · Payment <span className="font-mono text-[0.65rem]">{stripePaymentIntentId}</span>
-          </>
-        ) : null}
-      </p>
+  const summaryHint =
+    refundableCents <= 0 && hasStripePayment
+      ? "Fully refunded"
+      : !hasStripePayment
+        ? "Link payment to refund"
+        : `Refundable ${formatMoneyFromCents(refundableCents, currency)}`;
 
-      <dl className="mt-3 grid gap-2 text-xs text-slate-700 sm:grid-cols-2">
-        <div>
-          <dt className="text-slate-500">Order total</dt>
-          <dd className="font-medium tabular-nums text-brand-navy">
-            {formatMoneyFromCents(totalCents, currency)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-slate-500">Refunded</dt>
-          <dd className="font-medium tabular-nums text-brand-navy">
-            {formatMoneyFromCents(refundedCents, currency)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-slate-500">Refundable</dt>
-          <dd className="font-medium tabular-nums text-brand-navy">
-            {formatMoneyFromCents(refundableCents, currency)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-slate-500">Status</dt>
-          <dd className="font-medium capitalize text-brand-navy">{status}</dd>
-        </div>
-        {refundedAt ? (
-          <div className="sm:col-span-2">
-            <dt className="text-slate-500">Last refund</dt>
-            <dd className="font-medium text-brand-navy">
-              {new Date(refundedAt).toLocaleString("en-AU", { timeZone: "Australia/Perth" })}
+  return (
+    <details
+      open={panelOpen}
+      onToggle={(e) => setPanelOpen(e.currentTarget.open)}
+      className="no-print group mt-6 rounded-xl border border-amber-200/80 bg-amber-50/60"
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-2 p-4 [&::-webkit-details-marker]:hidden">
+        <svg
+          className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-90"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          aria-hidden
+        >
+          <path
+            fillRule="evenodd"
+            d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+            clipRule="evenodd"
+          />
+        </svg>
+        <span className="text-sm font-semibold text-brand-navy">Stripe refund (to card)</span>
+        <span
+          className={`ml-auto text-right text-xs font-medium tabular-nums ${
+            refundableCents <= 0 && hasStripePayment
+              ? "text-emerald-800"
+              : !hasStripePayment
+                ? "text-amber-900"
+                : "text-slate-600"
+          }`}
+        >
+          {refundedCents > 0 ? (
+            <span className="block sm:inline">
+              Refunded {formatMoneyFromCents(refundedCents, currency)}
+              {refundableCents > 0 ? <span className="hidden sm:inline"> · </span> : null}
+            </span>
+          ) : null}
+          {refundableCents > 0 || !hasStripePayment ? (
+            <span className="block sm:inline">{summaryHint}</span>
+          ) : null}
+        </span>
+      </summary>
+
+      <div className="border-t border-amber-200/80 px-4 pb-4 pt-3">
+        <p className="text-xs text-slate-600">
+          Refunds return to the customer&apos;s card via Stripe. Order{" "}
+          <span className="font-mono font-semibold">{orderNumber}</span>
+          {hasStripePayment ? (
+            <>
+              {" "}
+              · Payment <span className="font-mono text-[0.65rem]">{stripePaymentIntentId}</span>
+            </>
+          ) : null}
+        </p>
+
+        <dl className="mt-3 grid gap-2 text-xs text-slate-700 sm:grid-cols-2">
+          <div>
+            <dt className="text-slate-500">Order total</dt>
+            <dd className="font-medium tabular-nums text-brand-navy">
+              {formatMoneyFromCents(totalCents, currency)}
             </dd>
           </div>
-        ) : null}
-      </dl>
+          <div>
+            <dt className="text-slate-500">Refunded</dt>
+            <dd className="font-medium tabular-nums text-brand-navy">
+              {formatMoneyFromCents(refundedCents, currency)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-slate-500">Refundable</dt>
+            <dd className="font-medium tabular-nums text-brand-navy">
+              {formatMoneyFromCents(refundableCents, currency)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-slate-500">Status</dt>
+            <dd className="font-medium capitalize text-brand-navy">{status}</dd>
+          </div>
+          {refundedAt ? (
+            <div className="sm:col-span-2">
+              <dt className="text-slate-500">Last refund</dt>
+              <dd className="font-medium text-brand-navy">
+                {new Date(refundedAt).toLocaleString("en-AU", { timeZone: "Australia/Perth" })}
+              </dd>
+            </div>
+          ) : null}
+        </dl>
 
-      {!hasStripePayment ? (
-        <div className="mt-4">
-          <p className="text-xs font-semibold text-brand-navy">Link Stripe payment (pi_… or cs_…)</p>
-          <p className="text-[0.65rem] text-slate-500">
-            Stripe → Payments → open the A$8.30 payment → copy <strong>Payment ID</strong> (
-            <span className="font-mono">pi_…</span>) from the right sidebar. Required for orders placed before Stripe
-            ids were saved.
-          </p>
-          <input
-            type="text"
-            value={sessionInput}
-            onChange={(e) => setSessionInput(e.target.value)}
-            placeholder="pi_3TXzvV1o2VOZJ3CB0p8FmJ6x"
-            className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs"
-            disabled={pending}
-          />
-          <button
-            type="button"
-            disabled={
-              pending ||
-              (!sessionInput.trim().startsWith("cs_") && !sessionInput.trim().startsWith("pi_"))
-            }
-            onClick={() =>
-              run(() => linkStoreOrderStripeCheckoutSession(orderId, sessionInput.trim()))
-            }
-            className="mt-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-brand-navy hover:bg-slate-50 disabled:opacity-50"
-          >
-            Link payment
-          </button>
-        </div>
-      ) : null}
-
-      {refundableCents > 0 && hasStripePayment && status !== "unpaid" ? (
-        <div className="mt-4 space-y-2">
-          <p className="text-xs font-semibold text-brand-navy">Partial refund (AUD, optional)</p>
-          <p className="text-[0.65rem] text-slate-500">Leave blank when using full refund only.</p>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={partialAud}
-            onChange={(e) => setPartialAud(e.target.value)}
-            placeholder={(refundableCents / 100).toFixed(2)}
-            className="w-full max-w-[12rem] rounded-lg border border-slate-200 px-3 py-2 text-sm tabular-nums"
-            disabled={pending}
-          />
-          <div className="flex flex-wrap gap-2 pt-1">
-            <button
-              type="button"
+        {!hasStripePayment ? (
+          <div className="mt-4">
+            <p className="text-xs font-semibold text-brand-navy">Link Stripe payment (pi_… or cs_…)</p>
+            <p className="text-[0.65rem] text-slate-500">
+              Stripe → Payments → open the A$8.30 payment → copy <strong>Payment ID</strong> (
+              <span className="font-mono">pi_…</span>) from the right sidebar. Required for orders placed before Stripe
+              ids were saved.
+            </p>
+            <input
+              type="text"
+              value={sessionInput}
+              onChange={(e) => setSessionInput(e.target.value)}
+              placeholder="pi_3TXzvV1o2VOZJ3CB0p8FmJ6x"
+              className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs"
               disabled={pending}
-              onClick={() => run(() => refundStoreOrderViaStripe(orderId))}
-              className="rounded-lg bg-brand-orange px-4 py-2 text-xs font-semibold text-white hover:bg-brand-orange/90 disabled:opacity-50"
-            >
-              {pending ? "Processing…" : "Refund full amount to card"}
-            </button>
+            />
             <button
               type="button"
-              disabled={pending || !partialAud.trim()}
-              onClick={() => {
-                const parsed = Number.parseFloat(partialAud.replace(/,/g, "").trim());
-                if (!Number.isFinite(parsed) || parsed <= 0) {
-                  setError("Enter a valid refund amount in AUD.");
-                  return;
-                }
-                run(() =>
-                  refundStoreOrderViaStripe(orderId, { amountCents: Math.round(parsed * 100) }),
-                );
-              }}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-brand-navy hover:bg-slate-50 disabled:opacity-50"
+              disabled={
+                pending ||
+                (!sessionInput.trim().startsWith("cs_") && !sessionInput.trim().startsWith("pi_"))
+              }
+              onClick={() =>
+                run(() => linkStoreOrderStripeCheckoutSession(orderId, sessionInput.trim()))
+              }
+              className="mt-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-brand-navy hover:bg-slate-50 disabled:opacity-50"
             >
-              Refund partial amount
+              Link payment
             </button>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {refundableCents <= 0 && hasStripePayment ? (
-        <p className="mt-3 text-xs font-medium text-emerald-800">Fully refunded on file.</p>
-      ) : null}
+        {refundableCents > 0 && hasStripePayment && status !== "unpaid" ? (
+          <div className="mt-4 space-y-2">
+            <p className="text-xs font-semibold text-brand-navy">Partial refund (AUD, optional)</p>
+            <p className="text-[0.65rem] text-slate-500">Leave blank when using full refund only.</p>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={partialAud}
+              onChange={(e) => setPartialAud(e.target.value)}
+              placeholder={(refundableCents / 100).toFixed(2)}
+              className="w-full max-w-[12rem] rounded-lg border border-slate-200 px-3 py-2 text-sm tabular-nums"
+              disabled={pending}
+            />
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => run(() => refundStoreOrderViaStripe(orderId))}
+                className="rounded-lg bg-brand-orange px-4 py-2 text-xs font-semibold text-white hover:bg-brand-orange/90 disabled:opacity-50"
+              >
+                {pending ? "Processing…" : "Refund full amount to card"}
+              </button>
+              <button
+                type="button"
+                disabled={pending || !partialAud.trim()}
+                onClick={() => {
+                  const parsed = Number.parseFloat(partialAud.replace(/,/g, "").trim());
+                  if (!Number.isFinite(parsed) || parsed <= 0) {
+                    setError("Enter a valid refund amount in AUD.");
+                    return;
+                  }
+                  run(() =>
+                    refundStoreOrderViaStripe(orderId, { amountCents: Math.round(parsed * 100) }),
+                  );
+                }}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-brand-navy hover:bg-slate-50 disabled:opacity-50"
+              >
+                Refund partial amount
+              </button>
+            </div>
+          </div>
+        ) : null}
 
-      {error ? <p className="mt-3 text-xs font-medium text-red-700">{error}</p> : null}
-      {message ? <p className="mt-3 text-xs font-medium text-emerald-800">{message}</p> : null}
-    </div>
+        {refundableCents <= 0 && hasStripePayment ? (
+          <p className="mt-3 text-xs font-medium text-emerald-800">Fully refunded on file.</p>
+        ) : null}
+
+        {error ? <p className="mt-3 text-xs font-medium text-red-700">{error}</p> : null}
+        {message ? <p className="mt-3 text-xs font-medium text-emerald-800">{message}</p> : null}
+      </div>
+    </details>
   );
 }

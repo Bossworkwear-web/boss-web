@@ -1,11 +1,7 @@
 #!/usr/bin/env node
 /**
- * Patch Supabase `products.description` for Biz Collection using Fashion Biz sum CSVs that live in
- * `data/supplier/fashion-biz/csv/` (any file whose name contains `sum` and ends in `.csv`).
- * Reads columns from the header row: `style`, `short_description`, `stringified_description`.
- *
- * Put the supplier’s sum export(s) in that folder (file name does not need to contain “biz-collection”),
- * then run:
+ * Patch Supabase `products.description` for Fashion Biz lines (Biz Care, Biz Collection, Yes Chef)
+ * using sum CSVs in `data/supplier/fashion-biz/csv/` (`short_description`, `stringified_description`).
  *
  *   node scripts/update-biz-collection-descriptions-from-sum-csv.mjs --dry-run
  *   node scripts/update-biz-collection-descriptions-from-sum-csv.mjs
@@ -25,18 +21,38 @@ function parseArgs(argv) {
   return { dryRun: argv.includes("--dry-run") };
 }
 
-function styleFromBizCollectionName(name) {
-  const m = /\bBiz Collection\s+([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\b/i.exec(String(name ?? ""));
+function styleFromFashionBizName(name) {
+  const m = /\b(?:Biz Care|Biz Collection|Yes\s*Chef)\s+([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\b/i.exec(
+    String(name ?? ""),
+  );
   return m ? m[1].toUpperCase().replace(/-CLEARANCE$/i, "") : null;
 }
 
-function buildDescription(row, template, displayName, sumTitle, detailBody, style) {
+function brandFromFashionBizName(name, supplierName) {
+  const n = String(name ?? "");
+  if (/\bYes\s*Chef\b/i.test(n) || String(supplierName ?? "").trim().toLowerCase() === "yes chef") {
+    return "Yes Chef";
+  }
+  if (/\bBiz Collection\b/i.test(n) || String(supplierName ?? "").trim().toLowerCase() === "biz collection") {
+    return "Biz Collection";
+  }
+  if (/\bBiz Care\b/i.test(n) || String(supplierName ?? "").trim().toLowerCase() === "biz care") {
+    return "Biz Care";
+  }
+  return null;
+}
+
+function isFashionBizProduct(name, supplierName) {
+  return Boolean(brandFromFashionBizName(name, supplierName));
+}
+
+function buildDescription(row, template, displayName, sumTitle, detailBody, style, brand) {
   const name = String(row.name ?? "");
   const baseDescription = template
     .replace(/\{name\}/g, name)
     .replace(/\{displayName\}/g, displayName)
     .replace(/\{section\}/g, String(row.category ?? "").trim())
-    .replace(/\{brand\}/g, "Biz Collection")
+    .replace(/\{brand\}/g, brand)
     .replace(/\{sku\}/g, style);
   const parts = [];
   if (sumTitle) {
@@ -63,7 +79,7 @@ async function main() {
   );
   if (detailByStyle.size === 0) {
     console.warn(
-      "No stringified_description column found in any *sum*.csv under data/supplier/fashion-biz/csv/. Add or fix CSV files there (Fashion Biz sum export shape), then re-run.",
+      "No stringified_description column found in any *sum*.csv under data/supplier/fashion-biz/csv/. Add or fix CSV files there, then re-run.",
     );
   }
 
@@ -82,12 +98,15 @@ async function main() {
   let updated = 0;
   let skipped = 0;
   let scanned = 0;
+  let noCsvDetail = 0;
 
   while (true) {
     const { data, error } = await supabase
       .from("products")
       .select("id, name, slug, category, description, supplier_name")
-      .or("supplier_name.eq.Biz Collection,name.ilike.%Biz Collection%")
+      .or(
+        "name.ilike.%Biz Care%,name.ilike.%Biz Collection%,name.ilike.%Yes Chef%,supplier_name.eq.Biz Care,supplier_name.eq.Biz Collection,supplier_name.eq.Yes Chef",
+      )
       .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) {
@@ -100,29 +119,34 @@ async function main() {
     for (const row of data) {
       scanned += 1;
       const nm = String(row.name ?? "");
-      const sup = String(row.supplier_name ?? "").trim().toLowerCase();
-      if (!nm.toLowerCase().includes("biz collection") && sup !== "biz collection") {
+      if (!isFashionBizProduct(nm, row.supplier_name)) {
         skipped += 1;
         continue;
       }
-      const style = styleFromBizCollectionName(nm);
+      const brand = brandFromFashionBizName(nm, row.supplier_name);
+      if (!brand) {
+        skipped += 1;
+        continue;
+      }
+      const style = styleFromFashionBizName(nm);
       if (!style) {
         skipped += 1;
         continue;
       }
       const detailBody = (detailByStyle.get(style) ?? "").trim();
       if (!detailBody) {
+        noCsvDetail += 1;
         skipped += 1;
         continue;
       }
       const sumTitle = (shortByStyle.get(style) ?? "").trim();
-      const nextDesc = buildDescription(row, template, displayName, sumTitle, detailBody, style);
+      const nextDesc = buildDescription(row, template, displayName, sumTitle, detailBody, style, brand);
       if (nextDesc === (row.description ?? "")) {
         skipped += 1;
         continue;
       }
       if (args.dryRun) {
-        console.log(`[dry-run] ${style} → ${row.slug}`);
+        console.log(`[dry-run] ${brand} ${style} → ${row.slug}`);
         updated += 1;
         continue;
       }
@@ -140,7 +164,7 @@ async function main() {
   }
 
   console.log(
-    `Done. rows scanned=${scanned}, descriptions ${args.dryRun ? "would update" : "updated"}=${updated}, skipped=${skipped}`,
+    `Done. rows scanned=${scanned}, descriptions ${args.dryRun ? "would update" : "updated"}=${updated}, skipped=${skipped}, no CSV detail=${noCsvDetail}`,
   );
 }
 
