@@ -31,13 +31,13 @@ const footerLinkClass =
 const PAYMENT_ICONS = [
   { src: "/visa.png", alt: "Visa" },
   { src: "/mastercard.png", alt: "Mastercard" },
-  { src: "/amex.svg", alt: "American Express" },
   { src: "/eftpos.svg", alt: "EFTPOS" },
+  { src: "/link.svg", alt: "Link" },
   { src: "/apple-pay.svg", alt: "Apple Pay" },
   { src: "/google-pay.svg", alt: "Google Pay" },
-  { src: "/paypal.svg", alt: "PayPal" },
-  { src: "/payid.svg", alt: "PayID" },
-  { src: "/payto.svg", alt: "PayTo" },
+  { src: "/afterpay.svg", alt: "Afterpay" },
+  { src: "/klarna.svg", alt: "Klarna" },
+  { src: "/zip.svg", alt: "Zip" },
 ] as const;
 
 export function SiteFooter() {

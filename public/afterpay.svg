@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 36" role="img" aria-label="Afterpay">
+  <rect width="56" height="36" rx="4" fill="#000000"/>
+  <text
+    x="28"
+    y="23"
+    fill="#B2FCE4"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="7.5"
+    font-weight="700"
+    text-anchor="middle"
+  >Afterpay</text>
+</svg>
