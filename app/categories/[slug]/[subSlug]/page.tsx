@@ -27,7 +27,11 @@ import {
   type CategoryBrowseProductRow,
 } from "@/lib/main-category-browse";
 import { productCardDisplayLines } from "@/lib/product-card-copy";
-import { isJbWearSixSeriesListing, isJbWorkwearExcludedHeadwearOrSocks } from "@/lib/product-visibility";
+import {
+  isAussiePacificCatalogListing,
+  isJbWearSixSeriesListing,
+  isJbWorkwearExcludedHeadwearOrSocks,
+} from "@/lib/product-visibility";
 import { productPathSegment } from "@/lib/product-path-slug";
 import { resolveHealthCareBrowseSubSlug } from "@/lib/health-care-browse";
 import { resolveProductSubSlug } from "@/lib/product-subslug";
@@ -200,6 +204,14 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
   const filteredAllBrands = filterProductsForSubCategoryBrowse(slug, subSlug, allRows)
     .filter((item) => {
       if (slug === "workwear") {
+        if (
+          isAussiePacificCatalogListing(item.name, {
+            slug: item.slug ?? null,
+            supplier_name: item.supplier_name ?? null,
+          })
+        ) {
+          return false;
+        }
         const b = inferredBrandForFilter(item).toLowerCase();
         if (b === "jb's wear") {
           if (isJbWorkwearExcludedHeadwearOrSocks(item.name, { category: item.category ?? null })) {

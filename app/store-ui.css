@@ -17,10 +17,10 @@
   --store-ui-subpicker-gap: 0.6075rem;
 
   /* —— Role: category-browse-grid —— */
-  --store-ui-browse-card-title-size: 1.029375rem;
+  --store-ui-browse-card-title-size: 1.4823rem;
   /* Product name only (keep code/price larger for scanability). */
-  --store-ui-browse-card-name-size: 0.720625rem;
-  --store-ui-browse-card-price-was-size: 0.91125rem;
+  --store-ui-browse-card-name-size: 1.0377rem;
+  --store-ui-browse-card-price-was-size: 1.3122rem;
   /* vmin keeps image tiles balanced in tablet portrait and on short laptop viewports */
   --store-ui-browse-card-media-height: clamp(12.5rem, 38vmin, 20.6875rem);
   --store-ui-browse-card-body-padding: 1.5rem;

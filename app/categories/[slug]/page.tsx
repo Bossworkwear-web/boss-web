@@ -28,6 +28,7 @@ import {
 } from "@/lib/main-category-browse";
 import {
   hasStorefrontListNameAndPrice,
+  isAussiePacificCatalogListing,
   isJbWearSixSeriesListing,
   isJbWorkwearExcludedHeadwearOrSocks,
 } from "@/lib/product-visibility";
@@ -148,6 +149,14 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   };
 
   const isWorkwearExclusiveBrand = (item: CategoryBrowseProductRow): boolean => {
+    if (
+      isAussiePacificCatalogListing(item.name, {
+        slug: item.slug ?? null,
+        supplier_name: item.supplier_name ?? null,
+      })
+    ) {
+      return false;
+    }
     const b = inferredBrandForFilter(item).toLowerCase();
     if (b === "syzmik" || b === "bisley") {
       return true;

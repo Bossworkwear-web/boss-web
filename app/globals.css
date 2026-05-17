@@ -367,19 +367,19 @@ pre {
   font-weight: 300 !important;
 }
 
-/* Category browse product cards: reduce type ~30% for typical screens. */
+/* Category browse product cards: base scale (see store-ui.css tokens for final px). */
 .subcategory-browse-grid .subcategory-browse-card-body {
-  font-size: 0.49em;
+  font-size: 0.7056em;
 }
 
 /* Product cards (category/search): shrink code line slightly. */
 .subcategory-browse-card-body .product-card-grid-code {
-  font-size: 0.8em;
+  font-size: 1.152em;
 }
 
 /* Product cards (category/search): shrink product name only (keep code + price). */
 .subcategory-browse-card-body .product-card-grid-title {
-  font-size: 0.56em;
+  font-size: 0.8064em;
   line-height: 1.15;
 }
 

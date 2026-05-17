@@ -1747,7 +1747,7 @@ function SizeGuideDialog({
               </p>
               <ul className="space-y-2">
                 {externalLinks.map((link) => (
-                  <li key={link.href}>
+                  <li key={link.href} className="flex flex-col gap-0.5 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-2">
                     <a
                       href={link.href}
                       target="_blank"
@@ -1755,8 +1755,8 @@ function SizeGuideDialog({
                       className="text-[1.26rem] font-semibold text-brand-navy underline decoration-brand-orange/70 underline-offset-2 hover:text-brand-orange"
                     >
                       {link.label}
-                      <span className="ml-1 text-[1.08rem] font-normal text-brand-navy/55">(opens new tab)</span>
                     </a>
+                    <span className="break-all text-[1.08rem] font-normal text-brand-navy/55">{link.href}</span>
                   </li>
                 ))}
               </ul>
@@ -2380,8 +2380,14 @@ export function PremiumWorkPoloClient({
     "",
   );
   const supplierSizeChartLinks = useMemo(
-    () => resolveSupplierSizeChartLinks(product.name, product.slug ?? null),
-    [product.name, product.slug],
+    () =>
+      resolveSupplierSizeChartLinks(
+        product.name,
+        product.slug ?? null,
+        product.supplierName ?? null,
+        product.category ?? null,
+      ),
+    [product.name, product.slug, product.supplierName, product.category],
   );
 
   /** When the image set changes, re-pick hero for the current colour (chip / thumbnail clicks set hero directly). */

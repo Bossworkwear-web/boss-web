@@ -3,13 +3,97 @@
  * Edit this list when suppliers publish new PDFs or pages — no schema migration required.
  */
 
+import {
+  isBizCareCatalogProduct,
+  isFashionBizChefLineListing,
+  isYesChefCatalogProduct,
+  type WorkwearOnlyBrandMeta,
+} from "@/lib/product-visibility";
+
 export type SupplierSizeChartLink = {
   label: string;
   href: string;
 };
 
-function pack(productName: string, storeSlug?: string | null): string {
-  return `${productName} ${storeSlug ?? ""}`.toLowerCase();
+/** Fashion Biz group size guide (Biz Collection, Biz Care, Yes!Chef, etc.). */
+export const FASHION_BIZ_SIZE_GUIDE_URL = "https://www.fashionbiz.com.au/size-guide";
+
+const BIZ_COLLECTION_SIZE_GUIDE_LINK: SupplierSizeChartLink = {
+  label: "Biz Collection — size guide",
+  href: FASHION_BIZ_SIZE_GUIDE_URL,
+};
+
+/** Syzmik brand size guide (Fashion Biz group). */
+export const SYZMIK_SIZE_GUIDE_URL = "https://www.syzmik.com/size-guide";
+
+/** JB's Wear sizing specifications. */
+export const JBS_WEAR_SIZE_GUIDE_URL = "https://www.jbswear.com.au/general/sizing-specifications";
+
+/** Bisley Workwear size chart. */
+export const BISLEY_SIZE_GUIDE_URL = "https://www.bisleyworkwear.com.au/bisley-workwear-size-chart/";
+
+function isBisleyListing(blob: string, slug: string): boolean {
+  if (blob.includes("bisley") || /\bbisley\b/.test(slug)) {
+    return true;
+  }
+  return slug.startsWith("bis-");
+}
+
+function isJbsWearListing(blob: string, slug: string): boolean {
+  if (
+    blob.includes("jb's wear") ||
+    blob.includes("jbs wear") ||
+    blob.includes("jbswear") ||
+    /\bjbs\s*wear\b/.test(blob)
+  ) {
+    return true;
+  }
+  return slug.startsWith("jb-") || slug.includes("jbswear");
+}
+
+function pack(
+  productName: string,
+  storeSlug?: string | null,
+  supplierName?: string | null,
+  category?: string | null,
+): string {
+  return `${productName} ${storeSlug ?? ""} ${supplierName ?? ""} ${category ?? ""}`.toLowerCase();
+}
+
+function listingMeta(
+  storeSlug?: string | null,
+  supplierName?: string | null,
+  category?: string | null,
+): Pick<WorkwearOnlyBrandMeta, "slug" | "supplier_name" | "category"> {
+  return {
+    slug: storeSlug ?? null,
+    supplier_name: supplierName ?? null,
+    category: category ?? null,
+  };
+}
+
+function isBizCareSizeGuideListing(
+  productName: string,
+  blob: string,
+  slug: string,
+  meta: Pick<WorkwearOnlyBrandMeta, "slug" | "supplier_name" | "category">,
+): boolean {
+  return isBizCareCatalogProduct(productName, meta) || blob.includes("biz care") || slug.includes("bizcare");
+}
+
+function isYesChefSizeGuideListing(
+  productName: string,
+  blob: string,
+  slug: string,
+  storeSlug: string | null | undefined,
+  meta: Pick<WorkwearOnlyBrandMeta, "slug" | "supplier_name" | "category">,
+): boolean {
+  return (
+    isYesChefCatalogProduct(productName, meta) ||
+    isFashionBizChefLineListing(productName, storeSlug) ||
+    blob.includes("yes chef") ||
+    slug.includes("yeschef")
+  );
 }
 
 /**
@@ -19,31 +103,30 @@ function pack(productName: string, storeSlug?: string | null): string {
 export function resolveSupplierSizeChartLinks(
   productName: string,
   storeSlug?: string | null,
+  supplierName?: string | null,
+  category?: string | null,
 ): SupplierSizeChartLink[] {
-  const blob = pack(productName, storeSlug);
+  const blob = pack(productName, storeSlug, supplierName, category);
   const slug = String(storeSlug ?? "").toLowerCase();
+  const meta = listingMeta(storeSlug, supplierName, category);
 
   if (blob.includes("syzmik") || slug.includes("syzmik")) {
-    return [{ label: "Syzmik — size guide", href: "https://www.syzmik.com/size-guide" }];
+    return [{ label: "Syzmik — size guide", href: SYZMIK_SIZE_GUIDE_URL }];
   }
   if (blob.includes("biz collection") || slug.includes("bizcollection")) {
-    return [{ label: "Biz Collection — size guide", href: "https://www.bizcollection.com.au/size-guide" }];
+    return [BIZ_COLLECTION_SIZE_GUIDE_LINK];
   }
-  if (blob.includes("biz care") || slug.includes("bizcare")) {
-    return [
-      {
-        label: "Biz Collection — size guide (Biz Care / healthcare fits)",
-        href: "https://www.bizcollection.com.au/size-guide",
-      },
-    ];
+  if (isBizCareSizeGuideListing(productName, blob, slug, meta)) {
+    return [BIZ_COLLECTION_SIZE_GUIDE_LINK];
   }
-  if (blob.includes("yes chef") || slug.includes("yeschef")) {
-    return [
-      {
-        label: "Biz Collection — size guide (hospitality / aprons)",
-        href: "https://www.bizcollection.com.au/size-guide",
-      },
-    ];
+  if (isYesChefSizeGuideListing(productName, blob, slug, storeSlug, meta)) {
+    return [BIZ_COLLECTION_SIZE_GUIDE_LINK];
+  }
+  if (isJbsWearListing(blob, slug)) {
+    return [{ label: "JB — size guide", href: JBS_WEAR_SIZE_GUIDE_URL }];
+  }
+  if (isBisleyListing(blob, slug)) {
+    return [{ label: "Bisley — size guide", href: BISLEY_SIZE_GUIDE_URL }];
   }
 
   return [];

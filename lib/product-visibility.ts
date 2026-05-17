@@ -2440,6 +2440,17 @@ function isAussiePacificSupplierMeta(meta?: WorkwearOnlyBrandMeta | null): boole
   return slug.startsWith("ap-");
 }
 
+/** Aussie Pacific (Four Seasons API) — lists under Men's/Women's/etc., never Workwear browse. */
+export function isAussiePacificCatalogListing(
+  productName: string,
+  meta?: Pick<WorkwearOnlyBrandMeta, "slug" | "supplier_name"> | null,
+): boolean {
+  if (isAussiePacificSupplierMeta(meta)) {
+    return true;
+  }
+  return /\baussie\s+pacific\b/i.test(productName);
+}
+
 /** Men's AP polo style 1302 — must not list under Women's/Polos (already under Men's). Not 1302L / 13020. */
 function isAussiePacificMens1302ExcludeFromWomensPolos(productName: string, meta?: WorkwearOnlyBrandMeta): boolean {
   if (!isAussiePacificSupplierMeta(meta)) {
@@ -2480,6 +2491,11 @@ export function isProductVisibleInCategoryBrowse(
 
   // Requested: Biz Collection — never Workwear browse (any sub-category).
   if (mainSlug === WORKWEAR_MAIN_SLUG && isBizCollectionListing(productName, meta?.slug ?? null, meta?.category ?? null)) {
+    return false;
+  }
+
+  // Requested: Aussie Pacific — never Workwear browse (any sub-category; hi-vis keywords must not pull AP in).
+  if (mainSlug === WORKWEAR_MAIN_SLUG && isAussiePacificCatalogListing(productName, meta)) {
     return false;
   }
 
