@@ -271,7 +271,7 @@ function CategoryInlineNav({
 }
 
 const HEADER_SEARCH_INPUT_CLASS =
-  "min-w-0 w-[min(100%,22rem)] rounded-full border border-brand-navy/20 bg-white px-[0.875rem] py-2 text-base leading-snug text-brand-navy placeholder:text-brand-navy/50 focus:border-brand-orange focus:outline-none sm:w-[26rem] sm:px-[1.125rem] sm:py-2.5 sm:text-lg";
+  "min-w-0 w-[min(100%,7.5rem)] rounded-full border border-brand-navy/20 bg-white px-3 py-1.5 text-sm leading-snug text-brand-navy placeholder:text-brand-navy/50 focus:border-brand-orange focus:outline-none sm:w-[11rem] sm:px-[1.125rem] sm:py-2 sm:text-base lg:w-[13rem] lg:py-2.5 lg:text-lg";
 
 /**
  * Same DOM for Suspense fallback and hydrated tree — avoids `<div>` placeholder vs `<form>` mismatch.
@@ -347,6 +347,16 @@ function HeaderSearchFormInner() {
   );
 }
 
+function headerSearchAnimDisabled(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return (
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+    window.matchMedia("(max-width: 1023px)").matches
+  );
+}
+
 function HeaderSearchToggle({
   open,
   onOpen,
@@ -357,6 +367,7 @@ function HeaderSearchToggle({
   onClose: () => void;
 }) {
   const [isCollapsing, setIsCollapsing] = useState(false);
+  const [instantSearchUi, setInstantSearchUi] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -364,8 +375,21 @@ function HeaderSearchToggle({
     }
   }, [open]);
 
+  useEffect(() => {
+    const mqMobile = window.matchMedia("(max-width: 1023px)");
+    const mqReduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setInstantSearchUi(mqMobile.matches || mqReduce.matches);
+    sync();
+    mqMobile.addEventListener("change", sync);
+    mqReduce.addEventListener("change", sync);
+    return () => {
+      mqMobile.removeEventListener("change", sync);
+      mqReduce.removeEventListener("change", sync);
+    };
+  }, []);
+
   const beginClose = useCallback(() => {
-    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (headerSearchAnimDisabled()) {
       onClose();
       return;
     }
@@ -393,12 +417,16 @@ function HeaderSearchToggle({
     onClose();
   }
 
+  const searchShellClass = instantSearchUi
+    ? "max-w-[min(100%,12rem)] overflow-hidden"
+    : isCollapsing
+      ? "store-header-search-collapse"
+      : "store-header-search-expand";
+
   return open ? (
     <div
-      className={`flex max-w-full items-center gap-1.5 ${
-        isCollapsing ? "store-header-search-collapse" : "store-header-search-expand"
-      }`}
-      onAnimationEnd={onSearchShellAnimationEnd}
+      className={`flex max-w-full items-center gap-1 max-lg:max-w-[calc(100vw-5.5rem)] sm:gap-1.5 ${searchShellClass}`}
+      onAnimationEnd={instantSearchUi ? undefined : onSearchShellAnimationEnd}
     >
       <Suspense fallback={<HeaderSearchFormView />}>
         <HeaderSearchFormInner />
@@ -418,7 +446,7 @@ function HeaderSearchToggle({
     <button
       type="button"
       onClick={onOpen}
-      className="inline-flex shrink-0 items-center justify-center rounded-full p-2 text-brand-navy transition hover:bg-brand-surface sm:p-2.5"
+      className="inline-flex shrink-0 items-center justify-center rounded-full p-1.5 text-brand-navy transition hover:bg-brand-surface sm:p-2 lg:p-2.5"
       aria-label="Open search"
     >
       <SearchIcon className="h-5 w-5 sm:h-6 sm:w-6" />
@@ -611,12 +639,12 @@ export function TopNavClient({
         <nav
           className={`mx-auto flex w-full max-w-none flex-col gap-y-1 py-2.5 sm:gap-y-[0.3125rem] sm:py-3.5 ${SITE_PAGE_INSET_X_CLASS}`}
         >
-          <div className="flex w-full items-center gap-2 sm:gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-start lg:gap-3">
-            <div className="flex shrink-0 items-center gap-2 sm:gap-3 lg:justify-self-start">
+          <div className="flex w-full min-w-0 items-center gap-1.5 sm:gap-2 lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-start lg:gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2 lg:flex-none lg:justify-self-start">
               <button
                 type="button"
                 onClick={() => setMobileNavOpen(true)}
-                className="inline-flex items-center justify-center rounded-lg border border-brand-navy/25 p-2 text-brand-navy lg:hidden"
+                className="inline-flex shrink-0 items-center justify-center rounded-lg border border-brand-navy/25 p-1.5 text-brand-navy lg:hidden"
                 aria-expanded={mobileNavOpen}
                 aria-controls="mobile-store-menu"
                 aria-haspopup="dialog"
@@ -624,13 +652,17 @@ export function TopNavClient({
                 <MenuIcon className="h-6 w-6" />
                 <span className="sr-only">Open full menu</span>
               </button>
-              <Link href="/" className="inline-flex items-center px-0.5 py-0.5 sm:px-1 sm:py-1" aria-label="Home">
+              <Link
+                href="/"
+                className="inline-flex min-w-0 max-w-[calc(100%-2.75rem)] items-center py-0.5 sm:max-w-none sm:px-1 sm:py-1"
+                aria-label="Home"
+              >
                 <Image
                   src={LOGO_SRC}
                   alt="Boss Workwear"
                   width={360}
                   height={108}
-                  className="h-[4.8rem] w-auto sm:h-[5.4rem]"
+                  className="h-9 w-auto max-h-9 max-w-full object-contain object-left sm:h-11 sm:max-h-11 lg:h-[5.4rem] lg:max-h-none"
                   priority
                 />
               </Link>
@@ -646,13 +678,13 @@ export function TopNavClient({
               <StoreSecondaryNavLinks pathname={pathname} variant="header-row" />
             </div>
 
-            <div className="ml-auto flex shrink-0 flex-col items-end gap-1 sm:gap-1.5 lg:ml-0 lg:justify-self-end">
-              <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 md:gap-3">
+            <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1 lg:ml-0 lg:flex-col lg:items-end lg:gap-1.5 lg:justify-self-end">
+              <div className="flex items-center justify-end gap-0.5 sm:gap-1 md:gap-2">
               {customerName ? (
                 <>
                   <Link
                     href="/customer"
-                    className="max-w-[9rem] truncate rounded-full bg-brand-surface px-2.5 py-2 text-xs font-medium leading-snug text-brand-navy transition hover:bg-brand-navy/10 sm:max-w-none sm:px-[1.125rem] sm:py-2.5 sm:text-[1.3125rem]"
+                    className="hidden max-w-[9rem] truncate rounded-full bg-brand-surface px-2.5 py-2 text-xs font-medium leading-snug text-brand-navy transition hover:bg-brand-navy/10 lg:inline-flex lg:max-w-none lg:px-[1.125rem] lg:py-2.5 lg:text-[1.3125rem]"
                     title={customerName}
                   >
                     Hi, {customerName}
@@ -660,15 +692,25 @@ export function TopNavClient({
                   <button
                     type="button"
                     onClick={handleLogOut}
-                    className="rounded-full px-2.5 py-2 text-xs font-medium leading-snug text-brand-navy transition hover:bg-brand-surface sm:px-[1.125rem] sm:py-2.5 sm:text-[1.3125rem]"
+                    className="hidden rounded-full px-2.5 py-2 text-xs font-medium leading-snug text-brand-navy transition hover:bg-brand-surface lg:inline-flex lg:px-[1.125rem] lg:py-2.5 lg:text-[1.3125rem]"
                   >
                     Log out
                   </button>
+                  <Link
+                    href="/customer"
+                    className={`inline-flex items-center justify-center rounded-full p-1.5 sm:p-2 lg:hidden ${
+                      pathname.startsWith("/customer") ? "bg-brand-orange text-brand-navy" : "text-brand-navy hover:bg-brand-surface"
+                    }`}
+                    aria-label="My account"
+                    title={customerName}
+                  >
+                    <UserIcon className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
+                  </Link>
                 </>
               ) : (
                 <Link
                   href="/log-in"
-                  className={`inline-flex items-center justify-center rounded-full p-2 sm:p-2.5 ${
+                  className={`inline-flex items-center justify-center rounded-full p-1.5 sm:p-2 lg:p-2.5 ${
                     pathname === "/log-in" ? "bg-brand-orange text-brand-navy" : "text-brand-navy hover:bg-brand-surface"
                   }`}
                   aria-label="Sign in"
@@ -678,7 +720,7 @@ export function TopNavClient({
               )}
               <Link
                 href="/cart"
-                className={`relative inline-flex items-center justify-center gap-1 rounded-full p-2 sm:p-2.5 ${
+                className={`relative inline-flex items-center justify-center rounded-full p-1.5 sm:p-2 lg:p-2.5 ${
                   pathname === "/cart" ? "bg-brand-orange text-brand-navy" : "text-brand-navy hover:bg-brand-surface"
                 }`}
                 aria-label="Cart"
@@ -690,20 +732,20 @@ export function TopNavClient({
                       : "inline-flex shrink-0"
                   }
                 >
-                  <CartIcon className="h-[1.5125rem] w-[1.5125rem] shrink-0 sm:h-[1.815rem] sm:w-[1.815rem]" />
+                  <CartIcon className="h-5 w-5 shrink-0 sm:h-6 sm:w-6 lg:h-[1.815rem] lg:w-[1.815rem]" />
                 </span>
                 {cartCount > 0 && (
-                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-brand-navy px-1.5 text-xs font-medium text-white sm:min-w-6 sm:px-2 sm:text-sm">
+                  <span className="absolute -right-0.5 -top-0.5 inline-flex min-h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-brand-navy px-1 text-[0.625rem] font-medium leading-none text-white sm:min-h-[1.25rem] sm:min-w-[1.25rem] sm:text-xs">
                     {cartCount}
                   </span>
                 )}
               </Link>
-              </div>
               <HeaderSearchToggle
                 open={searchOpen}
                 onOpen={() => setSearchOpen(true)}
                 onClose={() => setSearchOpen(false)}
               />
+              </div>
             </div>
           </div>
         </nav>
@@ -726,13 +768,27 @@ export function TopNavClient({
           <div className="store-sidebar-menu store-ui-nav-drawer-panel absolute bottom-0 left-0 top-0 z-10 flex flex-col bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-brand-navy/10 px-4 py-3">
               <p className="text-sm font-medium uppercase tracking-[0.08em] text-brand-navy">Full menu</p>
-              <button
-                type="button"
-                onClick={() => setMobileNavOpen(false)}
-                className="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-navy hover:bg-brand-surface"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                {customerName ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileNavOpen(false);
+                      handleLogOut();
+                    }}
+                    className="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-navy hover:bg-brand-surface"
+                  >
+                    Log out
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-navy hover:bg-brand-surface"
+                >
+                  Close
+                </button>
+              </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
               <CategoryNavList

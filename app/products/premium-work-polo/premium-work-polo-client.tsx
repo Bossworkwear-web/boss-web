@@ -2991,12 +2991,105 @@ export function PremiumWorkPoloClient({
     </>
   );
 
+  const renderProductMetaHeader = (placement: "mobile" | "desktop") => {
+    const isMobile = placement === "mobile";
+    return (
+      <header
+        className={
+          isMobile
+            ? "product-detail-meta-header order-1 space-y-1.5 max-lg:[&_.product-detail-google-rating]:text-[calc(1.2rem*0.6)] lg:hidden"
+            : "product-detail-meta-header hidden space-y-2 lg:block"
+        }
+      >
+        <p
+          className={
+            isMobile
+              ? "text-[calc(1.08rem*0.6)] font-semibold uppercase tracking-[0.12em] text-brand-navy/70"
+              : "text-[1.08rem] font-semibold uppercase tracking-[0.12em] text-brand-navy/70"
+          }
+        >
+          {product.category}
+        </p>
+        {pdpProductTitle ? (
+          <>
+            <h1
+              className={
+                isMobile
+                  ? "product-detail-title text-[calc(3.3696rem*0.48)] font-medium leading-tight text-brand-navy"
+                  : "product-detail-title text-[calc(3.3696rem*0.8)] font-medium leading-tight text-brand-navy sm:text-[calc(4.212rem*0.8)]"
+              }
+            >
+              {pdpProductTitle}
+            </h1>
+            <p
+              className={
+                isMobile
+                  ? "product-detail-sku text-[calc(2.16rem*0.6)] font-light text-black"
+                  : "product-detail-sku text-[2.16rem] font-light text-black"
+              }
+            >
+              {brandAndModelLine}
+            </p>
+            {product.googleRating ? <ProductGoogleRatingRow info={product.googleRating} /> : null}
+          </>
+        ) : (
+          <>
+            <h1
+              className={
+                isMobile
+                  ? "product-detail-sku text-[calc(2.16rem*0.6)] font-light text-black"
+                  : "product-detail-sku text-[2.16rem] font-light text-black"
+              }
+            >
+              {brandAndModelLine}
+            </h1>
+            {product.googleRating ? <ProductGoogleRatingRow info={product.googleRating} /> : null}
+          </>
+        )}
+        <p
+          className={
+            isMobile
+              ? "product-detail-list-price w-full text-right text-[calc(2.16rem*0.6)] font-light text-black tabular-nums"
+              : "product-detail-list-price w-full text-right text-[2.16rem] font-light text-black tabular-nums"
+          }
+        >
+          {product.originalPrice != null ? (
+            <>
+              <span
+                className={
+                  isMobile
+                    ? "product-detail-price-strike mr-2 text-[calc(1.44rem*0.6)] font-light text-brand-navy/55 line-through"
+                    : "product-detail-price-strike mr-2 text-[1.44rem] font-light text-brand-navy/55 line-through"
+                }
+              >
+                {toCurrency(product.originalPrice)}
+              </span>
+              {toCurrency(product.basePrice)}
+            </>
+          ) : (
+            toCurrency(product.basePrice)
+          )}
+        </p>
+        <p
+          className={
+            isMobile
+              ? "text-right text-[calc(0.875rem*0.6)] text-brand-navy/55"
+              : "text-right text-sm text-brand-navy/55"
+          }
+        >
+          Includes {Math.round(STOREFRONT_RETAIL_GST_RATE * 100)}% GST.
+        </p>
+      </header>
+    );
+  };
+
   return (
     <main className="product-detail-page min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
       <div className={STORE_MAIN_SHELL_CLASS}>
         <section className={`${SITE_PAGE_INSET_X_CLASS} pb-6 pt-6 sm:pb-10 sm:pt-10`}>
-        <div className="mx-auto grid w-full max-w-none gap-8 lg:grid-cols-[1fr_1fr] lg:gap-10">
-        <section className="space-y-3 sm:space-y-4">
+        <div className="mx-auto grid w-full max-w-none grid-cols-1 gap-8 lg:grid-cols-[1fr_1fr] lg:gap-10">
+        {renderProductMetaHeader("mobile")}
+        <section className="order-2 space-y-3 sm:space-y-4 lg:col-start-1 lg:row-start-1 lg:self-start">
           <button
             type="button"
             onClick={() => activeImage && setHeroLightboxOpen(true)}
@@ -3211,7 +3304,8 @@ export function PremiumWorkPoloClient({
           ) : null}
         </section>
 
-        <section className="space-y-5 sm:space-y-6 lg:space-y-7">
+        <section className="order-3 space-y-5 sm:space-y-6 lg:col-start-2 lg:row-start-1 lg:space-y-7">
+          {renderProductMetaHeader("desktop")}
           {activeDealPackage ? (
             <div className="rounded-2xl border border-brand-orange/35 bg-gradient-to-r from-brand-orange/15 to-brand-navy/5 px-4 py-4 sm:px-5">
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-orange">Special deal</p>
@@ -3224,44 +3318,6 @@ export function PremiumWorkPoloClient({
               </p>
             </div>
           ) : null}
-          <header className="space-y-2">
-            <p className="text-[1.08rem] font-semibold uppercase tracking-[0.12em] text-brand-navy/70">
-              {product.category}
-            </p>
-            {pdpProductTitle ? (
-              <>
-                <h1 className="product-detail-title text-[3.3696rem] font-medium leading-tight text-brand-navy sm:text-[4.212rem]">
-                  {pdpProductTitle}
-                </h1>
-                <p className="product-detail-sku text-[2.16rem] font-light text-black">
-                  {brandAndModelLine}
-                </p>
-                {product.googleRating ? <ProductGoogleRatingRow info={product.googleRating} /> : null}
-              </>
-            ) : (
-              <>
-                <h1 className="product-detail-sku text-[2.16rem] font-light text-black">
-                  {brandAndModelLine}
-                </h1>
-                {product.googleRating ? <ProductGoogleRatingRow info={product.googleRating} /> : null}
-              </>
-            )}
-            <p className="product-detail-list-price w-full text-right text-[2.16rem] font-light text-black tabular-nums">
-              {product.originalPrice != null ? (
-                <>
-                  <span className="product-detail-price-strike text-[1.44rem] font-light text-brand-navy/55 line-through mr-2">
-                    {toCurrency(product.originalPrice)}
-                  </span>
-                  {toCurrency(product.basePrice)}
-                </>
-              ) : (
-                toCurrency(product.basePrice)
-              )}
-            </p>
-            <p className="text-right text-sm text-brand-navy/55">
-              Includes {Math.round(STOREFRONT_RETAIL_GST_RATE * 100)}% GST.
-            </p>
-          </header>
 
           <div className="space-y-3">
             <div className="flex flex-wrap items-end justify-between gap-2">
@@ -3333,7 +3389,7 @@ export function PremiumWorkPoloClient({
                 This colour is discontinued. Size &amp; quantity entry is disabled.
               </p>
             ) : null}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2 lg:grid-cols-4">
               {product.sizeOptions.map((size) => {
                 const row =
                   colorSizeQuantities[selectedColor] ?? emptySizeQuantities(product.sizeOptions);
@@ -3677,7 +3733,7 @@ export function PremiumWorkPoloClient({
             </>
           )}
         </section>
-      </div>
+        </div>
         </section>
       </div>
       <SizeGuideDialog

@@ -13,7 +13,7 @@ const HERO_SLIDES = [
 ] as const;
 
 /**
- * Centered slideshow: images at native aspect, capped by viewport (`object-contain`).
+ * Slideshow: mobile — ~1.01× scale with side crop (`object-cover`); sm+ — fit (`object-contain`).
  * Dots sit above the media stack for clicks (hero overlay uses `pointer-events-none`).
  */
 export function HomeHeroCarousel() {
@@ -28,8 +28,7 @@ export function HomeHeroCarousel() {
 
   return (
     <div
-      className="home-hero-strip-slideshow relative isolate w-full max-w-none overflow-hidden bg-white"
-      style={{ minHeight: "min(72vh, 56rem)" }}
+      className="home-hero-strip-slideshow relative isolate min-h-[min(56vh,32rem)] w-full max-w-none overflow-hidden bg-white sm:min-h-[min(64vh,44rem)] lg:min-h-[min(72vh,56rem)]"
       role="region"
       aria-roledescription="carousel"
       aria-label="Hero images"
@@ -37,7 +36,7 @@ export function HomeHeroCarousel() {
       {HERO_SLIDES.map((slide, i) => (
         <div
           key={slide.src}
-          className={`absolute inset-0 flex items-center justify-center px-0 py-2 transition-opacity duration-700 ease-in-out sm:py-4 ${
+          className={`absolute inset-0 overflow-hidden transition-opacity duration-700 ease-in-out sm:flex sm:items-center sm:justify-center sm:overflow-visible sm:py-4 ${
             i === index ? "z-[1] opacity-100" : "z-0 opacity-0"
           } pointer-events-none`}
           aria-hidden={i !== index}
@@ -50,7 +49,7 @@ export function HomeHeroCarousel() {
             priority={i === 0}
             fetchPriority={i === 0 ? "high" : "low"}
             sizes="100vw"
-            className="h-auto max-h-[min(78vh,1080px)] w-full max-w-none object-contain"
+            className="absolute left-1/2 top-1/2 h-full min-h-full w-full min-w-full max-w-none -translate-x-1/2 -translate-y-1/2 scale-[1.008] object-cover object-center sm:static sm:h-auto sm:min-h-0 sm:min-w-0 sm:max-h-[min(78vh,1080px)] sm:w-full sm:translate-x-0 sm:translate-y-0 sm:scale-100 sm:object-contain"
           />
         </div>
       ))}

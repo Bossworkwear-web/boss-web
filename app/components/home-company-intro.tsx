@@ -10,7 +10,10 @@ const sectionHeadingClass =
  */
 export function HomeCompanyIntro() {
   return (
-    <section aria-label="About Boss Workwear" className="border-t border-brand-navy/[0.08] bg-brand-surface/60">
+    <section
+      aria-label="About Boss Workwear"
+      className="hidden border-t border-brand-navy/[0.08] bg-brand-surface/60 sm:block"
+    >
       <div className={`${SITE_PAGE_INNER_SHELL_CLASS} py-12 sm:py-16`}>
         <header className="text-center">
           <div className="mb-5 flex justify-center sm:mb-6">

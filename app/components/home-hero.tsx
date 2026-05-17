@@ -19,14 +19,14 @@ export function HomeHero() {
           <HomeHeroCarousel />
         </div>
         <div className="home-hero-strip-copy-overlay pointer-events-none absolute inset-0 z-[2] flex items-center justify-center px-3 py-20 sm:px-5 sm:py-24 lg:px-6">
-          <div className="w-full max-w-[min(100vw,calc(120rem*1.452))] translate-y-[1cm] text-center text-white">
+          <div className="mx-auto w-[80vw] max-w-[80vw] translate-y-4 text-center text-white sm:w-full sm:max-w-[min(100%,calc(120rem*1.452))] sm:translate-y-[1cm]">
             <h1
               className={`${boldonse.className} mt-4 flex flex-col items-center gap-1 text-center text-[clamp(0.924rem,3.696vw+0.5808rem,4.8896rem)] font-normal leading-[1.08] text-white`}
             >
-              <span className="whitespace-nowrap">Trusted Workwear for Teams</span>
-              <span className="whitespace-nowrap">That Keeps Industries Moving.</span>
+              <span className="text-balance sm:whitespace-nowrap">Trusted Workwear for Teams</span>
+              <span className="text-balance sm:whitespace-nowrap">That Keeps Industries Moving.</span>
             </h1>
-            <p className="mx-auto mt-[calc((1.25rem+2.4024rem)/2)] max-w-[46.8rem] text-[1.57872rem] leading-[2.76276rem] text-white/95 sm:mt-[calc((1.25rem+2.5744rem)/2)] sm:text-[1.77652rem] sm:leading-[2.96056rem]">
+            <p className="mx-auto mt-[calc((1.25rem+2.4024rem)/4)] max-w-[46.8rem] text-[calc(1.57872rem/2)] leading-[calc(2.76276rem/2)] text-white/95 sm:mt-[calc((1.25rem+2.5744rem)/2)] sm:text-[1.77652rem] sm:leading-[2.96056rem]">
               From corporate polos to medical scrubs, we deliver professional uniforms designed for durability,
               comfort, and branding impact.
             </p>

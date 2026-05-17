@@ -57,7 +57,7 @@ export default async function RootLayout({
       suppressHydrationWarning
       className={`${encodeSansCondensed.variable} ${montserrat.variable} font-sans h-full antialiased`}
     >
-      <body suppressHydrationWarning className="min-h-full flex flex-col font-sans antialiased">
+      <body suppressHydrationWarning className="flex min-h-full flex-col overflow-x-clip font-sans antialiased">
         <div className="flex-1 min-w-0">{children}</div>
         <SiteFooter />
         <StorePublicChatGate initialCustomerSignedIn={storeChatCustomerSignedIn} />
