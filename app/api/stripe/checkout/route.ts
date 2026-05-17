@@ -172,6 +172,13 @@ export async function POST(req: Request) {
       currency: "aud",
       success_url: `${site}/payment?status=stripe_success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${site}/payment?status=stripe_cancelled`,
+      payment_method_options: {
+        card: {
+          restrictions: {
+            brands_blocked: ["american_express"],
+          },
+        },
+      },
       ...(discounts ? { discounts } : {}),
       line_items: [
         ...items.map((it, idx) => ({
