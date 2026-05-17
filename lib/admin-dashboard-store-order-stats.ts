@@ -1,12 +1,30 @@
 import { getPerthYmd, perthMondayYmdOfWeekContaining } from "@/lib/perth-calendar";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
-function perthDayStartIsoUtc(yyyyMmDd: string): string {
-  return new Date(`${yyyyMmDd}T00:00:00+08:00`).toISOString();
+function perthDayStartIsoUtc(yyyyMmDd: string): string | null {
+  const d = new Date(`${yyyyMmDd}T00:00:00+08:00`);
+  if (Number.isNaN(d.getTime())) {
+    return null;
+  }
+  return d.toISOString();
 }
 
-function perthDayEndIsoUtc(yyyyMmDd: string): string {
-  return new Date(`${yyyyMmDd}T23:59:59.999+08:00`).toISOString();
+function perthDayEndIsoUtc(yyyyMmDd: string): string | null {
+  const d = new Date(`${yyyyMmDd}T23:59:59.999+08:00`);
+  if (Number.isNaN(d.getTime())) {
+    return null;
+  }
+  return d.toISOString();
+}
+
+function supabaseErrorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) {
+    const msg = (error as { message?: unknown }).message;
+    if (typeof msg === "string" && msg.trim()) {
+      return msg;
+    }
+  }
+  return String(error ?? "Unknown database error");
 }
 
 export type DashboardStoreOrderPeriodBucket = {
@@ -45,6 +63,9 @@ export async function loadDashboardStoreOrderPeriodStats(): Promise<{
     const weekStart = perthDayStartIsoUtc(weekStartYmd);
     const monthStart = perthDayStartIsoUtc(monthStartYmd);
     const yearStart = perthDayStartIsoUtc(yearStartYmd);
+    if (!dayStart || !dayEnd || !weekStart || !monthStart || !yearStart) {
+      return { stats: null, error: "Could not resolve Perth calendar boundaries for store order stats." };
+    }
 
     const { data, error } = await supabase
       .from("store_orders")
@@ -53,13 +74,16 @@ export async function loadDashboardStoreOrderPeriodStats(): Promise<{
       .lte("created_at", dayEnd);
 
     if (error) {
+      const msg = supabaseErrorMessage(error);
+      const code =
+        error && typeof error === "object" && "code" in error
+          ? String((error as { code?: unknown }).code ?? "")
+          : "";
       const missing =
-        error.message.includes("store_orders") ||
-        error.message.includes("does not exist") ||
-        error.code === "42P01";
+        msg.includes("store_orders") || msg.includes("does not exist") || code === "42P01";
       return {
         stats: null,
-        error: missing ? "Store orders table not available." : error.message,
+        error: missing ? "Store orders table not available." : msg,
       };
     }
 
@@ -109,7 +133,12 @@ export async function loadDashboardStoreOrderPeriodStats(): Promise<{
       },
       error: null,
     };
-  } catch {
-    return { stats: null, error: "Could not load store order stats." };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e ?? "");
+    console.error("[loadDashboardStoreOrderPeriodStats]", e);
+    return {
+      stats: null,
+      error: msg.trim() || "Could not load store order stats.",
+    };
   }
 }

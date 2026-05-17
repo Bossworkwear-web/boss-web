@@ -17,21 +17,30 @@ export default async function AdminDashboardPage() {
 
   try {
     const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("products")
-      .select("stock_quantity, is_active")
-      .eq("is_active", true);
+    let data: { stock_quantity?: number | null }[] | null = null;
+    const withStock = await supabase.from("products").select("stock_quantity, is_active").eq("is_active", true);
+    if (!withStock.error && withStock.data) {
+      data = withStock.data;
+    } else {
+      const msg = withStock.error?.message ?? "";
+      if (msg.includes("stock_quantity")) {
+        const idsOnly = await supabase.from("products").select("id").eq("is_active", true);
+        if (!idsOnly.error && idsOnly.data) {
+          activeProducts = String(idsOnly.data.length);
+          lowStock = "—";
+          totalUnits = "—";
+        }
+      }
+    }
 
-    if (!error && data) {
+    if (data) {
       activeProducts = String(data.length);
-      const stocks = data.map((p) =>
-        typeof p.stock_quantity === "number" ? p.stock_quantity : 0
-      );
+      const stocks = data.map((p) => (typeof p.stock_quantity === "number" ? p.stock_quantity : 0));
       lowStock = String(stocks.filter((q) => q <= LOW_STOCK).length);
       totalUnits = String(stocks.reduce((a, b) => a + b, 0));
     }
-  } catch {
-    // Supabase not configured or column missing
+  } catch (e) {
+    console.error("[admin dashboard] product stock summary:", e);
   }
 
   return (

@@ -1,15 +1,35 @@
 /** Calendar date parts in Australia/Perth (for admin reporting). */
 export const PERTH_TZ = "Australia/Perth";
 
+function getPerthYmdUtcOffsetFallback(d: Date): { year: number; month: number; day: number; ymd: string } {
+  const perthMs = d.getTime() + 8 * 60 * 60 * 1000;
+  const p = new Date(perthMs);
+  const year = p.getUTCFullYear();
+  const month = p.getUTCMonth() + 1;
+  const day = p.getUTCDate();
+  const ymd = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return { year, month, day, ymd };
+}
+
 export function getPerthYmd(d = new Date()): { year: number; month: number; day: number; ymd: string } {
-  const ymd = new Intl.DateTimeFormat("en-CA", {
-    timeZone: PERTH_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(d);
-  const [y, m, day] = ymd.split("-").map((x) => Number(x));
-  return { year: y, month: m, day, ymd };
+  try {
+    const ymd = new Intl.DateTimeFormat("en-CA", {
+      timeZone: PERTH_TZ,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(d);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+      return getPerthYmdUtcOffsetFallback(d);
+    }
+    const [y, m, day] = ymd.split("-").map((x) => Number(x));
+    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(day)) {
+      return getPerthYmdUtcOffsetFallback(d);
+    }
+    return { year: y, month: m, day, ymd };
+  } catch {
+    return getPerthYmdUtcOffsetFallback(d);
+  }
 }
 
 export function isPerthDayOfMonth(d: Date, dayOfMonth: number): boolean {
