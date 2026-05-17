@@ -11,6 +11,7 @@ import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 import { STORE_GOOGLE_MAPS_QUERY, storeGoogleMapsSearchHref } from "@/lib/store-google-maps-url";
 import { extractAustralianPostcodeFromAddress } from "@/lib/customer-delivery-estimate";
 import {
+  CHECKOUT_PICK_UP_SESSION_KEY,
   STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD,
   STOREFRONT_LOGO_SETUP_BEFORE_GST_AUD,
   computeStorefrontCheckoutFees,
@@ -216,8 +217,28 @@ export default function CartPage() {
   }, [isCustomerSignedIn]);
 
   useEffect(() => {
-    if (!isCustomerSignedIn) setPickUp(false);
+    if (!isCustomerSignedIn) {
+      setPickUp(false);
+      try {
+        sessionStorage.removeItem(CHECKOUT_PICK_UP_SESSION_KEY);
+      } catch {
+        // ignore
+      }
+    }
   }, [isCustomerSignedIn]);
+
+  useEffect(() => {
+    if (!isCustomerSignedIn) return;
+    try {
+      if (pickUp) {
+        sessionStorage.setItem(CHECKOUT_PICK_UP_SESSION_KEY, "1");
+      } else {
+        sessionStorage.removeItem(CHECKOUT_PICK_UP_SESSION_KEY);
+      }
+    } catch {
+      // ignore
+    }
+  }, [pickUp, isCustomerSignedIn]);
 
   useEffect(() => {
     if (detailItemId && !items.some((i) => i.id === detailItemId)) {
@@ -274,16 +295,19 @@ export default function CartPage() {
         estimatedWeightKg,
         isCustomerSignedIn,
         hasPriorEmbroideryOrder,
+        pickUp: isCustomerSignedIn && pickUp,
       }),
-    [productNetSubtotal, items, deliveryPostcode, estimatedWeightKg, isCustomerSignedIn, hasPriorEmbroideryOrder],
+    [
+      productNetSubtotal,
+      items,
+      deliveryPostcode,
+      estimatedWeightKg,
+      isCustomerSignedIn,
+      hasPriorEmbroideryOrder,
+      pickUp,
+    ],
   );
-  const { deliveryFeeAud, logoSetupFeeAud, logoSetupApplies } = checkoutFees;
-  const effectiveDeliveryFeeAud = isCustomerSignedIn && pickUp ? 0 : deliveryFeeAud;
-  const payableTotal = useMemo(
-    () =>
-      Math.round((productNetSubtotal + effectiveDeliveryFeeAud + logoSetupFeeAud + Number.EPSILON) * 100) / 100,
-    [productNetSubtotal, effectiveDeliveryFeeAud, logoSetupFeeAud],
-  );
+  const { deliveryFeeAud, logoSetupFeeAud, logoSetupApplies, totalAud: payableTotal } = checkoutFees;
   const canCheckOut = termsAgreed && isCustomerSignedIn;
 
   const detailItem = detailItemId ? items.find((i) => i.id === detailItemId) : undefined;
@@ -507,9 +531,11 @@ export default function CartPage() {
                   <span className="font-semibold">
                     {!isCustomerSignedIn
                       ? toCurrency(0)
-                      : effectiveDeliveryFeeAud === 0
-                        ? "Free"
-                        : toCurrency(effectiveDeliveryFeeAud)}
+                      : pickUp
+                        ? "Pick up"
+                        : deliveryFeeAud === 0
+                          ? "Free"
+                          : toCurrency(deliveryFeeAud)}
                   </span>
                 </p>
                 {isCustomerSignedIn ? (

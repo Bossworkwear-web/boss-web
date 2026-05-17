@@ -22,6 +22,7 @@ import {
   validatePromotionCodeForCheckout,
 } from "@/lib/promotion-codes";
 import { validateSpecialDealPackageCartLines } from "@/lib/storefront-special-deal-package-cart";
+import { retrievePaidCheckoutSession } from "@/lib/store-order-stripe";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 const CHECKOUT_REFERENCE_BUCKET = "production-order-assets";
@@ -186,6 +187,10 @@ export type PlaceStoreOrderOptions = {
   reorderedFromStoreOrderId?: string;
   /** Applied checkout promotion code (`promotion_codes.id`), re-validated server-side. */
   promotionCodeId?: string;
+  /** Warehouse pick-up — no delivery fee on the order. */
+  pickUp?: boolean;
+  /** Stripe Checkout Session id (`cs_…`) after successful payment — verified server-side. */
+  stripeCheckoutSessionId?: string;
 };
 
 function escapeCustomerEmailForIlikeExact(email: string): string {
@@ -283,6 +288,7 @@ export async function placeStoreOrder(
     estimatedWeightKg: weightKg,
     isCustomerSignedIn: true,
     hasPriorEmbroideryOrder: hasPriorEmbroidery,
+    pickUp: options?.pickUp === true,
   });
   const deliveryFeeDollars = fees.deliveryFeeAud;
   let promotionDiscountDollars = 0;
@@ -322,6 +328,31 @@ export async function placeStoreOrder(
   const promotionDiscountCents = dollarsToCents(promotionDiscountDollars);
   const totalCents = dollarsToCents(totalDollars);
 
+  const stripeSessionId = (options?.stripeCheckoutSessionId ?? "").trim();
+  let stripePaymentIntentId: string | null = null;
+  if (stripeSessionId) {
+    const { data: existingPaid } = await supabase
+      .from("store_orders")
+      .select("id, order_number")
+      .eq("stripe_checkout_session_id", stripeSessionId)
+      .maybeSingle();
+    if (existingPaid?.id) {
+      return {
+        ok: false,
+        error: `This payment is already recorded as order ${existingPaid.order_number ?? existingPaid.id}.`,
+      };
+    }
+
+    const sessionRes = await retrievePaidCheckoutSession(stripeSessionId);
+    if (!sessionRes.ok) {
+      return { ok: false, error: sessionRes.error };
+    }
+    if (sessionRes.info.amountTotalCents > 0 && sessionRes.info.amountTotalCents !== totalCents) {
+      return { ok: false, error: "Payment amount does not match order total. Please contact support." };
+    }
+    stripePaymentIntentId = sessionRes.info.paymentIntentId;
+  }
+
   const insertPayload = {
     customer_email: customerEmail,
     customer_name: customerName,
@@ -334,6 +365,12 @@ export async function placeStoreOrder(
     currency: "AUD",
     carrier: "Australia Post",
     status: "paid",
+    ...(stripeSessionId
+      ? {
+          stripe_checkout_session_id: stripeSessionId,
+          ...(stripePaymentIntentId ? { stripe_payment_intent_id: stripePaymentIntentId } : {}),
+        }
+      : {}),
   };
 
   let orderRow: { id: string; tracking_token: string } | null = null;

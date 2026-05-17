@@ -8,6 +8,9 @@ import { cartHasSpecialDealPackage } from "@/lib/storefront-special-deal-package
 /** Product subtotal (excl. delivery & logo setup) must be at or above this for logo-setup waiver promo. */
 export const STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD = 500;
 
+/** Cart → payment → Stripe return: customer chose warehouse pick-up (no delivery fee). */
+export const CHECKOUT_PICK_UP_SESSION_KEY = "boss_web_checkout_pick_up_v1";
+
 export const STOREFRONT_LOGO_SETUP_BEFORE_GST_AUD = 60;
 
 function roundAudMoney(n: number): number {
@@ -47,6 +50,8 @@ export type StorefrontCheckoutFeesInput = {
    * Server paths should always pass a boolean.
    */
   hasPriorEmbroideryOrder: boolean | null;
+  /** Warehouse pick-up — delivery fee is $0 (signed-in customers only). */
+  pickUp?: boolean;
 };
 
 export type StorefrontCheckoutFeesResult = {
@@ -57,15 +62,22 @@ export type StorefrontCheckoutFeesResult = {
 };
 
 export function computeStorefrontCheckoutFees(input: StorefrontCheckoutFeesInput): StorefrontCheckoutFeesResult {
-  const { subtotalAud, items, deliveryPostcode, estimatedWeightKg, isCustomerSignedIn, hasPriorEmbroideryOrder } =
-    input;
+  const {
+    subtotalAud,
+    items,
+    deliveryPostcode,
+    estimatedWeightKg,
+    isCustomerSignedIn,
+    hasPriorEmbroideryOrder,
+    pickUp = false,
+  } = input;
 
   const distanceKm = distanceKmFromCompanyBase(deliveryPostcode);
   const baseDelivery = calculateDeliveryFee(distanceKm, estimatedWeightKg);
 
   let deliveryFeeAud = 0;
 
-  if (!isCustomerSignedIn) {
+  if (!isCustomerSignedIn || pickUp) {
     deliveryFeeAud = 0;
   } else {
     deliveryFeeAud = baseDelivery;

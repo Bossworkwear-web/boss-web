@@ -834,6 +834,11 @@ export type Database = {
           reordered_from_store_order_id: string | null;
           promotion_code_id: string | null;
           promotion_discount_cents: number;
+          stripe_checkout_session_id: string | null;
+          stripe_payment_intent_id: string | null;
+          stripe_refund_id: string | null;
+          refunded_cents: number;
+          refunded_at: string | null;
         };
         Insert: {
           id?: string;
@@ -858,6 +863,11 @@ export type Database = {
           reordered_from_store_order_id?: string | null;
           promotion_code_id?: string | null;
           promotion_discount_cents?: number;
+          stripe_checkout_session_id?: string | null;
+          stripe_payment_intent_id?: string | null;
+          stripe_refund_id?: string | null;
+          refunded_cents?: number;
+          refunded_at?: string | null;
         };
         Update: {
           id?: string;
@@ -882,6 +892,11 @@ export type Database = {
           reordered_from_store_order_id?: string | null;
           promotion_code_id?: string | null;
           promotion_discount_cents?: number;
+          stripe_checkout_session_id?: string | null;
+          stripe_payment_intent_id?: string | null;
+          stripe_refund_id?: string | null;
+          refunded_cents?: number;
+          refunded_at?: string | null;
         };
         Relationships: [
           {

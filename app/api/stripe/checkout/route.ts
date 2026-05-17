@@ -1,7 +1,7 @@
-import Stripe from "stripe";
 import { cookies } from "next/headers";
 
 import { extractAustralianPostcodeFromAddress } from "@/lib/customer-delivery-estimate";
+import { getStripeServer } from "@/lib/stripe-server";
 import { totalEstimatedShippingWeightKg } from "@/lib/delivery-shipping-weight";
 import { computeStorefrontCheckoutFees } from "@/lib/storefront-cart-checkout-fees";
 import { hasPriorEmbroideryOrderForCustomerEmail } from "@/lib/storefront-prior-embroidery-order";
@@ -40,29 +40,21 @@ function assertCart(items: CartItem[]): { ok: true } | { ok: false; error: strin
 }
 
 export async function POST(req: Request) {
-  const secretRaw = process.env.STRIPE_SECRET_KEY ?? "";
-  // Defend against copy/paste issues: newlines / quotes / whitespace can corrupt the Authorization header.
-  const secret = secretRaw.replace(/[\r\n\t "']/g, "").trim();
-  if (!secret) {
+  const stripe = getStripeServer();
+  if (!stripe) {
     return Response.json({ ok: false, error: "Stripe is not configured (STRIPE_SECRET_KEY)." }, { status: 503 });
   }
-  if (/\s/.test(secretRaw)) {
-    return Response.json(
-      {
-        ok: false,
-        error: "Stripe key contains whitespace/newlines. Re-copy the full sk_test_/sk_live_ value with no spaces.",
-      },
-      { status: 400 },
-    );
-  }
-  // Prefer Stripe SDK default API version unless you intentionally lock it.
-  const stripe = new Stripe(secret);
 
   const site =
     process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "") ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}` : "http://localhost:3000");
 
-  let body: { items?: CartItem[]; deliveryAddress?: string | null; promotionCodeId?: string | null } = {};
+  let body: {
+    items?: CartItem[];
+    deliveryAddress?: string | null;
+    promotionCodeId?: string | null;
+    pickUp?: boolean;
+  } = {};
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -148,6 +140,7 @@ export async function POST(req: Request) {
     serviceType: typeof it.serviceType === "string" ? it.serviceType : "",
     referenceImageUrls: Array.isArray(it.referenceImageUrls) ? it.referenceImageUrls : undefined,
   }));
+  const pickUp = body.pickUp === true;
   const fees = computeStorefrontCheckoutFees({
     subtotalAud: subtotal,
     items: feeItems,
@@ -155,6 +148,7 @@ export async function POST(req: Request) {
     estimatedWeightKg,
     isCustomerSignedIn: true,
     hasPriorEmbroideryOrder: hasPriorEmbroidery,
+    pickUp,
   });
   const deliveryFee = fees.deliveryFeeAud;
   const logoSetupFee = fees.logoSetupFeeAud;

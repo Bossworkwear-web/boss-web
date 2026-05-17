@@ -8,6 +8,7 @@ import { ArrowLeftIcon } from "@/app/components/icons";
 import { TopNav } from "@/app/components/top-nav";
 import { extractAustralianPostcodeFromAddress } from "@/lib/customer-delivery-estimate";
 import {
+  CHECKOUT_PICK_UP_SESSION_KEY,
   STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD,
   cartHasEmbroideryLogoReferenceUploads,
   computeStorefrontCheckoutFees,
@@ -71,6 +72,7 @@ export default function PaymentPage() {
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [promoPending, setPromoPending] = useState(false);
+  const [pickUp, setPickUp] = useState(false);
 
   useEffect(() => {
     const sync = () => setItems(getCartItems());
@@ -78,6 +80,11 @@ export default function PaymentPage() {
     const addr = getCookieValue("customer_delivery_address");
     setDeliveryAddress(addr);
     setDeliveryPostcode(extractAustralianPostcodeFromAddress(addr));
+    try {
+      setPickUp(sessionStorage.getItem(CHECKOUT_PICK_UP_SESSION_KEY) === "1");
+    } catch {
+      setPickUp(false);
+    }
     const parsed = parseStoredJsonOrNull(sessionStorage.getItem(CHECKOUT_PROMO_SESSION_KEY)) as AppliedPromo | null;
     if (parsed?.promotionCodeId && parsed.code && Number.isFinite(parsed.discountAud)) {
       setAppliedPromo(parsed);
@@ -125,8 +132,9 @@ export default function PaymentPage() {
         estimatedWeightKg,
         isCustomerSignedIn: true,
         hasPriorEmbroideryOrder,
+        pickUp,
       }),
-    [productNetSubtotal, items, deliveryPostcode, estimatedWeightKg, hasPriorEmbroideryOrder],
+    [productNetSubtotal, items, deliveryPostcode, estimatedWeightKg, hasPriorEmbroideryOrder, pickUp],
   );
   const { deliveryFeeAud: deliveryFee, logoSetupFeeAud: logoSetupFee, totalAud: checkoutTotal } = checkoutFees;
   const promoDiscount = appliedPromo?.discountAud ?? 0;
@@ -280,6 +288,11 @@ export default function PaymentPage() {
           if (appliedPromo) {
             sessionStorage.setItem(CHECKOUT_PROMO_SESSION_KEY, JSON.stringify(appliedPromo));
           }
+          if (pickUp) {
+            sessionStorage.setItem(CHECKOUT_PICK_UP_SESSION_KEY, "1");
+          } else {
+            sessionStorage.removeItem(CHECKOUT_PICK_UP_SESSION_KEY);
+          }
         } catch {
           // ignore storage failures (private mode, etc)
         }
@@ -305,6 +318,7 @@ export default function PaymentPage() {
             })),
             deliveryAddress,
             ...(appliedPromo ? { promotionCodeId: appliedPromo.promotionCodeId } : {}),
+            ...(pickUp ? { pickUp: true } : {}),
           }),
         });
         const json = (await res.json().catch(() => ({}))) as { ok?: boolean; url?: string; error?: string; hint?: string };
@@ -352,13 +366,22 @@ export default function PaymentPage() {
         if (parsed?.promotionCodeId && /^[0-9a-f-]{36}$/i.test(parsed.promotionCodeId)) {
           promotionCodeId = parsed.promotionCodeId;
         }
+        const pickUpStored = sessionStorage.getItem(CHECKOUT_PICK_UP_SESSION_KEY) === "1";
+        const stripeOpts = {
+          ...(promotionCodeId ? { promotionCodeId } : {}),
+          ...(pickUpStored ? { pickUp: true } : {}),
+          ...(sessionId.startsWith("cs_") ? { stripeCheckoutSessionId: sessionId } : {}),
+        };
         if (rs && /^[0-9a-f-]{36}$/i.test(rs)) {
-          placeOpts = { reorderedFromStoreOrderId: rs, ...(promotionCodeId ? { promotionCodeId } : {}) };
-        } else if (promotionCodeId) {
-          placeOpts = { promotionCodeId };
+          placeOpts = { reorderedFromStoreOrderId: rs, ...stripeOpts };
+        } else if (Object.keys(stripeOpts).length > 0) {
+          placeOpts = stripeOpts;
         }
       } catch {
         // ignore
+      }
+      if (!placeOpts && sessionId.startsWith("cs_")) {
+        placeOpts = { stripeCheckoutSessionId: sessionId };
       }
       const res = await placeStoreOrder(payloadItems, placeOpts);
       if (res.ok) {
@@ -370,6 +393,7 @@ export default function PaymentPage() {
           sessionStorage.removeItem("boss_web_checkout_delivery_address_v1");
           sessionStorage.removeItem(CHECKOUT_REORDER_SOURCE_SESSION_KEY);
           sessionStorage.removeItem(CHECKOUT_PROMO_SESSION_KEY);
+          sessionStorage.removeItem(CHECKOUT_PICK_UP_SESSION_KEY);
         } catch {
           // ignore
         }
@@ -463,7 +487,13 @@ export default function PaymentPage() {
             <p className="flex justify-between">
               <span>Delivery</span>
               <span className="font-semibold">
-                {deliveryPostcode ? (deliveryFee === 0 ? "Free" : toCurrency(deliveryFee)) : "—"}
+                {pickUp
+                  ? "Pick up"
+                  : deliveryPostcode
+                    ? deliveryFee === 0
+                      ? "Free"
+                      : toCurrency(deliveryFee)
+                    : "—"}
               </span>
             </p>
             {appliedPromo && promoDiscount > 0 ? (

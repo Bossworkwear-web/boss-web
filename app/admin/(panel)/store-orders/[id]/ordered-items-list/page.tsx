@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { DocketPrintBar } from "@/app/admin/(panel)/store-orders/[id]/docket/docket-print-bar";
+import { StoreOrderRefundPanel } from "@/app/admin/(panel)/store-orders/store-order-refund-panel";
 import { serviceTypeColoredContent } from "@/lib/service-type-colored";
 import { resolveStorefrontImageUrlList } from "@/lib/storefront-image-url";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
@@ -38,7 +39,7 @@ export default async function OrderedItemsListPage({ params }: Props) {
   const { data: order, error } = await supabase
     .from("store_orders")
     .select(
-      "order_number, delivery_address, customer_name, customer_email, tracking_number, created_at, subtotal_cents, total_cents, currency",
+      "id, order_number, status, delivery_address, customer_name, customer_email, tracking_number, created_at, subtotal_cents, total_cents, currency, refunded_cents, refunded_at, stripe_checkout_session_id, stripe_payment_intent_id",
     )
     .eq("id", id)
     .maybeSingle();
@@ -240,6 +241,22 @@ export default async function OrderedItemsListPage({ params }: Props) {
             details to the physical goods.
           </p>
         </div>
+
+        <StoreOrderRefundPanel
+          orderId={id}
+          orderNumber={String(order.order_number ?? "")}
+          status={String(order.status ?? "paid")}
+          totalCents={Number(order.total_cents ?? 0)}
+          currency={String(order.currency ?? "AUD")}
+          refundedCents={Number(order.refunded_cents ?? 0)}
+          stripeCheckoutSessionId={
+            typeof order.stripe_checkout_session_id === "string" ? order.stripe_checkout_session_id : null
+          }
+          stripePaymentIntentId={
+            typeof order.stripe_payment_intent_id === "string" ? order.stripe_payment_intent_id : null
+          }
+          refundedAt={typeof order.refunded_at === "string" ? order.refunded_at : null}
+        />
       </div>
     </>
   );

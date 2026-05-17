@@ -33,6 +33,10 @@ export type StoreOrderListRow = {
   invoice_reference: string | null;
   hold_process: boolean;
   hold_note: string | null;
+  refunded_cents: number;
+  refunded_at: string | null;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
 };
 
 export type StoreOrderDayGroup = {

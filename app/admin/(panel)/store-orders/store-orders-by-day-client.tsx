@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { StoreOrderHoldForm } from "@/app/admin/(panel)/store-orders/store-order-hold-form";
+import { StoreOrderRefundPanel } from "@/app/admin/(panel)/store-orders/store-order-refund-panel";
 import { StoreOrderInvoiceReferenceForm } from "@/app/admin/(panel)/store-orders/store-order-invoice-reference-form";
 import {
   StoreOrderXeroLines,
@@ -224,6 +225,12 @@ export function StoreOrdersByDayClient({
                               {r.order_number}
                             </Link>
                             <p className="text-xs text-slate-500">{formatOrderRowDateTime(r.created_at)}</p>
+                            <Link
+                              href={`/admin/store-orders/${r.id}/ordered-items-list`}
+                              className="text-xs font-semibold text-brand-orange hover:underline"
+                            >
+                              Packing list →
+                            </Link>
                             <StoreOrderInvoiceReferenceForm
                               orderId={r.id}
                               initialReference={r.invoice_reference}
@@ -260,6 +267,17 @@ export function StoreOrdersByDayClient({
                                 currency={r.currency}
                                 productLines={itemsByOrderId[r.id] ?? []}
                                 deliveryFeeCentsInclGst={r.delivery_fee_cents}
+                              />
+                              <StoreOrderRefundPanel
+                                orderId={r.id}
+                                orderNumber={r.order_number}
+                                status={r.status}
+                                totalCents={r.total_cents}
+                                currency={r.currency}
+                                refundedCents={r.refunded_cents}
+                                stripeCheckoutSessionId={r.stripe_checkout_session_id}
+                                stripePaymentIntentId={r.stripe_payment_intent_id}
+                                refundedAt={r.refunded_at}
                               />
                             </div>
                           </td>

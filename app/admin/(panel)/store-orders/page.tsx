@@ -45,6 +45,7 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
   try {
     const supabase = createSupabaseAdminClient();
     const selectCandidates = [
+      "id, order_number, status, customer_email, customer_name, total_cents, delivery_fee_cents, currency, tracking_number, created_at, invoice_reference, hold_process, hold_note, refunded_cents, refunded_at, stripe_checkout_session_id, stripe_payment_intent_id",
       "id, order_number, status, customer_email, customer_name, total_cents, delivery_fee_cents, currency, tracking_number, created_at, invoice_reference, hold_process, hold_note",
       "id, order_number, status, customer_email, customer_name, total_cents, delivery_fee_cents, currency, tracking_number, created_at, invoice_reference",
       "id, order_number, status, customer_email, customer_name, total_cents, delivery_fee_cents, currency, tracking_number, created_at",
@@ -100,6 +101,10 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
           hold_process?: boolean | null;
           hold_note?: string | null;
           delivery_fee_cents?: number;
+          refunded_cents?: number | null;
+          refunded_at?: string | null;
+          stripe_checkout_session_id?: string | null;
+          stripe_payment_intent_id?: string | null;
         };
         return {
           ...r,
@@ -107,6 +112,10 @@ export default async function AdminStoreOrdersPage({ searchParams }: PageProps) 
           invoice_reference: rec.invoice_reference ?? null,
           hold_process: Boolean(rec.hold_process),
           hold_note: rec.hold_note != null && String(rec.hold_note).trim() !== "" ? String(rec.hold_note) : null,
+          refunded_cents: Number(rec.refunded_cents) || 0,
+          refunded_at: rec.refunded_at ?? null,
+          stripe_checkout_session_id: rec.stripe_checkout_session_id ?? null,
+          stripe_payment_intent_id: rec.stripe_payment_intent_id ?? null,
         };
       }) as StoreOrderListRow[];
 
