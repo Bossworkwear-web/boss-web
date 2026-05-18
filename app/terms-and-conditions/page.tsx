@@ -113,6 +113,33 @@ export default function TermsAndConditionsPage() {
               <strong>Alterations:</strong> Requests to change items within an order may need to go through our returns
               or exchanges process and may incur fees as permitted by law.
             </p>
+
+            <h3 className="mb-2 mt-4 text-sm font-semibold text-brand-navy">5.2 Orders we may decline or cancel</h3>
+            <p className="text-brand-navy/80">
+              Without limiting sections 4 and 13, we may decline, cancel, suspend, or refuse to proceed with any order,
+              quote, or production (whether or not payment has been made, and whether or not production has started)
+              where we reasonably consider it appropriate and permitted by law. This includes, but is not limited to,
+              orders or requests that:
+            </p>
+            <p className="text-brand-navy/80">
+              (a) are abusive, threatening, harassing, or otherwise unreasonable in volume, turnaround, pricing, or
+              specification; (b) are commercially impractical, unsafe, or inconsistent with the workwear, uniform, PPE
+              apparel, or decoration services we supply; (c) include Customer Artwork or instructions that are unlawful,
+              sexually explicit or pornographic, obscene, gratuitously offensive, discriminatory, hateful, or that
+              promote violence or illegal activity; (d) appear likely to infringe intellectual property, privacy, or
+              publicity rights, or where you cannot demonstrate authority to use the materials; (e) would require us to
+              breach applicable law, card or payment network rules, supplier or decorator policies, or reasonable
+              community standards for a business of our kind; or (f) we reasonably suspect involve fraud, error, or
+              unauthorised use.
+            </p>
+            <p className="text-brand-navy/80">
+              If we decline or cancel for these reasons before goods or services are supplied, we will refund amounts you
+              paid for the affected items (and related delivery charges for those items), except where we have fairly
+              incurred non-recoverable costs with your prior agreement or as otherwise permitted by law. If production
+              has already started, sections 11, 13, and 17 and our returns policy apply. We are not obliged to give
+              detailed reasons where doing so could prejudice investigation of fraud or unlawful conduct, but we will act
+              fairly and in accordance with the ACL and other applicable law.
+            </p>
           </section>
 
           <section>
@@ -278,8 +305,9 @@ export default function TermsAndConditionsPage() {
             <p className="text-brand-navy/80">
               You indemnify us against claims arising from Customer Artwork you supply, except to the extent caused by our
               wrongful act or as required by law. You must supply print-ready files in formats we specify; poor-quality
-              files may delay production, incur extra fees, or reduce output quality. We may refuse orders where artwork
-              appears unlawful, defamatory, obscene, harassing, or likely to infringe third-party rights.
+              files may delay production, incur extra fees, or reduce output quality. We may refuse or cancel orders
+              (see section 5.2) where artwork or instructions appear unlawful, defamatory, obscene, sexually explicit or
+              pornographic, harassing, discriminatory, or likely to infringe third-party rights.
             </p>
           </section>
 
@@ -444,7 +472,7 @@ export default function TermsAndConditionsPage() {
           </section>
 
           <p className="mt-8 text-xs text-brand-navy/60">
-            Last updated: 9 May 2026. Questions:{" "}
+            Last updated: 17 May 2026. Questions:{" "}
             <Link href="/contact-us" className="text-brand-orange underline hover:text-brand-orange/90">
               Contact us
             </Link>

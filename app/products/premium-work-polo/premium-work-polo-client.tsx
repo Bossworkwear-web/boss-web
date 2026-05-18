@@ -103,6 +103,20 @@ const SERVICE_TYPE_BUTTON_SHADOW_IDLE: Record<ServiceType, string> = {
     "shadow-[0_5px_18px_-5px_rgba(59,130,246,0.28),0_2px_8px_-2px_rgba(59,130,246,0.14)]",
 };
 
+/** Clip radius for §3 Plain / Embroidery / Print artwork buttons (80% of 1rem / 1.175rem). */
+const SERVICE_TYPE_BUTTON_ROUNDED = "rounded-[0.8rem] sm:rounded-[0.94rem]";
+
+/** §4 placement row Emb / Print button label size (80% of 1.08rem / 1.26rem). */
+const PLACEMENT_SELECTOR_BUTTON_TEXT = "text-[0.864rem] sm:text-[1.008rem]";
+
+/** §4 placement row name + code (e.g. Left chest (LC)) — 80% of 1.26rem. */
+const PLACEMENT_SELECTOR_ROW_LABEL_TEXT = "text-[1.008rem]";
+
+/** §2 size label + quantity input — 80% of 1.26rem; input padding scaled to match. */
+const SIZE_QUANTITY_LABEL_TEXT = "text-[1.008rem]";
+const SIZE_QUANTITY_INPUT_CLASS =
+  "w-full rounded-lg border border-brand-navy/20 bg-brand-surface/40 px-[0.4rem] py-[0.3rem] text-[1.008rem] text-brand-navy tabular-nums focus:border-brand-orange focus:outline-none focus:ring-1 focus:ring-brand-orange";
+
 type LogoAttachmentRow = {
   key: string;
   file: File;
@@ -2944,56 +2958,22 @@ export function PremiumWorkPoloClient({
         </p>
         {pdpProductTitle ? (
           <>
-            <h1
-              className={
-                isMobile
-                  ? "product-detail-title text-[calc(3.3696rem*0.48)] font-medium leading-tight text-brand-navy"
-                  : "product-detail-title text-[calc(3.3696rem*0.8)] font-medium leading-tight text-brand-navy sm:text-[calc(4.212rem*0.8)]"
-              }
-            >
+            <h1 className="product-detail-title font-medium leading-tight text-brand-navy">
               {pdpProductTitle}
             </h1>
-            <p
-              className={
-                isMobile
-                  ? "product-detail-sku text-[calc(2.16rem*0.6)] font-light text-black"
-                  : "product-detail-sku text-[2.16rem] font-light text-black"
-              }
-            >
-              {brandAndModelLine}
-            </p>
+            <p className="product-detail-sku font-light text-black">{brandAndModelLine}</p>
             {product.googleRating ? <ProductGoogleRatingRow info={product.googleRating} /> : null}
           </>
         ) : (
           <>
-            <h1
-              className={
-                isMobile
-                  ? "product-detail-sku text-[calc(2.16rem*0.6)] font-light text-black"
-                  : "product-detail-sku text-[2.16rem] font-light text-black"
-              }
-            >
-              {brandAndModelLine}
-            </h1>
+            <h1 className="product-detail-sku font-light text-black">{brandAndModelLine}</h1>
             {product.googleRating ? <ProductGoogleRatingRow info={product.googleRating} /> : null}
           </>
         )}
-        <p
-          className={
-            isMobile
-              ? "product-detail-list-price w-full text-right text-[calc(2.16rem*0.6)] font-light text-black tabular-nums"
-              : "product-detail-list-price w-full text-right text-[2.16rem] font-light text-black tabular-nums"
-          }
-        >
+        <p className="product-detail-list-price w-full text-right font-light text-black tabular-nums">
           {product.originalPrice != null ? (
             <>
-              <span
-                className={
-                  isMobile
-                    ? "product-detail-price-strike mr-2 text-[calc(1.44rem*0.6)] font-light text-brand-navy/55 line-through"
-                    : "product-detail-price-strike mr-2 text-[1.44rem] font-light text-brand-navy/55 line-through"
-                }
-              >
+              <span className="product-detail-price-strike mr-2 font-light text-brand-navy/55 line-through">
                 {toCurrency(product.originalPrice)}
               </span>
               {toCurrency(product.basePrice)}
@@ -3328,7 +3308,7 @@ export function PremiumWorkPoloClient({
                   key={size}
                   className="flex flex-col gap-1.5 rounded-xl bg-white px-3 py-2.5"
                 >
-                  <span className="text-[1.26rem] font-semibold text-brand-navy">{size}</span>
+                  <span className={`${SIZE_QUANTITY_LABEL_TEXT} font-semibold text-brand-navy`}>{size}</span>
                   <label htmlFor={sizeQtyId} className="sr-only">
                     Quantity for {selectedColor} size {size}
                   </label>
@@ -3350,7 +3330,7 @@ export function PremiumWorkPoloClient({
                         };
                       });
                     }}
-                    className={`w-full rounded-lg border border-brand-navy/20 bg-brand-surface/40 px-2 py-1.5 text-[1.26rem] text-brand-navy tabular-nums focus:border-brand-orange focus:outline-none focus:ring-1 focus:ring-brand-orange ${
+                    className={`${SIZE_QUANTITY_INPUT_CLASS} ${
                       selectedColorIsDiscontinued ? "cursor-not-allowed opacity-50" : ""
                     }`}
                   />
@@ -3392,7 +3372,7 @@ export function PremiumWorkPoloClient({
                     aria-pressed={isActive}
                     aria-disabled={plainDisabled}
                     onClick={() => handleServiceChange(service)}
-                    className={`relative justify-self-center w-[40%] max-w-full overflow-hidden rounded-[2rem] border-0 bg-transparent p-0 transition-shadow duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-orange sm:rounded-[2.35rem] ${
+                    className={`relative justify-self-center w-[40%] max-w-full overflow-hidden ${SERVICE_TYPE_BUTTON_ROUNDED} border-0 bg-transparent p-0 transition-shadow duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-orange ${
                       plainDisabled ? "cursor-not-allowed opacity-40" : ""
                     } ${
                       isActive
@@ -3434,7 +3414,7 @@ export function PremiumWorkPoloClient({
                     aria-pressed={isActive}
                     aria-disabled={disabled}
                     onClick={() => handleServiceChange(service)}
-                    className={`relative mx-auto w-[40%] max-w-full overflow-hidden rounded-[2rem] border-0 bg-transparent p-0 transition-shadow duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-orange sm:rounded-[2.35rem] ${
+                    className={`relative mx-auto w-[40%] max-w-full overflow-hidden ${SERVICE_TYPE_BUTTON_ROUNDED} border-0 bg-transparent p-0 transition-shadow duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-orange ${
                       disabled ? "cursor-not-allowed opacity-45 shadow-none" : "cursor-pointer hover:opacity-[0.97]"
                     } ${
                       disabled
@@ -3505,7 +3485,7 @@ export function PremiumWorkPoloClient({
                               <PlacementIcon className="h-4 w-4" />
                             </span>
                           )}
-                          <span className="min-w-0 text-[1.26rem] font-semibold">
+                          <span className={`min-w-0 ${PLACEMENT_SELECTOR_ROW_LABEL_TEXT} font-semibold`}>
                             {option.label} <span className="text-brand-navy/50">({option.short})</span>
                           </span>
                         </div>
@@ -3515,7 +3495,7 @@ export function PremiumWorkPoloClient({
                             <button
                               type="button"
                               onClick={() => assignPlacement(option.id, "Embroidery")}
-                              className={`mx-auto w-[72%] max-w-full whitespace-nowrap rounded-md border px-2.5 py-1 text-[1.08rem] font-medium transition sm:px-3 sm:text-[1.26rem] ${
+                              className={`mx-auto w-[72%] max-w-full whitespace-nowrap rounded-md border px-2.5 py-1 ${PLACEMENT_SELECTOR_BUTTON_TEXT} font-medium transition sm:px-3 ${
                                 assignedService === "Embroidery"
                                   ? "border-brand-orange bg-brand-orange text-brand-navy"
                                   : "border-brand-navy/20 bg-white text-brand-navy hover:border-brand-orange"
@@ -3525,7 +3505,7 @@ export function PremiumWorkPoloClient({
                             </button>
                           ) : (
                             <span
-                              className="inline-flex mx-auto w-[72%] max-w-full items-center justify-center border-none bg-transparent p-0 text-[1.08rem] font-medium tabular-nums text-brand-navy/40 shadow-none ring-0 sm:text-[1.26rem]"
+                              className={`inline-flex mx-auto w-[72%] max-w-full items-center justify-center border-none bg-transparent p-0 ${PLACEMENT_SELECTOR_BUTTON_TEXT} font-medium tabular-nums text-brand-navy/40 shadow-none ring-0`}
                               aria-label="Embroidery not available for this placement"
                             >
                               -
@@ -3539,7 +3519,7 @@ export function PremiumWorkPoloClient({
                           <button
                             type="button"
                             onClick={() => assignPlacement(option.id, "Printing")}
-                            className={`mx-auto w-[72%] max-w-full whitespace-nowrap rounded-md border px-2.5 py-1 text-[1.08rem] font-medium transition sm:px-3 sm:text-[1.26rem] ${
+                            className={`mx-auto w-[72%] max-w-full whitespace-nowrap rounded-md border px-2.5 py-1 ${PLACEMENT_SELECTOR_BUTTON_TEXT} font-medium transition sm:px-3 ${
                               assignedService === "Printing"
                                 ? "border-blue-600 bg-blue-500 text-white"
                                 : "border-brand-navy/20 bg-white text-brand-navy hover:border-blue-500 hover:text-blue-600"

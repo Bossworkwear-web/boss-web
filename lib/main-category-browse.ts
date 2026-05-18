@@ -49,6 +49,7 @@ import {
   womensBrowseRemapPantsSubSlugIfMisfiledWomensTop,
 } from "@/lib/product-visibility";
 import { storefrontStripSupplierBranding } from "@/lib/product-display-name";
+import { syzmikStyleCodeFromListing } from "@/lib/product-card-copy";
 import {
   inferSubSlugFromNameHeuristics,
   resolveProductSubSlug,
@@ -231,10 +232,19 @@ function looksLikeSyzmikTeeGarmentRow(item: CategoryBrowseProductRow): boolean {
 }
 
 function syzmikStyleCodesForBrowseRow(item: CategoryBrowseProductRow): { code: string; base: string } | null {
+  const fromListing = syzmikStyleCodeFromListing(
+    item.name,
+    item.slug ?? null,
+    item.supplier_name ?? null,
+  );
+  if (fromListing) {
+    const upper = fromListing.toUpperCase();
+    return { code: upper, base: upper.replace(/-CLEARANCE$/i, "") };
+  }
   const stripped = storefrontStripSupplierBranding(item.name).trim();
   const head = stripped.split(/\s+/)[0]?.toUpperCase().replace(/[^A-Z0-9-]/g, "") ?? "";
   let code: string | null = null;
-  if (/^Z[A-Z0-9]{2,}$/i.test(head)) {
+  if (/^Z[A-Z0-9]{2,}(?:-[A-Z0-9]+)*$/i.test(head)) {
     code = head;
   } else {
     const m = `${item.name} ${item.slug ?? ""}`.toUpperCase().match(/\b(ZH[L]?\d{3})\b/);

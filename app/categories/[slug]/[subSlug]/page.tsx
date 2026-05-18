@@ -27,6 +27,7 @@ import {
   type CategoryBrowseProductRow,
 } from "@/lib/main-category-browse";
 import { productCardDisplayLines } from "@/lib/product-card-copy";
+import { isBizCollectionListing } from "@/lib/fashion-biz-gender-route";
 import {
   isAussiePacificCatalogListing,
   isJbWearSixSeriesListing,
@@ -204,6 +205,9 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
   const filteredAllBrands = filterProductsForSubCategoryBrowse(slug, subSlug, allRows)
     .filter((item) => {
       if (slug === "workwear") {
+        if (isBizCollectionListing(item.name, item.slug ?? null, item.category ?? null)) {
+          return false;
+        }
         if (
           isAussiePacificCatalogListing(item.name, {
             slug: item.slug ?? null,

@@ -1,6 +1,7 @@
 import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
 import {
   storefrontDescriptionForDisplay,
+  storefrontProductNameWithoutBrand,
   storefrontStripSupplierBranding,
 } from "@/lib/product-display-name";
 import { BIZ_CARE_COLLECTION_STYLE_DETAIL_BODY } from "@/lib/biz-care-collection-style-details.generated";
@@ -770,6 +771,10 @@ function cardProductCode(
       return upper;
     }
   }
+  const syzmikCode = syzmikStyleCodeFromListing(name, storeSlug, supplierName);
+  if (syzmikCode) {
+    return syzmikCode;
+  }
   const stripped = storefrontStripSupplierBranding(name).trim();
   return stripped.length > 0 ? stripped : name.trim();
 }
@@ -839,19 +844,60 @@ function cardMarketingTitleFromDescription(
   return null;
 }
 
-function isSyzmikProductListing(name: string, storeSlug?: string | null): boolean {
+function isSyzmikProductListing(
+  name: string,
+  storeSlug?: string | null,
+  supplierName?: string | null,
+): boolean {
   if (/^\s*syzmik\s+/i.test(name.trim())) {
     return true;
   }
+  const sup = String(supplierName ?? "").trim().toLowerCase();
+  if (sup === "syzmik" || sup.includes("syzmik")) {
+    return true;
+  }
   return /\bsyzmik\b/i.test((storeSlug ?? "").toLowerCase());
+}
+
+/** Syzmik style code from slug (`fb-syzmik-zj620-au`), `Syzmik ZJ620-AU`, or trailing `(ZJ620-AU)` on a title. */
+export function syzmikStyleCodeFromListing(
+  name: string,
+  storeSlug?: string | null,
+  supplierName?: string | null,
+): string | null {
+  if (!isSyzmikProductListing(name, storeSlug, supplierName)) {
+    return null;
+  }
+  const slug = (storeSlug ?? "").trim().toLowerCase();
+  const slugM =
+    slug.match(/(?:^|-)fb-syzmik-([a-z0-9]+(?:-[a-z0-9]+)*)(?:-clearance)?(?:-|$)/i) ??
+    slug.match(/(?:^|-)syzmik-([a-z0-9]+(?:-[a-z0-9]+)*)(?:-clearance)?(?:-|$)/i);
+  if (slugM?.[1]) {
+    return slugM[1].toUpperCase();
+  }
+  const trimmed = name.trim();
+  const parenM = trimmed.match(TRAILING_STYLE_PAREN_RE);
+  if (parenM?.[1] && /^Z[A-Z0-9]/i.test(parenM[1])) {
+    return parenM[1].toUpperCase();
+  }
+  const afterBrand = storefrontProductNameWithoutBrand(trimmed);
+  if (/^Z[A-Z0-9]{2,}(?:-[A-Z0-9]+)*$/i.test(afterBrand)) {
+    return afterBrand.toUpperCase();
+  }
+  const head = afterBrand.split(/\s+/)[0]?.toUpperCase().replace(/[^A-Z0-9-]/g, "") ?? "";
+  if (/^Z[A-Z0-9]{2,}(?:-[A-Z0-9]+)*$/i.test(head)) {
+    return head;
+  }
+  return null;
 }
 
 function syzmikMarketingTitleFallback(
   name: string,
   codeKey: string,
   storeSlug?: string | null,
+  supplierName?: string | null,
 ): string | null {
-  if (!isSyzmikProductListing(name, storeSlug)) {
+  if (!isSyzmikProductListing(name, storeSlug, supplierName)) {
     return null;
   }
   const baseKey = codeKey.replace(/-CLEARANCE$/i, "");
@@ -957,7 +1003,7 @@ export function productCardDisplayLines(
     productName = jbWearCardTitleFromName(name, codeKey);
   }
   if (!productName) {
-    productName = syzmikMarketingTitleFallback(name, codeKey, storeSlug);
+    productName = syzmikMarketingTitleFallback(name, codeKey, storeSlug, supplierName);
   }
   if (!productName) {
     productName = bizCareCollectionMarketingTitleFallback(name, codeKey, storeSlug, supplierName);

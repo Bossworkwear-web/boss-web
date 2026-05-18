@@ -3,8 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { AnimationEvent, RefObject } from "react";
-import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { CartIcon, MenuIcon, SearchIcon, UserIcon } from "@/app/components/icons";
 import { LOGO_SRC } from "@/app/generated/logo";
@@ -271,7 +271,7 @@ function CategoryInlineNav({
 }
 
 const HEADER_SEARCH_INPUT_CLASS =
-  "min-w-0 w-[min(100%,7.5rem)] rounded-full border border-brand-navy/20 bg-white px-3 py-1.5 text-sm leading-snug text-brand-navy placeholder:text-brand-navy/50 focus:border-brand-orange focus:outline-none sm:w-[11rem] sm:px-[1.125rem] sm:py-2 sm:text-base lg:w-[13rem] lg:py-2.5 lg:text-lg";
+  "min-w-0 w-full appearance-none rounded-full border-0 bg-white px-4 py-2.5 text-base leading-snug text-brand-navy shadow-none placeholder:text-brand-navy/50 focus:border-0 focus:outline-none focus:ring-0 sm:py-3 sm:text-lg";
 
 /**
  * Same DOM for Suspense fallback and hydrated tree — avoids `<div>` placeholder vs `<form>` mismatch.
@@ -301,7 +301,7 @@ function HeaderSearchFormView({ inputRef }: { inputRef?: RefObject<HTMLInputElem
   );
 }
 
-function HeaderSearchFormInner() {
+function HeaderSearchFormInner({ onClose }: { onClose?: () => void }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -318,10 +318,11 @@ function HeaderSearchFormInner() {
 
   return (
     <form
-      className="flex max-w-full items-center gap-2"
+      className="flex w-full items-center gap-2"
       onSubmit={(e) => {
         e.preventDefault();
         const v = (inputRef.current?.value ?? "").trim();
+        onClose?.();
         router.push(v.length > 0 ? `/search?q=${encodeURIComponent(v)}` : "/search");
       }}
     >
@@ -347,13 +348,46 @@ function HeaderSearchFormInner() {
   );
 }
 
-function headerSearchAnimDisabled(): boolean {
-  if (typeof window === "undefined") {
-    return false;
+function HeaderSearchPopup({ open, onClose }: { open: boolean; onClose: () => void }) {
+  useEffect(() => {
+    if (!open || typeof document === "undefined") {
+      return;
+    }
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open, onClose]);
+
+  if (!open) {
+    return null;
   }
+
   return (
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
-    window.matchMedia("(max-width: 1023px)").matches
+    <div
+      className="fixed inset-0 z-[125] flex items-start justify-end bg-black/40 p-3 pt-[calc(var(--site-header-height)+0.5rem)] sm:p-4 sm:pr-6 sm:pt-[calc(var(--site-header-height)+0.75rem)]"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Search products"
+      onClick={onClose}
+    >
+      <div
+        className="store-header-search-popup w-[min(100%,24rem)] rounded-2xl border border-brand-navy/12 bg-white px-4 py-2 shadow-2xl sm:px-5 sm:py-2.5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Suspense fallback={<HeaderSearchFormView />}>
+          <HeaderSearchFormInner onClose={onClose} />
+        </Suspense>
+      </div>
+    </div>
   );
 }
 
@@ -366,91 +400,20 @@ function HeaderSearchToggle({
   onOpen: () => void;
   onClose: () => void;
 }) {
-  const [isCollapsing, setIsCollapsing] = useState(false);
-  const [instantSearchUi, setInstantSearchUi] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setIsCollapsing(false);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    const mqMobile = window.matchMedia("(max-width: 1023px)");
-    const mqReduce = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const sync = () => setInstantSearchUi(mqMobile.matches || mqReduce.matches);
-    sync();
-    mqMobile.addEventListener("change", sync);
-    mqReduce.addEventListener("change", sync);
-    return () => {
-      mqMobile.removeEventListener("change", sync);
-      mqReduce.removeEventListener("change", sync);
-    };
-  }, []);
-
-  const beginClose = useCallback(() => {
-    if (headerSearchAnimDisabled()) {
-      onClose();
-      return;
-    }
-    setIsCollapsing(true);
-  }, [onClose]);
-
-  useEffect(() => {
-    if (!open || isCollapsing) {
-      return;
-    }
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        beginClose();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, isCollapsing, beginClose]);
-
-  function onSearchShellAnimationEnd(e: AnimationEvent<HTMLDivElement>) {
-    if (e.animationName !== "store-header-search-collapse" || !isCollapsing) {
-      return;
-    }
-    setIsCollapsing(false);
-    onClose();
-  }
-
-  const searchShellClass = instantSearchUi
-    ? "max-w-[min(100%,12rem)] overflow-hidden"
-    : isCollapsing
-      ? "store-header-search-collapse"
-      : "store-header-search-expand";
-
-  return open ? (
-    <div
-      className={`flex max-w-full items-center gap-1 max-lg:max-w-[calc(100vw-5.5rem)] sm:gap-1.5 ${searchShellClass}`}
-      onAnimationEnd={instantSearchUi ? undefined : onSearchShellAnimationEnd}
-    >
-      <Suspense fallback={<HeaderSearchFormView />}>
-        <HeaderSearchFormInner />
-      </Suspense>
+  return (
+    <>
       <button
         type="button"
-        onClick={beginClose}
-        className="inline-flex shrink-0 items-center justify-center rounded-full p-2 text-brand-navy transition hover:bg-brand-surface sm:p-2.5"
-        aria-label="Close search"
+        onClick={onOpen}
+        className="inline-flex shrink-0 items-center justify-center rounded-full p-1.5 text-brand-navy transition hover:bg-brand-surface sm:p-2 lg:p-2.5"
+        aria-label="Open search"
+        aria-expanded={open}
+        aria-haspopup="dialog"
       >
-        <span className="text-xl leading-none sm:text-2xl" aria-hidden>
-          ×
-        </span>
+        <SearchIcon className="h-5 w-5 sm:h-6 sm:w-6" />
       </button>
-    </div>
-  ) : (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="inline-flex shrink-0 items-center justify-center rounded-full p-1.5 text-brand-navy transition hover:bg-brand-surface sm:p-2 lg:p-2.5"
-      aria-label="Open search"
-    >
-      <SearchIcon className="h-5 w-5 sm:h-6 sm:w-6" />
-    </button>
+      <HeaderSearchPopup open={open} onClose={onClose} />
+    </>
   );
 }
 
@@ -579,6 +542,7 @@ export function TopNavClient({
 
   useEffect(() => {
     setMobileNavOpen(false);
+    setSearchOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -678,7 +642,7 @@ export function TopNavClient({
               <StoreSecondaryNavLinks pathname={pathname} variant="header-row" />
             </div>
 
-            <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1 lg:ml-0 lg:flex-col lg:items-end lg:gap-1.5 lg:justify-self-end">
+            <div className="store-header-actions ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1 lg:ml-0 lg:flex-col lg:items-end lg:gap-1.5 lg:justify-self-end">
               <div className="flex items-center justify-end gap-0.5 sm:gap-1 md:gap-2">
               {customerName ? (
                 <>

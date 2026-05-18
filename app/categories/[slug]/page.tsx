@@ -26,6 +26,7 @@ import {
   resolveChefCategoryBrowseSubSlug,
   type CategoryBrowseProductRow,
 } from "@/lib/main-category-browse";
+import { isBizCollectionListing } from "@/lib/fashion-biz-gender-route";
 import {
   hasStorefrontListNameAndPrice,
   isAussiePacificCatalogListing,
@@ -149,6 +150,9 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   };
 
   const isWorkwearExclusiveBrand = (item: CategoryBrowseProductRow): boolean => {
+    if (isBizCollectionListing(item.name, item.slug ?? null, item.category ?? null)) {
+      return false;
+    }
     if (
       isAussiePacificCatalogListing(item.name, {
         slug: item.slug ?? null,

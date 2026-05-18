@@ -130,6 +130,49 @@ pre {
     0 12px 32px rgba(55, 65, 81, 0.16);
 }
 
+/* Header logo + desktop category pills at 80% — descendant selectors only so SSR/client class strings stay identical. */
+.store-top-nav-shell a[aria-label="Home"] img {
+  height: 1.8rem !important;
+  max-height: 1.8rem !important;
+}
+
+@media (min-width: 640px) {
+  .store-top-nav-shell a[aria-label="Home"] img {
+    height: 2.2rem !important;
+    max-height: 2.2rem !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .store-top-nav-shell a[aria-label="Home"] img {
+    height: 4.32rem !important;
+    max-height: none !important;
+  }
+}
+
+.store-top-nav-shell nav[aria-label="Store navigation"] a[href^="/categories/"],
+.store-top-nav-shell nav[aria-label="More store pages"] a {
+  padding: 0.3rem 0.5rem !important;
+  font-size: 0.86rem !important;
+  line-height: 1.375 !important;
+}
+
+@media (min-width: 640px) {
+  .store-top-nav-shell nav[aria-label="Store navigation"] a[href^="/categories/"],
+  .store-top-nav-shell nav[aria-label="More store pages"] a {
+    padding: 0.4rem 0.6rem !important;
+    font-size: 0.988rem !important;
+  }
+}
+
+/* Header actions (login, cart, search): align with main category row on desktop */
+@media (min-width: 1024px) {
+  .store-top-nav-shell .store-header-actions {
+    align-self: center;
+    padding-top: 0.25rem;
+  }
+}
+
 /* TopNav cart: gentle grow/shrink on non-cart pages when the cart has items (not on /cart). */
 @keyframes store-cart-icon-breathe {
   0%,
@@ -148,75 +191,9 @@ pre {
   will-change: transform;
 }
 
-/* Header search: magnifier → expanded field — horizontal reveal */
-@keyframes store-header-search-expand {
-  from {
-    max-width: 2.75rem;
-  }
-  to {
-    max-width: min(100%, 34rem);
-  }
-}
-
-@keyframes store-header-search-collapse {
-  from {
-    max-width: min(100%, 34rem);
-  }
-  to {
-    max-width: 2.75rem;
-  }
-}
-
-@media (max-width: 1023px) {
-  @keyframes store-header-search-expand {
-    to {
-      max-width: min(100%, 12rem);
-    }
-  }
-
-  @keyframes store-header-search-collapse {
-    from {
-      max-width: min(100%, 12rem);
-    }
-  }
-
-  .store-header-search-expand,
-  .store-header-search-collapse {
-    animation: none;
-  }
-
-  .store-header-search-expand {
-    max-width: min(100%, 12rem);
-  }
-
-  .store-header-search-collapse {
-    max-width: 2.75rem;
-  }
-}
-
-.store-header-search-expand {
-  overflow: hidden;
-  animation: store-header-search-expand 1.52s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-.store-header-search-collapse {
-  overflow: hidden;
-  animation: store-header-search-collapse 1.52s cubic-bezier(0.36, 0, 0.66, 1) forwards;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .store-cart-icon-animate {
     animation: none;
-  }
-
-  .store-header-search-expand {
-    animation: none;
-    max-width: min(100%, 34rem);
-  }
-
-  .store-header-search-collapse {
-    animation: none;
-    max-width: 2.75rem;
   }
 }
 
@@ -421,32 +398,41 @@ img.category-top-ad-wa-mark {
   }
 }
 
-/* Product detail: title — medium (500); 20% smaller than legacy 3.3696 / 4.212rem */
+/* Product detail: name, product ID line, price — medium/light weights; sizes in one place (80% of prior scale). */
 .product-detail-page .product-detail-title {
   font-weight: 500 !important;
-  font-size: calc(3.3696rem * 0.8) !important;
+  font-size: calc(3.3696rem * 0.64) !important;
   line-height: 1.15;
 }
 
 @media (min-width: 640px) {
   .product-detail-page .product-detail-title {
-    font-size: calc(4.212rem * 0.8) !important;
+    font-size: calc(4.212rem * 0.64) !important;
   }
+}
+
+.product-detail-page .product-detail-meta-header .product-detail-sku,
+.product-detail-page .product-detail-meta-header .product-detail-list-price {
+  font-size: calc(2.16rem * 0.8) !important;
+}
+
+.product-detail-page .product-detail-meta-header .product-detail-list-price .product-detail-price-strike {
+  font-size: calc(1.44rem * 0.8) !important;
 }
 
 @media (max-width: 1023px) {
   .product-detail-page .product-detail-meta-header .product-detail-title {
-    font-size: calc(3.3696rem * 0.48) !important;
+    font-size: calc(3.3696rem * 0.384) !important;
     line-height: 1.15;
   }
 
   .product-detail-page .product-detail-meta-header .product-detail-sku,
   .product-detail-page .product-detail-meta-header .product-detail-list-price {
-    font-size: calc(2.16rem * 0.6) !important;
+    font-size: calc(2.16rem * 0.48) !important;
   }
 
   .product-detail-page .product-detail-meta-header .product-detail-price-strike {
-    font-size: calc(1.44rem * 0.6) !important;
+    font-size: calc(1.44rem * 0.48) !important;
   }
 }
 

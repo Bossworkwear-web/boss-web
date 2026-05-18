@@ -35,6 +35,7 @@ import {
   bisleyPdpDisplayProductNameWithApexPrefix,
   computePdpDescriptionBodyFromDetailFields,
   productCardDisplayLines,
+  syzmikStyleCodeFromListing,
 } from "@/lib/product-card-copy";
 import {
   applyBizCollectionP29012ColorDisplayRules,
@@ -376,15 +377,6 @@ function syzmikDescriptionLooksLikeTitleOnly(description: string): boolean {
   return false;
 }
 
-function syzmikStyleCodeUpperFromSlugOrName(slug: string, name: string): string | null {
-  const sl = String(slug ?? "").trim().toLowerCase();
-  const m = sl.match(/(?:^|-)fb-syzmik-([a-z0-9]{2,16})(?:-|$)/i) ?? sl.match(/(?:^|-)syzmik-([a-z0-9]{2,16})(?:-|$)/i);
-  if (m?.[1]) {
-    return m[1].toUpperCase();
-  }
-  const mm = String(name ?? "").trim().match(/\(([A-Za-z0-9][A-Za-z0-9/_-]{1,20})\)\s*$/);
-  return mm?.[1] ? mm[1].toUpperCase() : null;
-}
 
 function parseJbPrefixCountFromFirstImageUrl(imageUrls: string[]): number {
   const first = typeof imageUrls?.[0] === "string" ? imageUrls[0] : "";
@@ -826,9 +818,10 @@ async function getDetailDataInternal(
         if (parts.length > 0) {
           return parts.join("\n\n");
         }
-        const styleUpper = syzmikStyleCodeUpperFromSlugOrName(
-          String(product.slug?.trim() ? product.slug : slug),
+        const styleUpper = syzmikStyleCodeFromListing(
           product.name,
+          String(product.slug?.trim() ? product.slug : slug),
+          supplierNameRaw,
         );
         const csvBody = styleUpper ? syzmikDescriptionBodyFromCsv(styleUpper) : null;
         return csvBody && csvBody.trim().length > 0 ? csvBody : null;
