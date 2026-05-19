@@ -11,6 +11,7 @@ import { LOGO_SRC } from "@/app/generated/logo";
 import { clearCartItems, subscribeCartUpdates, useCartCount } from "@/lib/cart";
 import type { StorefrontNavSub } from "@/lib/catalog";
 import { readSidebarNavClient } from "@/lib/sidebar-nav";
+import { notifyRouteLoadingStart } from "@/lib/route-loading";
 import { SITE_PAGE_INSET_X_CLASS } from "@/lib/site-layout";
 
 function getCookieValue(name: string) {
@@ -323,6 +324,7 @@ function HeaderSearchFormInner({ onClose }: { onClose?: () => void }) {
         e.preventDefault();
         const v = (inputRef.current?.value ?? "").trim();
         onClose?.();
+        notifyRouteLoadingStart();
         router.push(v.length > 0 ? `/search?q=${encodeURIComponent(v)}` : "/search");
       }}
     >

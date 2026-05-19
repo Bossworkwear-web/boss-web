@@ -1,0 +1,115 @@
+"use client";
+
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
+
+import {
+  ROUTE_LOADING_START_EVENT,
+  shouldStartRouteLoadingForAnchor,
+  shouldStartRouteLoadingForUrl,
+  startRouteLoading,
+  stopRouteLoading,
+} from "@/lib/route-loading";
+import { mountRouteProgressBar } from "@/lib/route-progress-bar-dom";
+
+function onLinkIntent(event: Event) {
+  if (!(event instanceof MouseEvent) && !(event instanceof PointerEvent)) {
+    return;
+  }
+  if (event.button !== 0) {
+    return;
+  }
+  const anchor = (event.target as Element | null)?.closest("a");
+  if (!(anchor instanceof HTMLAnchorElement)) {
+    return;
+  }
+  if (!shouldStartRouteLoadingForAnchor(anchor, event as unknown as MouseEvent)) {
+    return;
+  }
+  startRouteLoading();
+}
+
+function RouteLoadingInner() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
+
+  useEffect(() => {
+    mountRouteProgressBar();
+  }, []);
+
+  useEffect(() => {
+    stopRouteLoading();
+  }, [pathname, search]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || pathname.startsWith("/admin")) {
+      return;
+    }
+
+    const onNavigationStart = () => {
+      startRouteLoading();
+    };
+
+    const onPopState = () => {
+      if (shouldStartRouteLoadingForUrl(window.location.href)) {
+        startRouteLoading();
+      }
+    };
+
+    const onNavigate = (event: Event) => {
+      if (!("destination" in event) || !("navigationType" in event)) {
+        return;
+      }
+      const nav = event as Event & {
+        navigationType: string;
+        destination: { sameDocument: boolean; url: string };
+      };
+      if (nav.navigationType === "reload") {
+        return;
+      }
+      const dest = nav.destination;
+      if (!dest.sameDocument) {
+        return;
+      }
+      try {
+        const url = new URL(dest.url);
+        if (url.origin !== window.location.origin || url.pathname.startsWith("/admin")) {
+          return;
+        }
+        const current = new URL(window.location.href);
+        if (url.pathname === current.pathname && url.search === current.search) {
+          return;
+        }
+        startRouteLoading();
+      } catch {
+        // ignore invalid URLs
+      }
+    };
+
+    window.addEventListener(ROUTE_LOADING_START_EVENT, onNavigationStart);
+    window.addEventListener("popstate", onPopState);
+    document.addEventListener("pointerdown", onLinkIntent, true);
+
+    const navigationApi = (window as Window & { navigation?: EventTarget }).navigation;
+    navigationApi?.addEventListener("navigate", onNavigate);
+
+    return () => {
+      window.removeEventListener(ROUTE_LOADING_START_EVENT, onNavigationStart);
+      window.removeEventListener("popstate", onPopState);
+      document.removeEventListener("pointerdown", onLinkIntent, true);
+      navigationApi?.removeEventListener("navigate", onNavigate);
+    };
+  }, [pathname]);
+
+  return null;
+}
+
+/** Orange top progress bar on client-side navigation (storefront only). */
+export function RouteLoading() {
+  return (
+    <Suspense fallback={null}>
+      <RouteLoadingInner />
+    </Suspense>
+  );
+}

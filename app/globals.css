@@ -1108,3 +1108,26 @@ img.category-top-ad-wa-mark {
     animation: none;
   }
 }
+
+/* Client route loading — imperative DOM bar (no React state during navigation) */
+.boss-route-progress {
+  pointer-events: none;
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 99999;
+  height: 3px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.boss-route-progress.is-active {
+  opacity: 1;
+}
+
+.boss-route-progress__fill {
+  height: 100%;
+  width: 0;
+  background: #ff851b; /* brand orange */
+  box-shadow: 0 0 8px rgba(255, 133, 27, 0.45);
+  transition: width 0.15s ease-out;
+}
