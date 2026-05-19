@@ -10,6 +10,7 @@ import {
   migrateLegacyPasswordToAuth,
   syncLegacyCustomerCookies,
 } from "@/lib/customer-auth";
+import { isRecaptchaConfigured, verifyRecaptchaToken } from "@/lib/recaptcha";
 import { sendCustomerPasswordResetEmail } from "@/lib/customer-password-reset-email";
 import { getSiteUrl } from "@/lib/site-url";
 import { createSupabaseAdminClient } from "@/lib/supabase";
@@ -91,6 +92,16 @@ export async function submitSignUp(formData: FormData) {
 
   if (password !== confirmPassword) {
     signupErrorRedirect("password_mismatch");
+  }
+
+  if (isRecaptchaConfigured()) {
+    const token = String(formData.get("g-recaptcha-response") ?? "").trim();
+    const ok = await verifyRecaptchaToken(token);
+    if (!ok) {
+      signupErrorRedirect("recaptcha_failed");
+    }
+  } else if (process.env.NODE_ENV === "production") {
+    signupErrorRedirect("recaptcha_config");
   }
 
   try {

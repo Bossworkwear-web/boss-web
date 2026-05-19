@@ -4,6 +4,7 @@ import type React from "react";
 import { useEffect, useMemo, useRef } from "react";
 
 import { OAuthSignInButtons } from "./oauth-sign-in-buttons";
+import { SignupRecaptcha } from "./signup-recaptcha";
 import { requestTemporaryPassword, submitLogIn, submitSignUp } from "./actions";
 
 type Props = {
@@ -100,6 +101,7 @@ export function LogInFormsClient({ isSignup }: Props) {
           className="rounded-md border border-brand-navy/20 px-3 py-2"
         />
       </div>
+      <SignupRecaptcha />
       <button
         type="submit"
         className="mt-2 rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-medium text-brand-navy transition hover:brightness-95"

@@ -152,6 +152,18 @@ export default async function LogInPage({ searchParams }: LogInPageProps) {
             Your email is already registered. Please register a new email address.
           </p>
         )}
+        {isSignup && status === "recaptcha_failed" && (
+          <p className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            <XCircleIcon className="h-4 w-4" />
+            Please complete the &ldquo;I&apos;m not a robot&rdquo; check and try again.
+          </p>
+        )}
+        {isSignup && status === "recaptcha_config" && (
+          <p className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+            <AlertTriangleIcon className="h-4 w-4" />
+            Sign-up verification is not configured on this site yet. Please try again later or contact us.
+          </p>
+        )}
 
         <LogInFormsClient isSignup={isSignup} />
         </div>
