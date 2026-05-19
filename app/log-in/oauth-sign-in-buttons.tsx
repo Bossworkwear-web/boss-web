@@ -16,28 +16,27 @@ type Props = {
 const PROVIDERS: {
   id: OAuthProvider;
   label: string;
-  className: string;
   icon: ReactNode;
 }[] = [
   {
     id: "google",
     label: "Continue with Google",
-    className: "border-slate-200 bg-white hover:bg-slate-50",
-    icon: <GoogleIcon className="h-6 w-6" />,
+    icon: <GoogleIcon className="h-7 w-7" />,
   },
   {
     id: "azure",
     label: "Continue with Microsoft",
-    className: "border-slate-200 bg-white hover:bg-slate-50",
-    icon: <MicrosoftIcon className="h-6 w-6" />,
+    icon: <MicrosoftIcon className="h-7 w-7" />,
   },
   {
     id: "apple",
     label: "Continue with Apple",
-    className: "border-brand-navy/20 bg-brand-navy hover:bg-brand-navy/90",
-    icon: <AppleIcon className="h-6 w-6 text-white" />,
+    icon: <AppleIcon className="h-7 w-7 text-brand-navy" />,
   },
 ];
+
+const oauthButtonClass =
+  "flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border-0 bg-transparent p-0 shadow-none transition hover:bg-brand-navy/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange/50 disabled:opacity-50";
 
 export function OAuthSignInButtons({ mode }: Props) {
   const [loading, setLoading] = useState<OAuthProvider | null>(null);
@@ -69,7 +68,7 @@ export function OAuthSignInButtons({ mode }: Props) {
       <p className="text-center text-xs font-medium uppercase tracking-wide text-brand-navy/50">
         {mode === "signup" ? "Or sign up with" : "Or continue with"}
       </p>
-      <div className="flex items-stretch justify-center gap-3">
+      <div className="flex items-center justify-center gap-6">
         {PROVIDERS.map((p) => (
           <button
             key={p.id}
@@ -77,8 +76,9 @@ export function OAuthSignInButtons({ mode }: Props) {
             disabled={loading !== null}
             onClick={() => signInWith(p.id)}
             aria-label={loading === p.id ? `${p.label} — redirecting` : p.label}
+            aria-pressed={loading === p.id}
             title={p.label}
-            className={`flex h-12 flex-1 max-w-[5.5rem] items-center justify-center rounded-xl border transition disabled:opacity-60 ${p.className} ${loading === p.id ? "ring-2 ring-brand-orange/60" : ""}`}
+            className={`${oauthButtonClass} ${loading === p.id ? "bg-brand-navy/5" : ""}`}
           >
             {p.icon}
           </button>

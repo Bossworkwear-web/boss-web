@@ -21,22 +21,32 @@ declare global {
 }
 
 const SCRIPT_ID = "boss-recaptcha-v2-script";
+const pendingMounts: Array<() => void> = [];
+
+function flushPendingMounts() {
+  const queue = pendingMounts.splice(0);
+  for (const run of queue) {
+    run();
+  }
+}
 
 function loadRecaptchaScript(onLoad: () => void) {
   if (typeof window === "undefined") {
     return;
   }
+
   if (window.grecaptcha?.render) {
     onLoad();
     return;
   }
 
+  pendingMounts.push(onLoad);
+  window.__bossRecaptchaOnload = flushPendingMounts;
+
   if (document.getElementById(SCRIPT_ID)) {
-    window.__bossRecaptchaOnload = onLoad;
     return;
   }
 
-  window.__bossRecaptchaOnload = onLoad;
   const script = document.createElement("script");
   script.id = SCRIPT_ID;
   script.src = "https://www.google.com/recaptcha/api.js?onload=__bossRecaptchaOnload&render=explicit";
@@ -45,33 +55,51 @@ function loadRecaptchaScript(onLoad: () => void) {
   document.head.appendChild(script);
 }
 
+function clearRecaptchaContainer(el: HTMLElement) {
+  el.innerHTML = "";
+  delete el.dataset.recaptchaMounted;
+}
+
 /** reCAPTCHA v2 checkbox for email sign-up only. */
 export function SignupRecaptcha() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!siteKey || !containerRef.current) {
+    if (!siteKey) {
       return;
     }
 
+    let cancelled = false;
+
     const mount = () => {
-      if (!containerRef.current || !window.grecaptcha?.render) {
+      if (cancelled) {
         return;
       }
-      if (widgetIdRef.current !== null) {
-        window.grecaptcha.reset(widgetIdRef.current);
+      const el = containerRef.current;
+      if (!el || !window.grecaptcha?.render) {
         return;
       }
-      widgetIdRef.current = window.grecaptcha.render(containerRef.current, {
+      if (el.dataset.recaptchaMounted === "1") {
+        return;
+      }
+
+      clearRecaptchaContainer(el);
+      widgetIdRef.current = window.grecaptcha.render(el, {
         sitekey: siteKey,
         theme: "light",
       });
+      el.dataset.recaptchaMounted = "1";
     };
 
     loadRecaptchaScript(mount);
 
     return () => {
+      cancelled = true;
+      const el = containerRef.current;
+      if (el) {
+        clearRecaptchaContainer(el);
+      }
       widgetIdRef.current = null;
     };
   }, []);
