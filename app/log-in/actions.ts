@@ -4,8 +4,16 @@ import crypto from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import {
+  finalizeCustomerAuthSession,
+  getCustomerProfileByEmail,
+  migrateLegacyPasswordToAuth,
+  syncLegacyCustomerCookies,
+} from "@/lib/customer-auth";
 import { sendCustomerPasswordResetEmail } from "@/lib/customer-password-reset-email";
+import { getSiteUrl } from "@/lib/site-url";
 import { createSupabaseAdminClient } from "@/lib/supabase";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function isNextRedirectError(error: unknown) {
   return (
@@ -25,7 +33,6 @@ function signupErrorRedirect(status: string) {
   redirect(`/log-in?${qs.toString()}`);
 }
 
-/** ISSUE:customer-password-reset — add recovery/token verification when implementing automated reset (AGENTS.md). */
 export async function submitLogIn(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "").trim();
@@ -37,45 +44,31 @@ export async function submitLogIn(formData: FormData) {
   const emailNorm = email.trim().toLowerCase();
 
   try {
-    const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("customer_profiles")
-      .select("customer_name, email_address, login_password, delivery_address")
-      .eq("email_address", emailNorm)
-      .maybeSingle();
+    const supabase = await createSupabaseServerClient();
+    let { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email: emailNorm,
+      password,
+    });
 
-    if (error || !data) {
+    if (signInError) {
+      const migrated = await migrateLegacyPasswordToAuth(emailNorm, password);
+      if (migrated) {
+        const retry = await supabase.auth.signInWithPassword({ email: emailNorm, password });
+        signInData = retry.data;
+        signInError = retry.error;
+      }
+    }
+
+    if (signInError || !signInData.user) {
       redirect(`/log-in?status=mismatch`);
     }
 
-    const stored = data.login_password;
-    if (stored === null || stored === "") {
-      redirect(`/log-in?status=mismatch`);
+    const result = await finalizeCustomerAuthSession(signInData.user);
+    if (result.status === "needs_profile") {
+      redirect(
+        `/customer-details?email=${encodeURIComponent(result.email)}&full_name=${encodeURIComponent(result.fullName)}`,
+      );
     }
-
-    if (stored !== password) {
-      redirect(`/log-in?status=mismatch`);
-    }
-
-    const cookieStore = await cookies();
-    cookieStore.set("customer_name", data.customer_name, {
-      path: "/",
-      maxAge: 60 * 60 * 24 * 30,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-    });
-    cookieStore.set("customer_email", data.email_address, {
-      path: "/",
-      maxAge: 60 * 60 * 24 * 30,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-    });
-    cookieStore.set("customer_delivery_address", data.delivery_address ?? "", {
-      path: "/",
-      maxAge: 60 * 60 * 24 * 30,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-    });
   } catch (error) {
     if (isNextRedirectError(error)) {
       throw error;
@@ -101,28 +94,44 @@ export async function submitSignUp(formData: FormData) {
   }
 
   try {
-    const supabase = createSupabaseAdminClient();
-    const { data: existingProfile, error } = await supabase
-      .from("customer_profiles")
-      .select("id")
-      .eq("email_address", email)
-      .maybeSingle();
-
-    if (error) {
-      signupErrorRedirect("error");
-    }
-
+    const { profile: existingProfile } = await getCustomerProfileByEmail(email);
     if (existingProfile) {
       signupErrorRedirect("email_exists");
     }
 
-    const cookieStore = await cookies();
-    cookieStore.set("pending_signup_password", password, {
-      path: "/",
-      maxAge: 60 * 20,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+    const supabase = await createSupabaseServerClient();
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName, customer_name: fullName },
+      },
     });
+
+    if (signUpError) {
+      const msg = signUpError.message.toLowerCase();
+      if (msg.includes("already") || msg.includes("registered")) {
+        signupErrorRedirect("email_exists");
+      }
+      signupErrorRedirect("error");
+    }
+
+    const cookieStore = await cookies();
+    if (!signUpData.session) {
+      cookieStore.set("pending_signup_password", password, {
+        path: "/",
+        maxAge: 60 * 20,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+      });
+    } else {
+      cookieStore.set("pending_signup_password", "", {
+        path: "/",
+        maxAge: 0,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+      });
+    }
   } catch (error) {
     if (isNextRedirectError(error)) {
       throw error;
@@ -131,10 +140,11 @@ export async function submitSignUp(formData: FormData) {
   }
 
   redirect(
-    `/customer-details?full_name=${encodeURIComponent(fullName)}&email=${encodeURIComponent(email)}`
+    `/customer-details?full_name=${encodeURIComponent(fullName)}&email=${encodeURIComponent(email)}`,
   );
 }
 
+/** Password reset via Resend token (legacy). Supabase Auth users can also use this until fully migrated. */
 export async function requestTemporaryPassword(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!email) {
@@ -145,7 +155,7 @@ export async function requestTemporaryPassword(formData: FormData) {
     const supabase = createSupabaseAdminClient();
     const { data } = await supabase
       .from("customer_profiles")
-      .select("id, customer_name, email_address, login_password")
+      .select("id, customer_name, email_address, login_password, auth_user_id")
       .eq("email_address", email)
       .maybeSingle();
 
@@ -160,9 +170,8 @@ export async function requestTemporaryPassword(formData: FormData) {
 
     const token = crypto.randomBytes(32).toString("hex");
     const tokenHash = crypto.createHash("sha256").update(token, "utf8").digest("hex");
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 30); // 30 minutes
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 30);
 
-    // NOTE: `customer_password_resets` exists via migration, but generated Supabase types may lag behind.
     const { error: insErr } = await supabase.from("customer_password_resets" as never).insert({
       customer_profile_id: data.id,
       token_hash: tokenHash,
@@ -173,9 +182,7 @@ export async function requestTemporaryPassword(formData: FormData) {
       redirect(`/log-in?status=reset_error`);
     }
 
-    const site =
-      process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "") ||
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}` : "http://localhost:3000");
+    const site = getSiteUrl();
     const resetUrl = `${site}/reset-password?email=${encodeURIComponent(data.email_address)}&token=${encodeURIComponent(token)}`;
 
     const sent = await sendCustomerPasswordResetEmail({

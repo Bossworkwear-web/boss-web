@@ -11,6 +11,7 @@ type LogInPageProps = {
     status?: string;
     email?: string;
     full_name?: string;
+    message?: string;
   }>;
 };
 
@@ -77,6 +78,13 @@ export default async function LogInPage({ searchParams }: LogInPageProps) {
           <p className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
             <XCircleIcon className="h-4 w-4" />
             Could not log in right now. Please try again.
+          </p>
+        )}
+        {!isSignup && status === "oauth_error" && (
+          <p className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            <XCircleIcon className="h-4 w-4" />
+            Social sign-in did not complete. Please try again
+            {params.message ? ` (${params.message})` : "."}
           </p>
         )}
         {!isSignup && status === "reset_invalid" && (

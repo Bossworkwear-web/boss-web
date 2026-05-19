@@ -7,6 +7,7 @@ import "./product-listing-cards.css";
 import { RouteLoading } from "@/app/components/route-loading";
 import { SiteFooter } from "@/app/components/site-footer";
 import { StorePublicChatGate } from "@/app/components/store-public-chat-gate";
+import { finalizeCustomerAuthSession, getAuthenticatedCustomerUser } from "@/lib/customer-auth";
 import { getSiteUrl } from "@/lib/site-url";
 
 const encodeSansCondensed = Encode_Sans_Condensed({
@@ -50,7 +51,21 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
-  const storeChatCustomerSignedIn = Boolean((cookieStore.get("customer_email")?.value ?? "").trim());
+  let storeChatCustomerSignedIn = Boolean((cookieStore.get("customer_email")?.value ?? "").trim());
+
+  if (!storeChatCustomerSignedIn) {
+    const authUser = await getAuthenticatedCustomerUser();
+    if (authUser) {
+      try {
+        const synced = await finalizeCustomerAuthSession(authUser);
+        if (synced.status === "ready") {
+          storeChatCustomerSignedIn = true;
+        }
+      } catch {
+        /* profile incomplete or DB error — user completes customer-details */
+      }
+    }
+  }
 
   return (
     <html

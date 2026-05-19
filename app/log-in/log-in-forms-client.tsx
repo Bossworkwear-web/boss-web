@@ -3,6 +3,7 @@
 import type React from "react";
 import { useEffect, useMemo, useRef } from "react";
 
+import { OAuthSignInButtons } from "./oauth-sign-in-buttons";
 import { requestTemporaryPassword, submitLogIn, submitSignUp } from "./actions";
 
 type Props = {
@@ -35,6 +36,13 @@ export function LogInFormsClient({ isSignup }: Props) {
   const key = useMemo(() => (isSignup ? "signup" : "login"), [isSignup]);
 
   return isSignup ? (
+    <>
+    <OAuthSignInButtons mode="signup" />
+    <div className="my-4 flex items-center gap-3 text-xs text-brand-navy/40">
+      <span className="h-px flex-1 bg-brand-navy/15" />
+      <span>or use email</span>
+      <span className="h-px flex-1 bg-brand-navy/15" />
+    </div>
     <form
       key={key}
       ref={signupRef}
@@ -99,7 +107,15 @@ export function LogInFormsClient({ isSignup }: Props) {
         Sign up
       </button>
     </form>
+    </>
   ) : (
+    <>
+    <OAuthSignInButtons mode="login" />
+    <div className="my-4 flex items-center gap-3 text-xs text-brand-navy/40">
+      <span className="h-px flex-1 bg-brand-navy/15" />
+      <span>or use email</span>
+      <span className="h-px flex-1 bg-brand-navy/15" />
+    </div>
     <form
       key={key}
       ref={loginRef}
@@ -150,6 +166,7 @@ export function LogInFormsClient({ isSignup }: Props) {
         </button>
       </div>
     </form>
+    </>
   );
 }
 

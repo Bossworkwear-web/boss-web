@@ -574,7 +574,12 @@ export function TopNavClient({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [mobileNavOpen]);
 
-  function handleLogOut() {
+  async function handleLogOut() {
+    try {
+      await fetch("/api/auth/signout", { method: "POST" });
+    } catch {
+      /* still clear local state */
+    }
     document.cookie = "customer_name=; Max-Age=0; path=/";
     document.cookie = "customer_email=; Max-Age=0; path=/";
     document.cookie = "customer_delivery_address=; Max-Age=0; path=/";

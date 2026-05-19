@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { AddressSections } from "@/app/customer-details/address-sections";
 import { ArrowLeftIcon, BuildingIcon, NotesIcon, XCircleIcon } from "@/app/components/icons";
+import { getAuthenticatedCustomerUser, linkProfileToAuthUser } from "@/lib/customer-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
@@ -106,8 +107,13 @@ async function submitCustomerDetails(formData: FormData) {
   const isEditMode = Boolean(profileId);
   const emailNorm = emailAddress.trim().toLowerCase();
   const passwordCandidate = isEditMode ? loginPasswordInput : loginPasswordInput || pendingPassword;
+  const authUser = await getAuthenticatedCustomerUser();
+  const authUserId = authUser?.id ?? null;
   const isOauthNewSignup = Boolean(
-    oauthPending && oauthEmailCookie && emailNorm === oauthEmailCookie && !isEditMode,
+    !isEditMode &&
+      emailNorm &&
+      (authUser?.email?.trim().toLowerCase() === emailNorm ||
+        (oauthPending && oauthEmailCookie === emailNorm)),
   );
 
   if (!customerName || !organisation || !contactNumber || !emailAddress || !deliveryAddress || !billingAddress) {
@@ -192,6 +198,7 @@ async function submitCustomerDetails(formData: FormData) {
           login_password: resolvedPassword,
           delivery_address: deliveryAddress,
           billing_address: billingAddress,
+          ...(authUserId ? { auth_user_id: authUserId } : {}),
         })
         .eq("id", profileId);
 
@@ -224,15 +231,24 @@ async function submitCustomerDetails(formData: FormData) {
         insertPassword = passwordCandidate;
       }
 
-      const { error } = await supabase.from("customer_profiles").insert({
-        customer_name: customerName,
-        organisation,
-        contact_number: contactNumber,
-        email_address: emailNorm,
-        login_password: insertPassword,
-        delivery_address: deliveryAddress,
-        billing_address: billingAddress,
-      });
+      const { data: inserted, error } = await supabase
+        .from("customer_profiles")
+        .insert({
+          customer_name: customerName,
+          organisation,
+          contact_number: contactNumber,
+          email_address: emailNorm,
+          login_password: insertPassword,
+          delivery_address: deliveryAddress,
+          billing_address: billingAddress,
+          ...(authUserId ? { auth_user_id: authUserId } : {}),
+        })
+        .select("id")
+        .single();
+
+      if (!error && inserted?.id && authUserId) {
+        await linkProfileToAuthUser(inserted.id, authUserId);
+      }
 
       if (error?.code === "23505") {
         redirect(

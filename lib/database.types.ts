@@ -151,6 +151,7 @@ export type Database = {
       customer_profiles: {
         Row: {
           id: string;
+          auth_user_id: string | null;
           customer_name: string;
           organisation: string;
           contact_number: string;
@@ -162,6 +163,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          auth_user_id?: string | null;
           customer_name: string;
           organisation: string;
           contact_number: string;
@@ -173,6 +175,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          auth_user_id?: string | null;
           customer_name?: string;
           organisation?: string;
           contact_number?: string;
