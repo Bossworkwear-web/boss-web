@@ -11,7 +11,6 @@ import { LOGO_SRC } from "@/app/generated/logo";
 import { clearCartItems, subscribeCartUpdates, useCartCount } from "@/lib/cart";
 import type { StorefrontNavSub } from "@/lib/catalog";
 import { readSidebarNavClient } from "@/lib/sidebar-nav";
-import { notifyFaviconNavigationStart } from "@/lib/favicon-route-progress";
 import { SITE_PAGE_INSET_X_CLASS } from "@/lib/site-layout";
 
 function getCookieValue(name: string) {
@@ -324,7 +323,6 @@ function HeaderSearchFormInner({ onClose }: { onClose?: () => void }) {
         e.preventDefault();
         const v = (inputRef.current?.value ?? "").trim();
         onClose?.();
-        notifyFaviconNavigationStart();
         router.push(v.length > 0 ? `/search?q=${encodeURIComponent(v)}` : "/search");
       }}
     >
@@ -355,8 +353,6 @@ function HeaderSearchPopup({ open, onClose }: { open: boolean; onClose: () => vo
     if (!open || typeof document === "undefined") {
       return;
     }
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onClose();
@@ -364,7 +360,6 @@ function HeaderSearchPopup({ open, onClose }: { open: boolean; onClose: () => vo
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      document.body.style.overflow = prev;
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [open, onClose]);
@@ -375,7 +370,7 @@ function HeaderSearchPopup({ open, onClose }: { open: boolean; onClose: () => vo
 
   return (
     <div
-      className="fixed inset-0 z-[125] flex items-start justify-end bg-black/40 p-3 pt-[calc(var(--site-header-height)+0.5rem)] sm:p-4 sm:pr-6 sm:pt-[calc(var(--site-header-height)+0.75rem)]"
+      className="fixed inset-0 z-[125] flex items-start justify-end overscroll-none bg-black/40 p-3 pt-[calc(var(--site-header-height)+0.5rem)] sm:p-4 sm:pr-6 sm:pt-[calc(var(--site-header-height)+0.75rem)]"
       role="dialog"
       aria-modal="true"
       aria-label="Search products"

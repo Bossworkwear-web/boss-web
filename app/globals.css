@@ -49,6 +49,8 @@
 html {
   font-family: var(--font-app);
   font-size: clamp(73%, calc(70% + 1vw), 88%);
+  /* Keep layout width stable when modals set overflow:hidden (no horizontal shift). */
+  scrollbar-gutter: stable;
 }
 
 /* Shared horizontal gutters (TopNav, pages using SITE_PAGE_ROW_CLASS / SITE_PAGE_INSET_X_CLASS). */
