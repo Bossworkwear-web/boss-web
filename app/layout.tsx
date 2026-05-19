@@ -4,6 +4,7 @@ import { Encode_Sans_Condensed, Montserrat } from "next/font/google";
 import "./globals.css";
 import "./store-ui.css";
 import "./product-listing-cards.css";
+import { FaviconRouteProgress } from "@/app/components/favicon-route-progress";
 import { SiteFooter } from "@/app/components/site-footer";
 import { StorePublicChatGate } from "@/app/components/store-public-chat-gate";
 import { getSiteUrl } from "@/lib/site-url";
@@ -58,6 +59,7 @@ export default async function RootLayout({
       className={`${encodeSansCondensed.variable} ${montserrat.variable} font-sans h-full antialiased`}
     >
       <body suppressHydrationWarning className="flex min-h-full flex-col overflow-x-clip font-sans antialiased">
+        <FaviconRouteProgress />
         <div className="flex-1 min-w-0">{children}</div>
         <SiteFooter />
         <StorePublicChatGate initialCustomerSignedIn={storeChatCustomerSignedIn} />

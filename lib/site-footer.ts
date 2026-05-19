@@ -4,7 +4,7 @@
  */
 export const SITE_STORE_ADDRESS_LINES = [
   "Shop 152, COVENTRY VILLAGE, 243 Walter Rd W",
-  "Perth Western Australia 6062",
+  "Morley, WA 6062",
 ] as const;
 
 export const siteFacebookUrl =
