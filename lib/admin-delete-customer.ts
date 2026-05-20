@@ -1,3 +1,4 @@
+import { findAuthUserByEmail } from "@/lib/customer-auth";
 import { deleteStoreOrderById } from "@/lib/admin-delete-store-order";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -80,6 +81,27 @@ async function deleteQuotesForCustomer(
   await supabase.from("quote_requests").delete().in("id", [...quoteIds]);
 }
 
+async function deleteAuthAccountForCustomer(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  email: string,
+  authUserId: string | null,
+): Promise<string | null> {
+  let userId = authUserId?.trim() || null;
+  if (!userId) {
+    const authUser = await findAuthUserByEmail(email);
+    userId = authUser?.id ?? null;
+  }
+  if (!userId) {
+    return null;
+  }
+
+  const { error } = await supabase.auth.admin.deleteUser(userId);
+  if (error) {
+    return error.message;
+  }
+  return null;
+}
+
 export type DeleteCustomerResult =
   | { ok: true; deletedOrderCount: number }
   | { ok: false; error: string };
@@ -131,6 +153,11 @@ export async function deleteCustomerAndAllRecords(emailRaw: string): Promise<Del
     if (profErr) {
       return { ok: false, error: profErr.message };
     }
+  }
+
+  const authDeleteError = await deleteAuthAccountForCustomer(supabase, email, authUserId);
+  if (authDeleteError) {
+    return { ok: false, error: authDeleteError };
   }
 
   return { ok: true, deletedOrderCount };

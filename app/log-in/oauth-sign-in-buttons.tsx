@@ -7,7 +7,7 @@ import type { OAuthProvider } from "@/lib/customer-auth";
 import { getSiteUrl } from "@/lib/site-url";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
-import { AppleIcon, GoogleIcon, MicrosoftIcon } from "./oauth-provider-icons";
+import { GoogleIcon, MicrosoftIcon } from "./oauth-provider-icons";
 
 type Props = {
   mode: "login" | "signup";
@@ -27,11 +27,6 @@ const PROVIDERS: {
     id: "azure",
     label: "Continue with Microsoft",
     icon: <MicrosoftIcon className="h-7 w-7" />,
-  },
-  {
-    id: "apple",
-    label: "Continue with Apple",
-    icon: <AppleIcon className="h-7 w-7 text-brand-navy" />,
   },
 ];
 

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { ImageUrlLightbox } from "@/app/components/image-url-lightbox";
 
 import {
+  deleteCustomerFromCustomerInfo,
   deleteCustomerMasterLogo,
   deleteCustomerSpecialRequest,
   deleteClickUpSheetImageForCustomerInfo,
@@ -122,6 +123,37 @@ export function CustomerInfoClient() {
           return;
         }
         setHits(res.hits);
+      })();
+    });
+  }
+
+  function deleteCustomerRow(c: CustomerListRow) {
+    const label = (c.name ?? c.organisation ?? c.email).trim() || c.email;
+    const orderNote =
+      c.orderCount > 0
+        ? `\n\nThis will also permanently delete ${c.orderCount} storefront order${c.orderCount === 1 ? "" : "s"} and related production records.`
+        : "";
+    if (
+      !window.confirm(
+        `Permanently delete customer "${label}" (${c.email})?\n\nThis removes their profile, login account (if any), quotes, chat history, logos, special requests, and all linked order data. This cannot be undone.${orderNote}`,
+      )
+    ) {
+      return;
+    }
+
+    setError(null);
+    startTransition(() => {
+      void (async () => {
+        const res = await deleteCustomerFromCustomerInfo(c.email);
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        if (selectedEmail === c.email) {
+          setSelectedEmail(null);
+          setPayload(null);
+        }
+        refreshCustomerList();
       })();
     });
   }
@@ -306,14 +338,24 @@ export function CustomerInfoClient() {
                     <td className="px-4 py-3 text-slate-700">{(c.phone ?? "").trim() || "—"}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-slate-700">{c.orderCount}</td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => loadCustomer(c.email)}
-                        disabled={pending}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                      >
-                        Open
-                      </button>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => loadCustomer(c.email)}
+                          disabled={pending}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          Open
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteCustomerRow(c)}
+                          disabled={pending}
+                          className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -3,6 +3,7 @@
 import { randomUUID } from "crypto";
 import { refresh, revalidatePath } from "next/cache";
 
+import { deleteCustomerAndAllRecords } from "@/lib/admin-delete-customer";
 import { assertAdminSession } from "@/lib/admin-auth";
 import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
 import { createSupabaseAdminClient } from "@/lib/supabase";
@@ -506,6 +507,25 @@ export async function deleteClickUpSheetImageForCustomerInfo(args: {
     const msg = e instanceof Error ? e.message : "Delete failed";
     return { ok: false, error: msg };
   }
+}
+
+/** Permanently delete customer data (profile, orders, quotes, chat, auth account, etc.). */
+export async function deleteCustomerFromCustomerInfo(
+  emailRaw: string,
+): Promise<{ ok: true; deletedOrderCount: number } | { ok: false; error: string }> {
+  try {
+    await assertAdminSession();
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const result = await deleteCustomerAndAllRecords(emailRaw);
+  if (result.ok) {
+    refresh();
+    revalidatePath("/admin/customer-info");
+    revalidatePath("/admin/crm");
+  }
+  return result;
 }
 
 export async function updateCustomerProfile(args: {

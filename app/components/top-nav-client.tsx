@@ -501,10 +501,12 @@ export function TopNavClient({
     const unsubscribe = subscribeCartUpdates(() => {
       syncCustomerName();
     });
+    window.addEventListener("boss-customer-profile-saved", syncCustomerName);
     const timerId = window.setTimeout(syncCustomerName, 0);
     return () => {
       window.clearTimeout(timerId);
       unsubscribe();
+      window.removeEventListener("boss-customer-profile-saved", syncCustomerName);
     };
   }, []);
 

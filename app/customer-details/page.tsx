@@ -316,7 +316,7 @@ async function submitCustomerDetails(formData: FormData) {
     redirect("/customer-details?status=error");
   }
 
-  redirect("/");
+  redirect("/?details_saved=1");
 }
 
 export default async function CustomerDetailsPage({ searchParams }: CustomerDetailsPageProps) {

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import { Suspense } from "react";
+import { CustomerDetailsSavedNotice } from "@/app/components/customer-details-saved-notice";
 import { HomeCompanyIntro } from "@/app/components/home-company-intro";
 import { HomeHero } from "@/app/components/home-hero";
 import { ProductShowcase } from "@/app/components/product-showcase";
@@ -19,6 +21,9 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
+      <Suspense fallback={null}>
+        <CustomerDetailsSavedNotice />
+      </Suspense>
       <MainWithSupplierRail>
         <TopNav />
         <HomeHero />
