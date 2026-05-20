@@ -359,6 +359,7 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
   const authEmailNorm = authUser?.email?.trim().toLowerCase() ?? "";
 
   const prefilledName = existingProfile?.customer_name ?? params.full_name ?? "";
+  const { firstName: prefilledFirstName, surname: prefilledSurname } = splitCustomerName(prefilledName);
   const prefilledEmail = existingProfile?.email_address ?? params.email ?? "";
   const prefilledEmailNorm = prefilledEmail.trim().toLowerCase();
   const oauthFlowCompleting =
