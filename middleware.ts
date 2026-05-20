@@ -21,9 +21,32 @@ function nextWithAdminPathname(request: NextRequest, pathname: string, base: Nex
   return res;
 }
 
+/** Supabase sometimes lands OAuth `code` on Site URL (`/`) instead of `/auth/callback`. */
+function oauthCodeCallbackRedirect(request: NextRequest): NextResponse | null {
+  const { pathname, searchParams } = request.nextUrl;
+  if (pathname === "/auth/callback") {
+    return null;
+  }
+  const code = searchParams.get("code");
+  if (!code || !/^[0-9a-f-]{36}$/i.test(code)) {
+    return null;
+  }
+  const url = request.nextUrl.clone();
+  url.pathname = "/auth/callback";
+  return NextResponse.redirect(url);
+}
+
 export async function middleware(request: NextRequest) {
   const sessionResponse = await updateSupabaseAuthSession(request);
   const { pathname } = request.nextUrl;
+
+  const oauthRedirect = oauthCodeCallbackRedirect(request);
+  if (oauthRedirect) {
+    sessionResponse.cookies.getAll().forEach((c) => {
+      oauthRedirect.cookies.set(c.name, c.value);
+    });
+    return oauthRedirect;
+  }
 
   if (pathname === "/") {
     const dest = homeLegacyQueryRedirectUrl(request.nextUrl.searchParams);

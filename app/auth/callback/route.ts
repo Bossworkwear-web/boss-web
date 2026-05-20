@@ -10,7 +10,8 @@ export async function GET(request: Request) {
   const errorParam = requestUrl.searchParams.get("error");
   const errorDescription = requestUrl.searchParams.get("error_description");
   const requestOrigin = new URL(request.url).origin;
-  const site = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "") || requestOrigin;
+  // Stay on the same host the user used (www vs apex) so auth cookies apply.
+  const site = requestOrigin;
 
   if (errorParam) {
     const qs = new URLSearchParams({
