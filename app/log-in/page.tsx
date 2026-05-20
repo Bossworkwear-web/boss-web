@@ -68,10 +68,23 @@ export default async function LogInPage({ searchParams }: LogInPageProps) {
             Please enter both email and password.
           </p>
         )}
+        {!isSignup && status === "no_account" && (
+          <p className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            <XCircleIcon className="h-4 w-4" />
+            No account found for this email. Please sign up first, or check the spelling.
+          </p>
+        )}
+        {!isSignup && status === "legacy_account" && (
+          <p className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+            <AlertTriangleIcon className="h-4 w-4" />
+            This email is on file from an earlier registration. Use the password you created then, or choose
+            &ldquo;Send reset email&rdquo; below to set a new one.
+          </p>
+        )}
         {!isSignup && status === "mismatch" && (
           <p className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
             <XCircleIcon className="h-4 w-4" />
-            Login details do not match. Please try again.
+            Incorrect password for this email. Try again or use &ldquo;Send reset email&rdquo; below.
           </p>
         )}
         {!isSignup && status === "error" && (
@@ -143,13 +156,43 @@ export default async function LogInPage({ searchParams }: LogInPageProps) {
         {isSignup && status === "email_exists" && (
           <p className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
             <XCircleIcon className="h-4 w-4" />
-            This email is already registered. Please use a different email.
+            This email is already registered.{" "}
+            <Link href="/log-in" className="underline underline-offset-2">
+              Log in
+            </Link>{" "}
+            instead.
+          </p>
+        )}
+        {isSignup && status === "legacy_exists" && (
+          <p className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+            <AlertTriangleIcon className="h-4 w-4" />
+            This email is already on file from an earlier registration.{" "}
+            <Link href="/log-in" className="underline underline-offset-2">
+              Log in
+            </Link>{" "}
+            with your original password, or use &ldquo;Send reset email&rdquo; on the Log in tab.
+          </p>
+        )}
+        {isSignup && status === "auth_exists" && (
+          <p className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+            <AlertTriangleIcon className="h-4 w-4" />
+            An account with this email already exists.{" "}
+            <Link href="/log-in" className="underline underline-offset-2">
+              Log in
+            </Link>{" "}
+            or use &ldquo;Send reset email&rdquo; if you forgot your password.
+          </p>
+        )}
+        {isSignup && status === "signup_failed" && (
+          <p className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            <XCircleIcon className="h-4 w-4" />
+            Could not complete sign-up. Please try again or contact us for help.
           </p>
         )}
         {isSignup && status === "error" && (
           <p className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
             <XCircleIcon className="h-4 w-4" />
-            Your email is already registered. Please register a new email address.
+            Something went wrong during sign-up. Please try again.
           </p>
         )}
         {isSignup && status === "recaptcha_failed" && (
