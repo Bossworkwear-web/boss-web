@@ -15,7 +15,9 @@ Run in Supabase SQL Editor (or apply migration):
 Add **Redirect URLs**:
 
 - `http://localhost:3000/auth/callback`
+- `http://127.0.0.1:3000/auth/callback` (if you test with `127.0.0.1` in the browser)
 - `https://bossworkwear.au/auth/callback`
+- `https://www.bossworkwear.au/auth/callback` (site uses `www` in production)
 - (Preview) `https://<your-vercel-preview>.vercel.app/auth/callback`
 
 **Site URL:** `https://bossworkwear.au`

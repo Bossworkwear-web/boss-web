@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { AddressSections } from "@/app/customer-details/address-sections";
 import { ArrowLeftIcon, BuildingIcon, NotesIcon, XCircleIcon } from "@/app/components/icons";
 import { getAuthenticatedCustomerUser, linkProfileToAuthUser } from "@/lib/customer-auth";
+import { combineCustomerName, splitCustomerName } from "@/lib/customer-name";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
@@ -75,7 +76,9 @@ async function submitCustomerDetails(formData: FormData) {
   "use server";
 
   const profileId = String(formData.get("profile_id") ?? "").trim();
-  const customerName = String(formData.get("customer_name") ?? "").trim();
+  const firstName = String(formData.get("first_name") ?? "").trim();
+  const surname = String(formData.get("surname") ?? "").trim();
+  const customerName = combineCustomerName(firstName, surname);
   const organisation = String(formData.get("organisation") ?? "").trim();
   const contactNumber = String(formData.get("contact_number") ?? "").trim();
   const emailAddress = String(formData.get("email_address") ?? "").trim();
@@ -116,7 +119,16 @@ async function submitCustomerDetails(formData: FormData) {
         (oauthPending && oauthEmailCookie === emailNorm)),
   );
 
-  if (!customerName || !organisation || !contactNumber || !emailAddress || !deliveryAddress || !billingAddress) {
+  if (
+    !firstName ||
+    !surname ||
+    !customerName ||
+    !organisation ||
+    !contactNumber ||
+    !emailAddress ||
+    !deliveryAddress ||
+    !billingAddress
+  ) {
     redirect("/customer-details?status=invalid");
   }
 
@@ -343,11 +355,18 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
     }
   }
 
+  const authUser = await getAuthenticatedCustomerUser();
+  const authEmailNorm = authUser?.email?.trim().toLowerCase() ?? "";
+
   const prefilledName = existingProfile?.customer_name ?? params.full_name ?? "";
   const prefilledEmail = existingProfile?.email_address ?? params.email ?? "";
   const prefilledEmailNorm = prefilledEmail.trim().toLowerCase();
   const oauthFlowCompleting =
     oauthPending && Boolean(oauthEmailCookie) && prefilledEmailNorm === oauthEmailCookie && !existingProfile;
+  /** Email sign-up already set password in Supabase Auth — no second entry on this form. */
+  const emailSignupCompleting =
+    !existingProfile && Boolean(authEmailNorm) && prefilledEmailNorm === authEmailNorm && !oauthPending;
+  const skipLoginPasswordField = oauthFlowCompleting || emailSignupCompleting || Boolean(pendingPassword);
   const isOauthOnlyAccount =
     existingProfile !== null &&
     (existingProfile.login_password === null || existingProfile.login_password === "");
@@ -367,7 +386,7 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
   return (
     <main className="min-h-screen bg-white py-10 text-brand-navy">
       <div className={SITE_PAGE_ROW_CLASS}>
-        <div className="mx-auto w-full max-w-[calc(70%/1.2)] origin-top [zoom:1.2] space-y-6">
+        <div className="mx-auto w-full max-w-3xl space-y-6 lg:max-w-[calc(70%/1.2)] lg:origin-top lg:[zoom:1.2]">
         <header className="space-y-3">
           <Link
             href={backToMyAccount ? "/customer" : "/sign-up"}
@@ -387,8 +406,8 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
         {status === "invalid" && (
           <p className="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-4 py-3 text-sm font-medium text-orange-700">
             <NotesIcon className="h-4 w-4" />
-            Please fill in all required fields. Organisation is required — if you have no company name, enter your own
-            full name.
+            Please fill in all required fields, including First Name and Surname. Organisation is required — if you
+            have no company name, enter your own full name.
           </p>
         )}
         {status === "invalid_postcode" && (
@@ -420,17 +439,34 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
-              <label htmlFor="customer_name" className="text-sm font-semibold">
-                Customer Name *
+              <label htmlFor="first_name" className="text-sm font-semibold">
+                First Name *
               </label>
               <input
-                id="customer_name"
-                name="customer_name"
-                defaultValue={prefilledName}
+                id="first_name"
+                name="first_name"
+                type="text"
+                autoComplete="given-name"
+                required
+                defaultValue={prefilledFirstName}
                 className="rounded-md border border-brand-navy/20 px-3 py-2"
               />
             </div>
             <div className="grid gap-2">
+              <label htmlFor="surname" className="text-sm font-semibold">
+                Surname *
+              </label>
+              <input
+                id="surname"
+                name="surname"
+                type="text"
+                autoComplete="family-name"
+                required
+                defaultValue={prefilledSurname}
+                className="rounded-md border border-brand-navy/20 px-3 py-2"
+              />
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
               <label htmlFor="organisation" className="text-sm font-semibold">
                 Organisation *
               </label>
@@ -470,22 +506,36 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
                 className="rounded-md border border-brand-navy/20 px-3 py-2 read-only:bg-brand-surface/80 read-only:text-brand-navy/70"
               />
             </div>
-            {oauthFlowCompleting ? null : pendingPassword ? (
-              <input type="hidden" id="login_password" name="login_password" value={pendingPassword} />
-            ) : (
+            {skipLoginPasswordField ? (
+              pendingPassword ? (
+                <input type="hidden" id="login_password" name="login_password" value={pendingPassword} />
+              ) : null
+            ) : existingProfile ? (
               <div className="grid gap-2 sm:col-span-2">
                 <label htmlFor="login_password" className="text-sm font-semibold">
                   Login Password{" "}
-                  {existingProfile
-                    ? isOauthOnlyAccount
-                      ? "(optional — add one to sign in with email and password)"
-                      : "(leave blank to keep current)"
-                    : "*"}
+                  {isOauthOnlyAccount
+                    ? "(optional — add one to sign in with email and password)"
+                    : "(leave blank to keep current)"}
                 </label>
                 <input
                   id="login_password"
                   name="login_password"
                   type="password"
+                  autoComplete="new-password"
+                  className="rounded-md border border-brand-navy/20 px-3 py-2"
+                />
+              </div>
+            ) : (
+              <div className="grid gap-2 sm:col-span-2">
+                <label htmlFor="login_password" className="text-sm font-semibold">
+                  Login Password *
+                </label>
+                <input
+                  id="login_password"
+                  name="login_password"
+                  type="password"
+                  autoComplete="new-password"
                   className="rounded-md border border-brand-navy/20 px-3 py-2"
                 />
               </div>

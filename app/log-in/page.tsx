@@ -153,6 +153,12 @@ export default async function LogInPage({ searchParams }: LogInPageProps) {
             Passwords do not match. Please try again.
           </p>
         )}
+        {isSignup && status === "weak_password" && (
+          <p className="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-4 py-3 text-sm font-medium text-orange-700">
+            <AlertTriangleIcon className="h-4 w-4" />
+            Password must be at least 6 characters. Please choose a longer password.
+          </p>
+        )}
         {isSignup && status === "email_exists" && (
           <p className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
             <XCircleIcon className="h-4 w-4" />

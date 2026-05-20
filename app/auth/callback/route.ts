@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { finalizeCustomerAuthSession } from "@/lib/customer-auth";
-import { getSiteUrl } from "@/lib/site-url";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -10,7 +9,8 @@ export async function GET(request: Request) {
   const next = requestUrl.searchParams.get("next") ?? "/";
   const errorParam = requestUrl.searchParams.get("error");
   const errorDescription = requestUrl.searchParams.get("error_description");
-  const site = getSiteUrl();
+  const requestOrigin = new URL(request.url).origin;
+  const site = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "") || requestOrigin;
 
   if (errorParam) {
     const qs = new URLSearchParams({

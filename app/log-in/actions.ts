@@ -5,16 +5,17 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import {
+  completeEmailSignUp,
   finalizeCustomerAuthSession,
   findAuthUserByEmail,
   getCustomerAccountSnapshot,
   getCustomerProfileByEmail,
-  linkAuthUserToNewProfileFromSignup,
   migrateLegacyPasswordToAuth,
   sendSupabasePasswordResetEmail,
 } from "@/lib/customer-auth";
-import { isRecaptchaConfigured, verifyRecaptchaToken } from "@/lib/recaptcha";
+import { isRecaptchaConfigured, isRecaptchaDevBypass, verifyRecaptchaToken } from "@/lib/recaptcha";
 import { sendCustomerPasswordResetEmail } from "@/lib/customer-password-reset-email";
+import { combineCustomerName } from "@/lib/customer-name";
 import { getSiteUrl } from "@/lib/site-url";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -95,12 +96,14 @@ export async function submitLogIn(formData: FormData) {
 }
 
 export async function submitSignUp(formData: FormData) {
-  const fullName = String(formData.get("full_name") ?? "").trim();
+  const firstName = String(formData.get("first_name") ?? "").trim();
+  const surname = String(formData.get("surname") ?? "").trim();
+  const fullName = combineCustomerName(firstName, surname);
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "").trim();
   const confirmPassword = String(formData.get("confirm_password") ?? "").trim();
 
-  if (!fullName || !email || !password || !confirmPassword) {
+  if (!firstName || !surname || !email || !password || !confirmPassword) {
     signupErrorRedirect("invalid");
   }
 
@@ -108,135 +111,68 @@ export async function submitSignUp(formData: FormData) {
     signupErrorRedirect("password_mismatch");
   }
 
-  if (isRecaptchaConfigured()) {
+  if (isRecaptchaConfigured() && !isRecaptchaDevBypass()) {
     const token = String(formData.get("g-recaptcha-response") ?? "").trim();
     const ok = await verifyRecaptchaToken(token);
     if (!ok) {
       signupErrorRedirect("recaptcha_failed");
     }
-  } else if (process.env.NODE_ENV === "production") {
+  } else if (process.env.NODE_ENV === "production" && !isRecaptchaConfigured()) {
     signupErrorRedirect("recaptcha_config");
   }
 
   try {
-    const account = await getCustomerAccountSnapshot(email);
-    const { profile: existingProfile, authUser: existingAuthUser } = account;
+    const result = await completeEmailSignUp(email, password, fullName);
 
-    if (existingProfile?.auth_user_id || (existingProfile && existingAuthUser)) {
-      signupErrorRedirect("email_exists");
-    }
-
-    if (existingProfile && !existingProfile.auth_user_id) {
-      const migrated = await migrateLegacyPasswordToAuth(email, password);
-      if (!migrated) {
-        signupErrorRedirect("legacy_exists");
-      }
-
-      const supabase = await createSupabaseServerClient();
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (signInError || !signInData.user) {
-        signupErrorRedirect("legacy_exists");
-      }
-
-      const cookieStore = await cookies();
-      cookieStore.set("pending_signup_password", "", {
-        path: "/",
-        maxAge: 0,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-      });
-
-      redirect(
-        `/customer-details?full_name=${encodeURIComponent(existingProfile.customer_name || fullName)}&email=${encodeURIComponent(email)}`,
-      );
-    }
-
-    const supabase = await createSupabaseServerClient();
-
-    if (existingAuthUser && !existingProfile) {
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (signInError) {
-        signupErrorRedirect("auth_exists");
-      }
-      if (!signInData.user) {
-        signupErrorRedirect("error");
-      }
-
-      await linkAuthUserToNewProfileFromSignup(signInData.user!, fullName, email, password);
-
-      const cookieStore = await cookies();
-      cookieStore.set("pending_signup_password", "", {
-        path: "/",
-        maxAge: 0,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-      });
-
-      redirect(
-        `/customer-details?full_name=${encodeURIComponent(fullName)}&email=${encodeURIComponent(email)}`,
-      );
-    }
-
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName, customer_name: fullName },
-      },
-    });
-
-    if (signUpError) {
-      const msg = signUpError.message.toLowerCase();
-      const code = (signUpError.code ?? "").toLowerCase();
-      if (
-        code.includes("already") ||
-        code.includes("registered") ||
-        msg.includes("already") ||
-        msg.includes("registered") ||
-        msg.includes("exists")
-      ) {
-        const authNow = existingAuthUser ?? (await getCustomerAccountSnapshot(email)).authUser;
-        if (authNow) {
-          signupErrorRedirect("auth_exists");
-        }
+    switch (result.status) {
+      case "email_exists":
         signupErrorRedirect("email_exists");
-      }
-      console.error("[submitSignUp]", signUpError.message, signUpError.code);
-      signupErrorRedirect("signup_failed");
-    }
+        break;
+      case "legacy_exists":
+        signupErrorRedirect("legacy_exists");
+        break;
+      case "weak_password":
+        signupErrorRedirect("weak_password");
+        break;
+      case "error":
+        console.error("[submitSignUp]", result.message);
+        signupErrorRedirect("signup_failed");
+        break;
+      case "redirect_details": {
+        const cookieStore = await cookies();
+        const supabase = await createSupabaseServerClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-    const cookieStore = await cookies();
-    if (!signUpData.session) {
-      cookieStore.set("pending_signup_password", password, {
-        path: "/",
-        maxAge: 60 * 20,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-      });
-    } else {
-      cookieStore.set("pending_signup_password", "", {
-        path: "/",
-        maxAge: 0,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-      });
+        if (!session) {
+          cookieStore.set("pending_signup_password", password, {
+            path: "/",
+            maxAge: 60 * 20,
+            sameSite: "lax",
+            secure: process.env.NODE_ENV === "production",
+          });
+        } else {
+          cookieStore.set("pending_signup_password", "", {
+            path: "/",
+            maxAge: 0,
+            sameSite: "lax",
+            secure: process.env.NODE_ENV === "production",
+          });
+        }
+
+        redirect(
+          `/customer-details?full_name=${encodeURIComponent(result.fullName)}&email=${encodeURIComponent(result.email)}`,
+        );
+      }
     }
   } catch (error) {
     if (isNextRedirectError(error)) {
       throw error;
     }
+    console.error("[submitSignUp]", error);
     signupErrorRedirect("error");
   }
-
-  redirect(
-    `/customer-details?full_name=${encodeURIComponent(fullName)}&email=${encodeURIComponent(email)}`,
-  );
 }
 
 /** Password reset via Resend token (legacy). Supabase Auth users can also use this until fully migrated. */

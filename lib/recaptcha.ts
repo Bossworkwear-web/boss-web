@@ -6,6 +6,13 @@ export function isRecaptchaConfigured(): boolean {
   );
 }
 
+/** Dev only: skip verify when the widget cannot load locally (never enable in production). */
+export function isRecaptchaDevBypass(): boolean {
+  return (
+    process.env.NODE_ENV === "development" && process.env.RECAPTCHA_DEV_BYPASS?.trim() === "1"
+  );
+}
+
 export function getRecaptchaSiteKey(): string | null {
   const key = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY?.trim();
   return key || null;
@@ -24,7 +31,7 @@ export async function verifyRecaptchaToken(token: string): Promise<boolean> {
 
   const response = token.trim();
   if (!response) {
-    return false;
+    return isRecaptchaDevBypass();
   }
 
   const body = new URLSearchParams({

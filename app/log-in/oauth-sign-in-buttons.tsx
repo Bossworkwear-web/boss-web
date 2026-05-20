@@ -47,13 +47,18 @@ export function OAuthSignInButtons({ mode }: Props) {
     setError(null);
 
     const supabase = createSupabaseBrowserClient();
-    const redirectTo = `${getSiteUrl()}/auth/callback?next=${encodeURIComponent("/")}`;
+    // Match the browser origin (127.0.0.1 vs localhost) so Supabase redirect URLs align.
+    const siteOrigin =
+      typeof window !== "undefined" ? window.location.origin : getSiteUrl();
+    const redirectTo = `${siteOrigin}/auth/callback?next=${encodeURIComponent("/")}`;
 
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
         redirectTo,
-        ...(provider === "azure" ? { scopes: "email openid profile" } : {}),
+        ...(provider === "azure"
+          ? { scopes: "openid profile email offline_access" }
+          : {}),
       },
     });
 

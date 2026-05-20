@@ -215,9 +215,6 @@ export async function finalizeCustomerAuthSession(user: User): Promise<
 }
 
 /**
- * Legacy email/password in customer_profiles → create Supabase Auth user and link.
- */
-/**
  * Link a legacy customer_profiles row to Supabase Auth using the given password.
  * When login_password is empty (e.g. admin-created row), the supplied password is stored.
  */
@@ -265,6 +262,91 @@ export async function migrateLegacyPasswordToAuth(emailNorm: string, password: s
 
   await linkProfileToAuthUser(profile.id, created.user.id);
   return true;
+}
+
+export type EmailSignUpResult =
+  | { status: "redirect_details"; fullName: string; email: string }
+  | { status: "email_exists" }
+  | { status: "legacy_exists" }
+  | { status: "weak_password" }
+  | { status: "error"; message: string };
+
+/**
+ * Email sign-up → Supabase Auth (admin create / link) then customer-details.
+ * Handles orphan auth users (Auth row without customer_profiles) from prior failed sign-ups.
+ */
+export async function completeEmailSignUp(
+  emailNorm: string,
+  password: string,
+  fullName: string,
+): Promise<EmailSignUpResult> {
+  if (password.length < 6) {
+    return { status: "weak_password" };
+  }
+
+  const { profile, authUser } = await getCustomerAccountSnapshot(emailNorm);
+  const admin = createSupabaseAdminClient();
+  const supabase = await createSupabaseServerClient();
+
+  if (profile?.auth_user_id || (profile && authUser)) {
+    return { status: "email_exists" };
+  }
+
+  if (profile && !profile.auth_user_id) {
+    const migrated = await migrateLegacyPasswordToAuth(emailNorm, password);
+    if (!migrated) {
+      return { status: "legacy_exists" };
+    }
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email: emailNorm, password });
+    if (signInError) {
+      return { status: "legacy_exists" };
+    }
+    return {
+      status: "redirect_details",
+      fullName: profile.customer_name?.trim() || fullName,
+      email: emailNorm,
+    };
+  }
+
+  if (authUser) {
+    const { error: updateErr } = await admin.auth.admin.updateUserById(authUser.id, {
+      password,
+      user_metadata: { full_name: fullName, customer_name: fullName },
+    });
+    if (updateErr) {
+      console.error("[completeEmailSignUp] orphan auth update", updateErr.message);
+      return { status: "error", message: updateErr.message };
+    }
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email: emailNorm, password });
+    if (signInError) {
+      console.error("[completeEmailSignUp] orphan auth signIn", signInError.message);
+      return { status: "error", message: signInError.message };
+    }
+    return { status: "redirect_details", fullName, email: emailNorm };
+  }
+
+  const { error: createErr } = await admin.auth.admin.createUser({
+    email: emailNorm,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: fullName, customer_name: fullName },
+  });
+
+  if (createErr) {
+    const msg = createErr.message.toLowerCase();
+    if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
+      return { status: "email_exists" };
+    }
+    if (msg.includes("password") || msg.includes("weak")) {
+      return { status: "weak_password" };
+    }
+    console.error("[completeEmailSignUp] createUser", createErr.message);
+    return { status: "error", message: createErr.message };
+  }
+
+  await supabase.auth.signInWithPassword({ email: emailNorm, password });
+
+  return { status: "redirect_details", fullName, email: emailNorm };
 }
 
 /** Auth user exists but customer_profiles is missing — create profile shell after email sign-up. */

@@ -61,8 +61,11 @@ function rankSuggestions(query: string, data: NominatimSuggestion[]) {
 }
 
 function inputClass(disabled: boolean) {
-  return `rounded-md border border-brand-navy/20 px-3 py-2 ${disabled ? "bg-slate-100 text-brand-navy/50" : ""}`;
+  return `w-full min-w-0 rounded-md border border-brand-navy/20 px-3 py-2 ${disabled ? "bg-slate-100 text-brand-navy/50" : ""}`;
 }
+
+/** Postcode + state always stack — avoids overlap in narrow split columns (e.g. side-by-side addresses). */
+const postcodeStateRowClass = "grid grid-cols-1 gap-3";
 
 export function AddressSections({
   deliveryParts,
@@ -183,7 +186,7 @@ export function AddressSections({
   }
 
   return (
-    <div className="grid gap-6 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <div className="space-y-3 rounded-xl border border-brand-navy/10 p-4">
         <h2 className="text-sm font-medium uppercase tracking-[0.1em] text-brand-navy/75">Delivery Address</h2>
         <div className="relative grid gap-2">
@@ -237,8 +240,8 @@ export function AddressSections({
             className={inputClass(false)}
           />
         </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <div className="grid gap-2">
+        <div className={postcodeStateRowClass}>
+          <div className="grid min-w-0 gap-2">
             <label htmlFor="delivery_postcode" className="text-sm font-semibold">Postcode *</label>
             <input
               id="delivery_postcode"
@@ -294,12 +297,12 @@ export function AddressSections({
           <label htmlFor="billing_suburb" className="text-sm font-semibold">Suburb *</label>
           <input id="billing_suburb" name="billing_suburb" defaultValue={billingParts.suburb} disabled={sameAsDelivery} className={inputClass(sameAsDelivery)} />
         </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <div className="grid gap-2">
+        <div className={postcodeStateRowClass}>
+          <div className="grid min-w-0 gap-2">
             <label htmlFor="billing_postcode" className="text-sm font-semibold">Postcode *</label>
             <input id="billing_postcode" name="billing_postcode" defaultValue={billingParts.postcode} disabled={sameAsDelivery} className={inputClass(sameAsDelivery)} placeholder="6000" />
           </div>
-          <div className="grid gap-2">
+          <div className="grid min-w-0 gap-2">
             <label htmlFor="billing_state" className="text-sm font-semibold">State *</label>
             <input id="billing_state" name="billing_state" defaultValue={billingParts.state} disabled={sameAsDelivery} className={inputClass(sameAsDelivery)} />
           </div>

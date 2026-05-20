@@ -9,6 +9,7 @@ import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CartIcon, MenuIcon, SearchIcon, UserIcon } from "@/app/components/icons";
 import { LOGO_SRC } from "@/app/generated/logo";
 import { clearCartItems, subscribeCartUpdates, useCartCount } from "@/lib/cart";
+import { customerFirstName } from "@/lib/customer-display-name";
 import type { StorefrontNavSub } from "@/lib/catalog";
 import { readSidebarNavClient } from "@/lib/sidebar-nav";
 import { notifyRouteLoadingStart } from "@/lib/route-loading";
@@ -655,7 +656,7 @@ export function TopNavClient({
                     className="hidden max-w-[9rem] truncate rounded-full bg-brand-surface px-2.5 py-2 text-xs font-medium leading-snug text-brand-navy transition hover:bg-brand-navy/10 lg:inline-flex lg:max-w-none lg:px-[1.125rem] lg:py-2.5 lg:text-[1.3125rem]"
                     title={customerName}
                   >
-                    Hi, {customerName}
+                    Hi, {customerFirstName(customerName)}
                   </Link>
                   <button
                     type="button"

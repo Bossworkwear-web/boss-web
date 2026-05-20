@@ -51,18 +51,33 @@ export function LogInFormsClient({ isSignup }: Props) {
       autoComplete="off"
       className="grid gap-4 rounded-2xl p-6"
     >
-      <div className="grid gap-2">
-        <label htmlFor="name" className="text-sm font-semibold">
-          Full Name
-        </label>
-        <input
-          id="name"
-          name="full_name"
-          type="text"
-          autoComplete="off"
-          defaultValue=""
-          className="rounded-md border border-brand-navy/20 px-3 py-2"
-        />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <label htmlFor="first_name" className="text-sm font-semibold">
+            First Name
+          </label>
+          <input
+            id="first_name"
+            name="first_name"
+            type="text"
+            autoComplete="given-name"
+            defaultValue=""
+            className="rounded-md border border-brand-navy/20 px-3 py-2"
+          />
+        </div>
+        <div className="grid gap-2">
+          <label htmlFor="surname" className="text-sm font-semibold">
+            Surname
+          </label>
+          <input
+            id="surname"
+            name="surname"
+            type="text"
+            autoComplete="family-name"
+            defaultValue=""
+            className="rounded-md border border-brand-navy/20 px-3 py-2"
+          />
+        </div>
       </div>
       <div className="grid gap-2">
         <label htmlFor="email-signup" className="text-sm font-semibold">
@@ -86,7 +101,8 @@ export function LogInFormsClient({ isSignup }: Props) {
           name="password"
           type="password"
           autoComplete="new-password"
-          className="rounded-md border border-brand-navy/20 px-3 py-2"
+          placeholder="At least 6 characters"
+          className="rounded-md border border-brand-navy/20 px-3 py-2 placeholder:text-brand-navy/40"
         />
       </div>
       <div className="grid gap-2">
