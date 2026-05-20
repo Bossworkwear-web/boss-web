@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import type { AdminPortalNavAccess } from "@/lib/admin-portal-permissions";
 import { isAdminPathAllowedForPortalAccess } from "@/lib/admin-portal-permissions";
+import { notifyRouteLoadingStart } from "@/lib/route-loading";
 
 const LINKS = [
   { href: "/admin", label: "Dashboard" },
@@ -141,6 +142,7 @@ export function AdminNav({ portalAccess }: { portalAccess: AdminPortalNavAccess 
 
   async function logout() {
     await fetch("/api/admin/logout", { method: "POST" });
+    notifyRouteLoadingStart();
     router.push("/admin/login");
     router.refresh();
   }

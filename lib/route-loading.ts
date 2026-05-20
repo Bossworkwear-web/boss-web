@@ -108,9 +108,6 @@ export function shouldStartRouteLoadingForUrl(url: URL | string): boolean {
     if (dest.origin !== window.location.origin) {
       return false;
     }
-    if (dest.pathname.startsWith("/admin")) {
-      return false;
-    }
     const current = new URL(window.location.href);
     return dest.pathname !== current.pathname || dest.search !== current.search;
   } catch {

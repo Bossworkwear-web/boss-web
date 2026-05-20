@@ -43,7 +43,7 @@ function RouteLoadingInner() {
   }, [pathname, search]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || pathname.startsWith("/admin")) {
+    if (typeof window === "undefined") {
       return;
     }
 
@@ -74,7 +74,7 @@ function RouteLoadingInner() {
       }
       try {
         const url = new URL(dest.url);
-        if (url.origin !== window.location.origin || url.pathname.startsWith("/admin")) {
+        if (url.origin !== window.location.origin) {
           return;
         }
         const current = new URL(window.location.href);
@@ -105,7 +105,7 @@ function RouteLoadingInner() {
   return null;
 }
 
-/** Orange top progress bar on client-side navigation (storefront only). */
+/** Orange top progress bar on client-side navigation (storefront + admin). */
 export function RouteLoading() {
   return (
     <Suspense fallback={null}>
