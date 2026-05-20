@@ -120,10 +120,11 @@ export async function deleteCustomerAndAllRecords(emailRaw: string): Promise<Del
 
   const { data: profile } = await supabase
     .from("customer_profiles")
-    .select("id")
+    .select("id, auth_user_id")
     .eq("email_address", email)
     .maybeSingle();
   const profileId = profile?.id ? String(profile.id) : null;
+  const authUserId = profile?.auth_user_id ? String(profile.auth_user_id) : null;
 
   const { data: orders } = await supabase.from("store_orders").select("id").ilike("customer_email", email);
 
