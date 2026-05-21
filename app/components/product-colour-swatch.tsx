@@ -15,18 +15,26 @@ type ProductColourSwatchProps = {
 type SwatchDotSize = "compact" | "default" | "large";
 
 /** Fixed classes so SSR/client bundles always agree (avoids Turbopack HMR stale-chunk mismatches). */
-const SWATCH_DOT_CLASS: Record<`${SwatchDotSize}${"White" | ""}`, string> = {
+const SWATCH_DOT_CLASS = {
   compact: "h-[18px] w-[18px] shrink-0 rounded-full border-0",
   compactWhite: "h-[18px] w-[18px] shrink-0 rounded-full border border-neutral-300",
   default: "h-[22px] w-[22px] shrink-0 rounded-full border-0",
   defaultWhite: "h-[22px] w-[22px] shrink-0 rounded-full border border-neutral-300",
   large: "h-[44px] w-[44px] shrink-0 rounded-full border-0",
   largeWhite: "h-[44px] w-[44px] shrink-0 rounded-full border border-neutral-300",
-};
+} as const;
 
 function swatchDotClass(size: SwatchDotSize, isWhite: boolean): string {
-  const key = isWhite ? `${size}White` : size;
-  return SWATCH_DOT_CLASS[key];
+  if (isWhite) {
+    if (size === "compact") {
+      return SWATCH_DOT_CLASS.compactWhite;
+    }
+    if (size === "large") {
+      return SWATCH_DOT_CLASS.largeWhite;
+    }
+    return SWATCH_DOT_CLASS.defaultWhite;
+  }
+  return SWATCH_DOT_CLASS[size];
 }
 
 type ProductColourSwatchDotsProps = {

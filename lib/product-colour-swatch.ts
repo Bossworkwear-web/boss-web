@@ -9,7 +9,7 @@ export type ProductColourSwatchPart = {
 };
 
 /** Longest keys first so "royal blue" wins over "blue". */
-const COLOUR_HEX_ENTRIES: readonly [string, string][] = [
+const COLOUR_HEX_ENTRIES = ([
   ["fluoro yellow lime", "#c6f000"],
   ["fluoro yellow", "#e8ff00"],
   ["hi-vis orange", "#ff6600"],
@@ -91,7 +91,7 @@ const COLOUR_HEX_ENTRIES: readonly [string, string][] = [
   ["black", "#171717"],
   ["white", "#ffffff"],
   ["check", "#525252"],
-].sort((a, b) => b[0].length - a[0].length);
+] satisfies [string, string][]).sort((a, b) => b[0].length - a[0].length);
 
 function normalizeColourPart(raw: string): string {
   return raw
