@@ -633,9 +633,9 @@ export function TopNavClient({
                 <Image
                   src={LOGO_SRC}
                   alt="Boss Workwear"
-                  width={360}
-                  height={108}
-                  className="h-9 w-auto max-h-9 max-w-full object-contain object-left sm:h-11 sm:max-h-11 lg:h-[5.4rem] lg:max-h-none"
+                  width={324}
+                  height={97}
+                  className="h-[2.025rem] w-auto max-h-[2.025rem] max-w-full object-contain object-left sm:h-[2.475rem] sm:max-h-[2.475rem] lg:h-[4.86rem] lg:max-h-none"
                   priority
                 />
               </Link>

@@ -132,22 +132,22 @@ pre {
     0 12px 32px rgba(55, 65, 81, 0.16);
 }
 
-/* Header logo + desktop category pills at 80% — descendant selectors only so SSR/client class strings stay identical. */
+/* Header logo 10% smaller than prior 80% sizes — descendant selectors only so SSR/client class strings stay identical. */
 .store-top-nav-shell a[aria-label="Home"] img {
-  height: 1.8rem !important;
-  max-height: 1.8rem !important;
+  height: 1.62rem !important;
+  max-height: 1.62rem !important;
 }
 
 @media (min-width: 640px) {
   .store-top-nav-shell a[aria-label="Home"] img {
-    height: 2.2rem !important;
-    max-height: 2.2rem !important;
+    height: 1.98rem !important;
+    max-height: 1.98rem !important;
   }
 }
 
 @media (min-width: 1024px) {
   .store-top-nav-shell a[aria-label="Home"] img {
-    height: 4.32rem !important;
+    height: 3.888rem !important;
     max-height: none !important;
   }
 }
