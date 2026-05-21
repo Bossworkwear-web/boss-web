@@ -8,20 +8,6 @@ import {
   sanitizeLatinInput,
 } from "@/lib/latin-input";
 
-function applyFilter(el: HTMLInputElement | HTMLTextAreaElement) {
-  const mode = detectLatinInputMode(el);
-  const next = sanitizeLatinInput(el.value, mode);
-  if (next !== el.value) {
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    el.value = next;
-    if (start !== null && end !== null) {
-      const pos = Math.min(start, next.length);
-      el.setSelectionRange(pos, pos);
-    }
-  }
-}
-
 /** Blocks non-Latin scripts on all text inputs project-wide. */
 export function GlobalLatinInputGuard() {
   useEffect(() => {
@@ -45,17 +31,6 @@ export function GlobalLatinInputGuard() {
       }
     };
 
-    const onInput = (event: Event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
-        return;
-      }
-      if (isLatinInputGuardDisabled(target)) {
-        return;
-      }
-      applyFilter(target);
-    };
-
     const onPaste = (event: Event) => {
       const target = event.target;
       if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
@@ -74,20 +49,18 @@ export function GlobalLatinInputGuard() {
       const mode = detectLatinInputMode(target);
       const start = target.selectionStart ?? 0;
       const end = target.selectionEnd ?? 0;
-      const merged = sanitizeLatinInput(target.value.slice(0, start) + paste + target.value.slice(end), mode);
-      target.value = merged;
-      const pos = Math.min(start + sanitizeLatinInput(paste, mode).length, merged.length);
+      const sanitizedPaste = sanitizeLatinInput(paste, mode);
+      target.setRangeText(sanitizedPaste, start, end, "end");
+      const pos = Math.min(start + sanitizedPaste.length, target.value.length);
       target.setSelectionRange(pos, pos);
-      target.dispatchEvent(new Event("input", { bubbles: true }));
+      target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertFromPaste" }));
     };
 
     document.addEventListener("beforeinput", onBeforeInput, true);
-    document.addEventListener("input", onInput, true);
     document.addEventListener("paste", onPaste, true);
 
     return () => {
       document.removeEventListener("beforeinput", onBeforeInput, true);
-      document.removeEventListener("input", onInput, true);
       document.removeEventListener("paste", onPaste, true);
     };
   }, []);

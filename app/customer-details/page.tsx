@@ -388,7 +388,7 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
   return (
     <main className="min-h-screen bg-white py-10 text-brand-navy">
       <div className={SITE_PAGE_ROW_CLASS}>
-        <div className="mx-auto w-full max-w-3xl space-y-6 lg:max-w-[calc(70%/1.2)] lg:origin-top lg:[zoom:1.2]">
+        <div className="mx-auto w-full max-w-3xl space-y-6 lg:max-w-4xl">
         <header className="space-y-3">
           <Link
             href={backToMyAccount ? "/customer" : "/sign-up"}

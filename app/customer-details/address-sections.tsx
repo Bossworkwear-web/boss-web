@@ -186,7 +186,7 @@ export function AddressSections({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2" data-latin-input="off">
       <div className="space-y-3 rounded-xl border border-brand-navy/10 p-4">
         <h2 className="text-sm font-medium uppercase tracking-[0.1em] text-brand-navy/75">Delivery Address</h2>
         <div className="relative grid gap-2">
@@ -206,7 +206,9 @@ export function AddressSections({
             autoComplete="off"
             className={inputClass(false)}
           />
-          {showSuggestions && (loadingSuggestions || suggestions.length > 0 || deliveryAddress1.trim().length >= 3) && (
+          {showSuggestions &&
+            (loadingSuggestions || suggestions.length > 0) &&
+            deliveryAddress1.trim().length >= 3 && (
             <div className="absolute top-full z-20 mt-1 w-full rounded-md border border-brand-navy/20 bg-white shadow-lg">
               {loadingSuggestions && <p className="px-3 py-2 text-xs text-brand-navy/70">Searching addresses...</p>}
               {!loadingSuggestions &&
