@@ -29,7 +29,7 @@ export function CategorySubcategoryPicker({ mainSlug, mainLabel, subs, activeSub
             href={`/categories/${mainSlug}`}
             className={`subcategory-list-link text-center font-semibold transition ${
               allActive
-                ? "bg-brand-navy text-white ring-2 ring-brand-orange ring-offset-2"
+                ? "bg-slate-500 text-white"
                 : "bg-brand-surface text-brand-navy hover:bg-brand-navy/5"
             }`}
             aria-current={allActive ? "page" : undefined}
@@ -45,7 +45,7 @@ export function CategorySubcategoryPicker({ mainSlug, mainLabel, subs, activeSub
                 href={`/categories/${mainSlug}/${sub.slug}`}
                 className={`subcategory-list-link text-center font-semibold transition ${
                   active
-                    ? "bg-brand-navy text-white ring-2 ring-brand-orange ring-offset-2"
+                    ? "bg-slate-500 text-white"
                     : "bg-brand-surface text-brand-navy hover:bg-brand-navy/5"
                 }`}
                 aria-current={active ? "page" : undefined}
