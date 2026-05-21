@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AddressSections } from "@/app/customer-details/address-sections";
+import { CustomerDetailsForm } from "@/app/customer-details/customer-details-form";
 import { ArrowLeftIcon, BuildingIcon, NotesIcon, XCircleIcon } from "@/app/components/icons";
 import { getAuthenticatedCustomerUser, linkProfileToAuthUser } from "@/lib/customer-auth";
 import { combineCustomerName, splitCustomerName } from "@/lib/customer-name";
@@ -430,7 +431,7 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
           </p>
         )}
 
-        <form action={submitCustomerDetails} className="grid gap-5 rounded-2xl border border-brand-navy/15 p-6">
+        <CustomerDetailsForm action={submitCustomerDetails} cancelHref="/">
           <input type="hidden" name="profile_id" value={existingProfile?.id ?? ""} />
 
           <p className="inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.1em] text-brand-navy/75">
@@ -549,21 +550,7 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
             defaultSameAsDelivery={defaultSameAsDelivery}
           />
 
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="submit"
-              className="w-fit rounded-xl bg-brand-orange px-6 py-2.5 text-sm font-medium text-brand-navy transition hover:brightness-95"
-            >
-              Save Customer Details
-            </button>
-            <Link
-              href="/"
-              className="w-fit rounded-xl bg-brand-surface px-6 py-2.5 text-sm font-medium text-brand-navy transition hover:text-brand-orange"
-            >
-              Cancel
-            </Link>
-          </div>
-        </form>
+        </CustomerDetailsForm>
         </div>
       </div>
     </main>

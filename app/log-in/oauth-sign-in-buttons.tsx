@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 
+import { CUSTOMER_OAUTH_FLOW_COOKIE } from "@/lib/customer-oauth-flow";
 import type { OAuthProvider } from "@/lib/customer-auth";
 import { getSiteUrl } from "@/lib/site-url";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -33,6 +34,12 @@ const PROVIDERS: {
 const oauthButtonClass =
   "flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border-0 bg-transparent p-0 shadow-none transition hover:bg-brand-navy/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange/50 disabled:opacity-50";
 
+/** Supabase OAuth may drop query params on redirect; cookie survives for Google and Microsoft. */
+function setOAuthFlowCookie(mode: "login" | "signup") {
+  const secure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${CUSTOMER_OAUTH_FLOW_COOKIE}=${mode}; path=/; max-age=600; SameSite=Lax${secure}`;
+}
+
 export function OAuthSignInButtons({ mode }: Props) {
   const [loading, setLoading] = useState<OAuthProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +52,8 @@ export function OAuthSignInButtons({ mode }: Props) {
     // Match the browser origin (127.0.0.1 vs localhost) so Supabase redirect URLs align.
     const siteOrigin =
       typeof window !== "undefined" ? window.location.origin : getSiteUrl();
-    const redirectTo = `${siteOrigin}/auth/callback?next=${encodeURIComponent("/")}`;
+    setOAuthFlowCookie(mode);
+    const redirectTo = `${siteOrigin}/auth/callback?next=${encodeURIComponent("/")}&flow=${mode}`;
 
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,

@@ -12,6 +12,10 @@ import {
   bisleySlugUsesPositionalColorGallery,
   bisleySortedPositionalImageUrlsIfComplete,
 } from "@/lib/bisley-positional-color-gallery";
+import {
+  ProductColourSwatch,
+  ProductColourSwatchDots,
+} from "@/app/components/product-colour-swatch";
 import { filterAp2211ColorOptions, isStorefrontAp2211Slug } from "@/lib/ap-2211-storefront";
 import { filterAp3309ColorOptions, isStorefrontAp3309Slug } from "@/lib/ap-3309-storefront";
 import { isPpeStorefrontProduct } from "@/lib/catalog";
@@ -3265,15 +3269,13 @@ export function PremiumWorkPoloClient({
                         setActiveImage(pickPrimaryImageForColor(color, galleryImages, galleryPickOpts));
                       }}
                       title={color}
-                      className={`min-h-[2.75rem] rounded-lg border px-2 py-2 text-center text-[1.02rem] font-semibold leading-snug transition sm:min-h-0 sm:px-2.5 sm:py-2 sm:text-[1.08rem] md:text-[1.05rem] ${
-                        manyColours ? "line-clamp-2 sm:line-clamp-2" : ""
-                      } ${
+                      className={`min-h-[2.75rem] rounded-lg border-0 px-2 py-2 text-center text-[1.02rem] font-semibold leading-snug transition sm:min-h-0 sm:px-2.5 sm:py-2.5 sm:text-[1.08rem] md:text-[1.05rem] ${
                         isActive
-                          ? "border-brand-orange bg-brand-orange/15 text-brand-navy ring-1 ring-brand-orange/30"
-                          : "border-brand-navy/20 bg-white text-brand-navy hover:border-brand-orange"
+                          ? "bg-brand-orange/15 text-brand-navy ring-1 ring-brand-orange/30"
+                          : "bg-transparent text-brand-navy hover:bg-brand-orange/10"
                       }`}
                     >
-                      {color}
+                      <ProductColourSwatch label={color} compact={manyColours} />
                     </button>
                   );
                 })}
@@ -3290,8 +3292,13 @@ export function PremiumWorkPoloClient({
                 ? `This deal includes exactly ${activeDealPackage.units} shirts in total. Split them across colours and sizes below (${totalPieces} of ${activeDealPackage.units} selected).`
                 : "Quantities are saved per colour. Switch colour to enter a different breakdown — your other colours stay as you left them. Add to cart adds every colour and size with a quantity greater than zero."}
             </p>
-            <p className="text-[1.02rem] font-semibold text-brand-navy/80">
-              Editing: <span className="text-brand-orange">{selectedColor || "—"}</span>
+            <p className="flex flex-wrap items-center gap-2 text-[1.02rem] font-semibold text-brand-navy/80">
+              <span>Editing:</span>
+              {selectedColor ? (
+                <ProductColourSwatchDots label={selectedColor} size="large" />
+              ) : (
+                <span className="text-brand-navy/45">—</span>
+              )}
             </p>
             {selectedColorIsDiscontinued ? (
               <p className="rounded-lg border border-brand-navy/10 bg-brand-surface px-3 py-2 text-[1.02rem] font-medium text-brand-navy/70">

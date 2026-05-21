@@ -93,6 +93,12 @@ export default async function LogInPage({ searchParams }: LogInPageProps) {
             Could not log in right now. Please try again.
           </p>
         )}
+        {!isSignup && status === "oauth_no_account" && (
+          <p className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            <XCircleIcon className="h-4 w-4" />
+            Account not found. Please sign up first.
+          </p>
+        )}
         {!isSignup && status === "oauth_error" && (
           <p className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
             <XCircleIcon className="h-4 w-4" />

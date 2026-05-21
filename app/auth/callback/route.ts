@@ -1,12 +1,20 @@
 import { NextResponse } from "next/server";
 
-import { finalizeCustomerAuthSession } from "@/lib/customer-auth";
+import {
+  consumeCustomerOAuthFlowCookie,
+  finalizeCustomerAuthSession,
+  getCustomerProfileByAuthUserId,
+  getCustomerProfileByEmail,
+} from "@/lib/customer-auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const next = requestUrl.searchParams.get("next") ?? "/";
+  const oauthFlowFromQuery = requestUrl.searchParams.get("flow") === "login" ? "login" : null;
+  const oauthFlowFromCookie = await consumeCustomerOAuthFlowCookie();
+  const oauthFlow = oauthFlowFromQuery ?? oauthFlowFromCookie;
   const errorParam = requestUrl.searchParams.get("error");
   const errorDescription = requestUrl.searchParams.get("error_description");
   const requestOrigin = new URL(request.url).origin;
@@ -42,6 +50,18 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (oauthFlow === "login") {
+      const emailNorm = user.email?.trim().toLowerCase() ?? "";
+      let profile = (await getCustomerProfileByAuthUserId(user.id)).profile;
+      if (!profile && emailNorm) {
+        profile = (await getCustomerProfileByEmail(emailNorm)).profile;
+      }
+      if (!profile) {
+        await supabase.auth.signOut();
+        return NextResponse.redirect(`${site}/log-in?status=oauth_no_account`);
+      }
+    }
+
     const result = await finalizeCustomerAuthSession(user);
 
     if (result.status === "ready") {

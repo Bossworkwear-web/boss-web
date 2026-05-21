@@ -1,8 +1,15 @@
 import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
+import {
+  CUSTOMER_OAUTH_FLOW_COOKIE,
+  type CustomerOAuthFlow,
+} from "@/lib/customer-oauth-flow";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+export type { CustomerOAuthFlow } from "@/lib/customer-oauth-flow";
+export { CUSTOMER_OAUTH_FLOW_COOKIE } from "@/lib/customer-oauth-flow";
 
 export type CustomerProfileRow = {
   id: string;
@@ -39,6 +46,15 @@ export async function syncLegacyCustomerCookies(profile: {
   cookieStore.set("customer_delivery_address", profile.delivery_address ?? "", cookieOptions());
 }
 
+/** Read OAuth tab (login vs sign-up); clears the short-lived cookie set before redirect. */
+export async function consumeCustomerOAuthFlowCookie(): Promise<CustomerOAuthFlow> {
+  const cookieStore = await cookies();
+  const clear = { path: "/", maxAge: 0, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production" };
+  const raw = cookieStore.get(CUSTOMER_OAUTH_FLOW_COOKIE)?.value;
+  cookieStore.set(CUSTOMER_OAUTH_FLOW_COOKIE, "", clear);
+  return raw === "login" ? "login" : "signup";
+}
+
 export async function clearLegacyCustomerCookies() {
   const cookieStore = await cookies();
   const clear = { path: "/", maxAge: 0, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production" };
@@ -47,6 +63,7 @@ export async function clearLegacyCustomerCookies() {
   cookieStore.set("customer_delivery_address", "", clear);
   cookieStore.set("customer_oauth_pending", "", clear);
   cookieStore.set("customer_oauth_email", "", clear);
+  cookieStore.set("customer_oauth_flow", "", clear);
   cookieStore.set("pending_signup_password", "", clear);
 }
 
