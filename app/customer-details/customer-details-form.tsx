@@ -26,9 +26,15 @@ function SavingOverlay() {
       aria-live="polite"
     >
       <div className="w-full max-w-sm rounded-3xl border border-brand-navy/10 bg-white px-8 py-8 text-center shadow-2xl sm:max-w-md sm:px-10 sm:py-10">
-        <p id="customer-details-saving-title" className="text-xl font-semibold text-brand-navy sm:text-2xl">
-          Saving...
-        </p>
+        <div className="flex items-center justify-center gap-3">
+          <span
+            className="h-8 w-8 shrink-0 animate-spin rounded-full border-[3px] border-brand-navy/15 border-t-brand-orange"
+            aria-hidden
+          />
+          <p id="customer-details-saving-title" className="text-xl font-semibold text-brand-navy sm:text-2xl">
+            Saving...
+          </p>
+        </div>
         <p className="mt-3 text-sm text-brand-navy/65">Please wait while we save your details.</p>
       </div>
     </div>
