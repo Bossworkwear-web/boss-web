@@ -143,17 +143,28 @@
   min-width: 0 !important;
 }
 
-/* Tablet / iPad through 1279px (incl. 1024 landscape): four per row → 4×5 with 20/page. */
+/*
+ * Tablet grid (iPad, Android, Windows touch, ChromeOS/Google tablets): 4 per row → 4×5 @ 20/page.
+ * 1) Viewport ≤1279px (covers iPad landscape 1024px).
+ * 2) Touch-primary (pointer: coarse) at any width — large Android/Windows tablets in landscape.
+ */
 @media (min-width: 640px) and (max-width: 1279px) {
   .subcategory-browse-grid.subcategory-browse-grid-gap {
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   }
 }
 
-/* PC desktop (1280px+): five per row. */
-@media (min-width: 1280px) {
+/* Mouse desktop (fine pointer + hover): five per row from 1024px — after coarse rule below. */
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
   .subcategory-browse-grid.subcategory-browse-grid-gap {
     grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Touch tablets ≥1280px wide: keep 4 cols (overrides fine-pointer rule on hybrid wide tablets). */
+@media (min-width: 640px) and (pointer: coarse) {
+  .subcategory-browse-grid.subcategory-browse-grid-gap {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   }
 }
 

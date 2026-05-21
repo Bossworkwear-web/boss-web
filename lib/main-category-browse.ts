@@ -77,7 +77,7 @@ export type CategoryBrowseProductRow = {
   available_sizes?: string[] | null;
 };
 
-/** Category grids — 20/page: iPad 4×5 (≤1279px), desktop 5×4 (1280px+). */
+/** Category grids — 20/page: tablets (touch) 4×5; mouse desktop 5×4 @ 1024px+. */
 export const CATEGORY_BROWSE_PAGE_SIZE = 20;
 
 /** Product grid shell — column counts are set in `app/store-ui.css` (not Tailwind). */
