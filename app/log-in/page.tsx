@@ -175,6 +175,18 @@ export default async function LogInPage({ searchParams }: LogInPageProps) {
             instead.
           </p>
         )}
+        {isSignup && status === "oauth_already_registered" && (
+          <p className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+            <AlertTriangleIcon className="h-4 w-4 shrink-0" />
+            <span>
+              This Google or Microsoft account is already registered. Please use the{" "}
+              <Link href="/log-in" className="font-semibold underline underline-offset-2">
+                Log in
+              </Link>{" "}
+              tab to sign in — you were not signed in.
+            </span>
+          </p>
+        )}
         {isSignup && status === "legacy_exists" && (
           <p className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
             <AlertTriangleIcon className="h-4 w-4" />

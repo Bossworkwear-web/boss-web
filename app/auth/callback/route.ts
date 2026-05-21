@@ -50,16 +50,22 @@ export async function GET(request: Request) {
   }
 
   try {
+    const emailNorm = user.email?.trim().toLowerCase() ?? "";
+    let profile = (await getCustomerProfileByAuthUserId(user.id)).profile;
+    if (!profile && emailNorm) {
+      profile = (await getCustomerProfileByEmail(emailNorm)).profile;
+    }
+
     if (oauthFlow === "login") {
-      const emailNorm = user.email?.trim().toLowerCase() ?? "";
-      let profile = (await getCustomerProfileByAuthUserId(user.id)).profile;
-      if (!profile && emailNorm) {
-        profile = (await getCustomerProfileByEmail(emailNorm)).profile;
-      }
       if (!profile) {
         await supabase.auth.signOut();
         return NextResponse.redirect(`${site}/log-in?status=oauth_no_account`);
       }
+    }
+
+    if (oauthFlow === "signup" && profile) {
+      await supabase.auth.signOut();
+      return NextResponse.redirect(`${site}/log-in?mode=signup&status=oauth_already_registered`);
     }
 
     const result = await finalizeCustomerAuthSession(user);
