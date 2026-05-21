@@ -140,8 +140,15 @@
   min-width: 0 !important;
 }
 
-/* Five product cards per row on large viewports (overrides any stale Tailwind lg:grid-cols-6 in cache). */
-@media (min-width: 1024px) {
+/* Tablet / iPad (incl. 1024px landscape): four cards per row — overrides Tailwind lg:grid-cols-5. */
+@media (min-width: 640px) and (max-width: 1279px) {
+  .subcategory-browse-grid.subcategory-browse-grid-gap {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Desktop (1280px+): five per row. */
+@media (min-width: 1280px) {
   .subcategory-browse-grid.subcategory-browse-grid-gap {
     grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   }
