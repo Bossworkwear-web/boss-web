@@ -143,15 +143,15 @@
   min-width: 0 !important;
 }
 
-/* Tablet (640–1023px): four cards per row. */
-@media (min-width: 640px) and (max-width: 1023px) {
+/* Tablet / iPad through 1279px (incl. 1024 landscape): four per row → 4×5 with 20/page. */
+@media (min-width: 640px) and (max-width: 1279px) {
   .subcategory-browse-grid.subcategory-browse-grid-gap {
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   }
 }
 
-/* PC / desktop (1024px+): five per row (matches prior lg:grid-cols-5). */
-@media (min-width: 1024px) {
+/* PC desktop (1280px+): five per row. */
+@media (min-width: 1280px) {
   .subcategory-browse-grid.subcategory-browse-grid-gap {
     grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   }
