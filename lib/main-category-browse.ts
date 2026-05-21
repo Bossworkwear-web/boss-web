@@ -77,8 +77,12 @@ export type CategoryBrowseProductRow = {
   available_sizes?: string[] | null;
 };
 
-/** Category and subcategory product grids — how many cards per page before ?page=2, … */
-export const CATEGORY_BROWSE_PAGE_SIZE = 15;
+/** Category and subcategory product grids — 4×4 on tablet (md); desktop lg uses 5 columns. */
+export const CATEGORY_BROWSE_PAGE_SIZE = 16;
+
+/** Tailwind grid for `/categories/...` product cards (tablet sm–lg: 4 cols; desktop lg+: 5). */
+export const CATEGORY_BROWSE_GRID_CLASS =
+  "subcategory-browse-grid subcategory-browse-grid-gap grid grid-cols-1 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5";
 
 const CHEF_STOREFRONT_SUB_SLUGS = new Set(["jackets", "pants", "apron", "miscellaneous"]);
 

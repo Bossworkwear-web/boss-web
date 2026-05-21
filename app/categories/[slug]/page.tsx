@@ -21,6 +21,7 @@ import { categoryBrowseCardImageUrl } from "@/lib/category-browse-card-image";
 import { getDiscountPercent } from "@/lib/discounts";
 import { getMainCategory, HEALTH_CARE_MAIN_SLUG } from "@/lib/catalog";
 import {
+  CATEGORY_BROWSE_GRID_CLASS,
   CATEGORY_BROWSE_PAGE_SIZE,
   filterProductsForMainCategoryBrowse,
   resolveChefCategoryBrowseSubSlug,
@@ -298,7 +299,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
             </div>
           </header>
 
-          <div className="subcategory-browse-grid subcategory-browse-grid-gap grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5">
+          <div className={CATEGORY_BROWSE_GRID_CLASS}>
             {pageItems.map((item) => {
               const discountPercent = getDiscountPercent(item.name);
               const listPrice = storefrontRetailFromSupplierBase(item.base_price);
