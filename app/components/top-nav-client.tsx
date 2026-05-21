@@ -35,6 +35,7 @@ type ProductSidebarNav = {
 
 type CategoryNavListProps = {
   mainCategories: { slug: string; label: string }[];
+  navSubsByMain: Record<string, readonly StorefrontNavSub[]>;
   productSidebarNav: ProductSidebarNav | null;
   pathname: string;
   onNavigate?: () => void;
@@ -146,6 +147,7 @@ function StoreSecondaryNavLinks({
 /** Vertical list — mobile drawer / overlay menu. */
 function CategoryNavList({
   mainCategories,
+  navSubsByMain,
   productSidebarNav,
   pathname,
   onNavigate,
@@ -154,6 +156,10 @@ function CategoryNavList({
   const mainRowClass = (active: boolean) =>
     `store-ui-sidebar-main-link relative z-10 flex min-h-[44px] w-full items-center rounded-lg px-2.5 py-2 text-left font-semibold leading-snug transition [overflow-wrap:anywhere] [word-break:break-word] ${
       active ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-surface hover:text-brand-navy"
+    }`;
+  const subRowClass = (active: boolean) =>
+    `store-ui-sidebar-sub-link flex min-h-[40px] w-full items-center rounded-lg px-2.5 py-1.5 text-left font-medium leading-snug transition [overflow-wrap:anywhere] [word-break:break-word] ${
+      active ? "bg-brand-surface font-semibold text-brand-navy" : "text-brand-navy/80 hover:bg-brand-surface hover:text-brand-navy"
     }`;
 
   return (
@@ -168,6 +174,8 @@ function CategoryNavList({
           pathname === `/categories/${main.slug}` || pathname.startsWith(`/categories/${main.slug}/`);
         const isMainRowActive =
           routeShowsThisMain || (isProductContext && productSidebarNav?.mainSlug === main.slug);
+        const subCategories = navSubsByMain[main.slug] ?? [];
+        const showSubs = routeShowsThisMain && subCategories.length > 0;
 
         return (
           <div key={`sidebar-main-${main.slug}`} className="space-y-1.5">
@@ -179,6 +187,36 @@ function CategoryNavList({
             >
               {main.label}
             </Link>
+            {showSubs ? (
+              <ul className="m-0 flex list-none flex-col gap-1 border-l-2 border-brand-navy/10 py-0.5 pl-3" role="list">
+                <li>
+                  <Link
+                    href={mainHref}
+                    onClick={() => onNavigate?.()}
+                    className={subRowClass(pathname === mainHref)}
+                    aria-current={pathname === mainHref ? "page" : undefined}
+                  >
+                    All {main.label}
+                  </Link>
+                </li>
+                {subCategories.map((sub) => {
+                  const subHref = `/categories/${main.slug}/${sub.slug}`;
+                  const subActive = pathname === subHref || pathname.startsWith(`${subHref}/`);
+                  return (
+                    <li key={sub.slug}>
+                      <Link
+                        href={subHref}
+                        onClick={() => onNavigate?.()}
+                        className={subRowClass(subActive)}
+                        aria-current={subActive ? "page" : undefined}
+                      >
+                        {sub.label}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
           </div>
         );
       })}
@@ -766,6 +804,7 @@ export function TopNavClient({
             <div className="min-h-0 flex-1 overflow-y-auto">
               <CategoryNavList
                 mainCategories={mainCategories}
+                navSubsByMain={navSubsByMain}
                 productSidebarNav={productSidebarNav}
                 pathname={pathname}
                 onNavigate={() => setMobileNavOpen(false)}

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { CategoryBrowseTitle } from "@/app/components/category-browse-title";
+import { CategorySubcategoryPicker } from "@/app/components/category-subcategory-picker";
 import { CategoryBrandFilter } from "@/app/components/category-brand-filter";
 import { CategoryGetAQuoteCta } from "@/app/components/category-get-a-quote-cta";
 import { CategoryPaginationPageSummary } from "@/app/components/category-pagination-page-summary";
@@ -348,6 +349,13 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
               </p>
             </div>
           </header>
+
+          <CategorySubcategoryPicker
+            mainSlug={slug}
+            mainLabel={main.label}
+            subs={subsForMain}
+            activeSubSlug={subMeta.slug}
+          />
 
           <div className={CATEGORY_BROWSE_GRID_CLASS}>
             {pageItems.map((item) => {

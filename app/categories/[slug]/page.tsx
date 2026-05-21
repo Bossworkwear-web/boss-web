@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { CategoryBrowseTitle } from "@/app/components/category-browse-title";
+import { CategorySubcategoryPicker } from "@/app/components/category-subcategory-picker";
 import { CategoryBrandFilter } from "@/app/components/category-brand-filter";
 import { CategoryGetAQuoteCta } from "@/app/components/category-get-a-quote-cta";
 import { CategoryPaginationPageSummary } from "@/app/components/category-pagination-page-summary";
@@ -19,7 +20,7 @@ import { WomensCategoryTopAd } from "@/app/components/womens-category-top-ad";
 import { WorkwearCategoryTopAd } from "@/app/components/workwear-category-top-ad";
 import { categoryBrowseCardImageUrl } from "@/lib/category-browse-card-image";
 import { getDiscountPercent } from "@/lib/discounts";
-import { getMainCategory, HEALTH_CARE_MAIN_SLUG } from "@/lib/catalog";
+import { getMainCategory, getSubCategoriesForMain, HEALTH_CARE_MAIN_SLUG } from "@/lib/catalog";
 import {
   CATEGORY_BROWSE_GRID_CLASS,
   CATEGORY_BROWSE_PAGE_SIZE,
@@ -298,6 +299,12 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
               </p>
             </div>
           </header>
+
+          <CategorySubcategoryPicker
+            mainSlug={slug}
+            mainLabel={main.label}
+            subs={getSubCategoriesForMain(slug)}
+          />
 
           <div className={CATEGORY_BROWSE_GRID_CLASS}>
             {pageItems.map((item) => {

@@ -87,7 +87,26 @@
 }
 
 .subcategory-list-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   gap: var(--store-ui-subpicker-gap) !important;
+}
+
+@media (min-width: 640px) {
+  .subcategory-list-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Category page sub-picker — hide when desktop hover sub-nav is usable */
+.category-subcategory-picker-shell {
+  display: block;
+}
+
+@media (min-width: 1280px) and (hover: hover) and (pointer: fine) {
+  .category-subcategory-picker-shell {
+    display: none !important;
+  }
 }
 
 /* -------------------------------------------------------------------------- */
