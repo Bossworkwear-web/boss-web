@@ -7,6 +7,7 @@ import type { RefObject } from "react";
 import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { CartIcon, MenuIcon, SearchIcon, UserIcon } from "@/app/components/icons";
+import { LoadingRingSpinner } from "@/app/components/loading-ring-spinner";
 import { LOGO_SRC } from "@/app/generated/logo";
 import { clearCartItems, subscribeCartUpdates, useCartCount } from "@/lib/cart";
 import { customerFirstName } from "@/lib/customer-display-name";
@@ -429,7 +430,7 @@ export function TopNavClient({
   const headerShellRef = useRef<HTMLElement | null>(null);
   const cartCount = useCartCount();
   const [customerName, setCustomerName] = useState("");
-  const [logoutNoticeVisible, setLogoutNoticeVisible] = useState(false);
+  const [logoutOverlay, setLogoutOverlay] = useState<"signing-out" | "signed-out" | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [productSidebarNav, setProductSidebarNav] = useState<ProductSidebarNav | null>(null);
@@ -548,13 +549,13 @@ export function TopNavClient({
   }, [pathname]);
 
   useEffect(() => {
-    if (!logoutNoticeVisible) {
+    if (logoutOverlay !== "signed-out") {
       return;
     }
-    const id = window.setTimeout(() => setLogoutNoticeVisible(false), 5000);
+    const id = window.setTimeout(() => setLogoutOverlay(null), 5000);
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setLogoutNoticeVisible(false);
+        setLogoutOverlay(null);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -562,7 +563,7 @@ export function TopNavClient({
       window.clearTimeout(id);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [logoutNoticeVisible]);
+  }, [logoutOverlay]);
 
   useEffect(() => {
     if (!mobileNavOpen || typeof window === "undefined") {
@@ -578,6 +579,8 @@ export function TopNavClient({
   }, [mobileNavOpen]);
 
   async function handleLogOut() {
+    setLogoutOverlay("signing-out");
+    setMobileNavOpen(false);
     try {
       await fetch("/api/auth/signout", { method: "POST" });
     } catch {
@@ -588,8 +591,7 @@ export function TopNavClient({
     document.cookie = "customer_delivery_address=; Max-Age=0; path=/";
     clearCartItems();
     setCustomerName("");
-    setMobileNavOpen(false);
-    setLogoutNoticeVisible(true);
+    setLogoutOverlay("signed-out");
     const leaveToHome =
       pathname === "/customer" ||
       pathname.startsWith("/customer/") ||
@@ -778,25 +780,49 @@ export function TopNavClient({
         </div>
       ) : null}
 
-      {logoutNoticeVisible ? (
+      {logoutOverlay ? (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 p-5 sm:p-8"
           role="alertdialog"
           aria-modal="true"
-          aria-labelledby="logout-notice-title"
-          aria-describedby="logout-notice-desc"
-          onClick={() => setLogoutNoticeVisible(false)}
+          aria-busy={logoutOverlay === "signing-out"}
+          aria-labelledby="logout-overlay-title"
+          aria-describedby="logout-overlay-desc"
+          onClick={() => {
+            if (logoutOverlay === "signed-out") {
+              setLogoutOverlay(null);
+            }
+          }}
         >
           <div
             className="w-full max-w-lg rounded-3xl border border-brand-navy/10 bg-white px-8 py-8 text-center shadow-2xl sm:max-w-xl sm:px-12 sm:py-10"
             onClick={(e) => e.stopPropagation()}
           >
-            <p id="logout-notice-title" className="text-xl font-semibold text-brand-navy sm:text-2xl">
-              Signed out
-            </p>
-            <p id="logout-notice-desc" className="mt-4 text-lg leading-snug text-brand-navy/80 sm:mt-5 sm:text-xl">
-              You have been logged out.
-            </p>
+            {logoutOverlay === "signing-out" ? (
+              <>
+                <div className="flex items-center justify-center gap-3">
+                  <LoadingRingSpinner />
+                  <p id="logout-overlay-title" className="text-xl font-semibold text-brand-navy sm:text-2xl">
+                    Signing out...
+                  </p>
+                </div>
+                <p id="logout-overlay-desc" className="mt-3 text-sm text-brand-navy/65">
+                  Please wait.
+                </p>
+              </>
+            ) : (
+              <>
+                <p id="logout-overlay-title" className="text-xl font-semibold text-brand-navy sm:text-2xl">
+                  Signed out
+                </p>
+                <p
+                  id="logout-overlay-desc"
+                  className="mt-4 text-lg leading-snug text-brand-navy/80 sm:mt-5 sm:text-xl"
+                >
+                  You have been logged out.
+                </p>
+              </>
+            )}
           </div>
         </div>
       ) : null}

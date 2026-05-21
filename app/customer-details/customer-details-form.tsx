@@ -4,6 +4,8 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
+import { LoadingRingSpinner } from "@/app/components/loading-ring-spinner";
+
 type CustomerDetailsFormProps = {
   action: (formData: FormData) => void | Promise<void>;
   cancelHref: string;
@@ -27,10 +29,7 @@ function SavingOverlay() {
     >
       <div className="w-full max-w-sm rounded-3xl border border-brand-navy/10 bg-white px-8 py-8 text-center shadow-2xl sm:max-w-md sm:px-10 sm:py-10">
         <div className="flex items-center justify-center gap-3">
-          <span
-            className="h-8 w-8 shrink-0 animate-spin rounded-full border-[3px] border-brand-navy/15 border-t-brand-orange"
-            aria-hidden
-          />
+          <LoadingRingSpinner />
           <p id="customer-details-saving-title" className="text-xl font-semibold text-brand-navy sm:text-2xl">
             Saving...
           </p>
