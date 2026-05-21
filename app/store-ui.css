@@ -131,7 +131,10 @@
   padding: var(--store-ui-browse-card-body-padding) !important;
 }
 
+/* Plain CSS grid (classes live in lib/ — Tailwind may not emit `grid` utilities from that string). */
 .subcategory-browse-grid.subcategory-browse-grid-gap {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
   gap: var(--store-ui-browse-grid-gap) !important;
 }
 
@@ -140,15 +143,15 @@
   min-width: 0 !important;
 }
 
-/* Tablet / iPad (incl. 1024px landscape): four cards per row — overrides Tailwind lg:grid-cols-5. */
-@media (min-width: 640px) and (max-width: 1279px) {
+/* Tablet (640–1023px): four cards per row. */
+@media (min-width: 640px) and (max-width: 1023px) {
   .subcategory-browse-grid.subcategory-browse-grid-gap {
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   }
 }
 
-/* Desktop (1280px+): five per row. */
-@media (min-width: 1280px) {
+/* PC / desktop (1024px+): five per row (matches prior lg:grid-cols-5). */
+@media (min-width: 1024px) {
   .subcategory-browse-grid.subcategory-browse-grid-gap {
     grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   }

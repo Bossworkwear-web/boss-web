@@ -77,12 +77,11 @@ export type CategoryBrowseProductRow = {
   available_sizes?: string[] | null;
 };
 
-/** Category and subcategory product grids — 4×4 on tablet/iPad; desktop (1280px+) uses 5 columns. */
-export const CATEGORY_BROWSE_PAGE_SIZE = 16;
+/** Category and subcategory product grids — 20 cards per page (?page=2, …). */
+export const CATEGORY_BROWSE_PAGE_SIZE = 20;
 
-/** Tailwind grid for `/categories/...` product cards (store-ui.css enforces 4/5 cols with !important). */
-export const CATEGORY_BROWSE_GRID_CLASS =
-  "subcategory-browse-grid subcategory-browse-grid-gap grid grid-cols-1 sm:grid-cols-4 xl:grid-cols-5";
+/** Product grid shell — column counts are set in `app/store-ui.css` (not Tailwind). */
+export const CATEGORY_BROWSE_GRID_CLASS = "subcategory-browse-grid subcategory-browse-grid-gap";
 
 const CHEF_STOREFRONT_SUB_SLUGS = new Set(["jackets", "pants", "apron", "miscellaneous"]);
 
