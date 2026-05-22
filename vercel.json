@@ -1,9 +1,5 @@
 {
-  "build": {
-    "env": {
-      "NEXT_ADAPTER_PATH": ""
-    }
-  },
+  "buildCommand": "node scripts/vercel-build.mjs",
   "crons": [
     {
       "path": "/api/cron/supplier-order-day",

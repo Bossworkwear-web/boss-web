@@ -2,13 +2,7 @@ import type { NextConfig } from "next";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-/**
- * Vercel's Next.js 16 adapter runs modifyConfig at build start; it can throw
- * `path ... Received undefined` and fail the deploy. Standard `next build` is fine without it.
- */
-if (process.env.VERCEL) {
-  delete process.env.NEXT_ADAPTER_PATH;
-}
+const isVercel = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
 
 /** Absolute project root — avoids Turbopack mis-inferring `app/` when the repo path has spaces. */
 function getProjectRoot(): string {
@@ -54,6 +48,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Empty string overrides NEXT_ADAPTER_PATH from defaultConfig (null/undefined are ignored).
+  ...(isVercel ? { adapterPath: "" } : {}),
   poweredByHeader: false,
   reactStrictMode: true,
   compress: true,
