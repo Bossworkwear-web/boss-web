@@ -6,7 +6,7 @@ export const XERO_AUTHORIZE_URL = "https://login.xero.com/identity/connect/autho
 export const XERO_TOKEN_URL = "https://identity.xero.com/connect/token";
 export const XERO_CONNECTIONS_URL = "https://api.xero.com/connections";
 
-/** Scopes for contact + sales invoice sync (phase 2). */
+/** Scopes requested at Connect (phase 1). */
 export const XERO_OAUTH_SCOPES = [
   "openid",
   "profile",
@@ -14,8 +14,13 @@ export const XERO_OAUTH_SCOPES = [
   "offline_access",
   "accounting.settings.read",
   "accounting.contacts",
-  "accounting.transactions",
 ].join(" ");
+
+/**
+ * Added before phase 2 invoice sync — reconnect Xero after enabling.
+ * Some tenants hit unauthorized_client when accounting.transactions is in the initial authorize URL.
+ */
+export const XERO_OAUTH_SCOPES_INVOICES = "accounting.transactions";
 
 export const XERO_OAUTH_STATE_COOKIE = "boss_xero_oauth_state";
 
@@ -57,6 +62,16 @@ export function isXeroOAuthConfigured(): boolean {
 export function getXeroClientIdPrefix(): string | null {
   const id = cleanEnvVar(process.env.XERO_CLIENT_ID);
   return id.length >= 4 ? id.slice(0, 4) : id || null;
+}
+
+/** Last 4 chars — compare with Xero → Configuration → Client id. */
+export function getXeroClientIdSuffix(): string | null {
+  const id = cleanEnvVar(process.env.XERO_CLIENT_ID);
+  return id.length >= 4 ? id.slice(-4) : id || null;
+}
+
+export function getXeroClientIdLength(): number {
+  return cleanEnvVar(process.env.XERO_CLIENT_ID).length;
 }
 
 export function getXeroRedirectUri(): string {

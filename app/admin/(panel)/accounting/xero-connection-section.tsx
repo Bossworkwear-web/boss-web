@@ -1,7 +1,13 @@
 import Link from "next/link";
 
 import type { XeroConnectionPublic } from "@/lib/xero/connection-db";
-import { getXeroClientIdPrefix, getXeroRedirectUri, isXeroOAuthConfigured } from "@/lib/xero/config";
+import {
+  getXeroClientIdLength,
+  getXeroClientIdPrefix,
+  getXeroClientIdSuffix,
+  getXeroRedirectUri,
+  isXeroOAuthConfigured,
+} from "@/lib/xero/config";
 
 type Props = {
   connection: XeroConnectionPublic | null;
@@ -23,6 +29,8 @@ function formatPerthDateTime(iso: string): string {
 export function XeroConnectionSection({ connection, loadError }: Props) {
   const configured = isXeroOAuthConfigured();
   const clientIdPrefix = getXeroClientIdPrefix();
+  const clientIdSuffix = getXeroClientIdSuffix();
+  const clientIdLength = getXeroClientIdLength();
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -86,8 +94,11 @@ export function XeroConnectionSection({ connection, loadError }: Props) {
       </p>
       {configured && clientIdPrefix ? (
         <p className="mt-2 text-xs text-slate-500">
-          This deployment&apos;s Client id starts with:{" "}
-          <code className="font-mono">{clientIdPrefix}</code> (should match Xero → Configuration → Client id)
+          This deployment&apos;s Client id:{" "}
+          <code className="font-mono">
+            {clientIdPrefix}…{clientIdSuffix}
+          </code>{" "}
+          ({clientIdLength} characters — compare start/end with Xero → Configuration)
         </p>
       ) : null}
     </section>

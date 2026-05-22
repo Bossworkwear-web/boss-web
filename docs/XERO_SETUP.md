@@ -59,10 +59,14 @@ Then **Settings → API → Reload schema**.
 3. Click **Connect to Xero** and authorise your organisation
 4. Confirm status shows tenant name and “Connected”
 
-## Scopes requested
+## Scopes requested (phase 1 Connect)
 
 - `openid`, `profile`, `email`, `offline_access` (refresh token)
-- `accounting.settings.read`, `accounting.contacts`, `accounting.transactions` (invoices in phase 2)
+- `accounting.settings.read`, `accounting.contacts`
+
+`accounting.transactions` is added before phase 2 automatic invoices (may require disconnect + reconnect).
+
+If Connect shows `unauthorized_client`, confirm Client id start/end match Xero and redeploy after env changes.
 
 ## Phase 2 (planned)
 
