@@ -813,6 +813,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      xero_connections: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          tenant_name: string;
+          access_token: string;
+          refresh_token: string;
+          expires_at: string;
+          scopes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          tenant_name: string;
+          access_token: string;
+          refresh_token: string;
+          expires_at: string;
+          scopes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          tenant_id?: string;
+          tenant_name?: string;
+          access_token?: string;
+          refresh_token?: string;
+          expires_at?: string;
+          scopes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       store_orders: {
         Row: {
           id: string;
@@ -842,6 +878,12 @@ export type Database = {
           stripe_refund_id: string | null;
           refunded_cents: number;
           refunded_at: string | null;
+          xero_contact_id: string | null;
+          xero_invoice_id: string | null;
+          xero_invoice_number: string | null;
+          xero_sync_status: string;
+          xero_sync_error: string | null;
+          xero_synced_at: string | null;
         };
         Insert: {
           id?: string;
@@ -871,6 +913,12 @@ export type Database = {
           stripe_refund_id?: string | null;
           refunded_cents?: number;
           refunded_at?: string | null;
+          xero_contact_id?: string | null;
+          xero_invoice_id?: string | null;
+          xero_invoice_number?: string | null;
+          xero_sync_status?: string;
+          xero_sync_error?: string | null;
+          xero_synced_at?: string | null;
         };
         Update: {
           id?: string;
@@ -900,6 +948,12 @@ export type Database = {
           stripe_refund_id?: string | null;
           refunded_cents?: number;
           refunded_at?: string | null;
+          xero_contact_id?: string | null;
+          xero_invoice_id?: string | null;
+          xero_invoice_number?: string | null;
+          xero_sync_status?: string;
+          xero_sync_error?: string | null;
+          xero_synced_at?: string | null;
         };
         Relationships: [
           {

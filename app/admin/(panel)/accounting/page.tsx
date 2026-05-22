@@ -2,7 +2,9 @@ import Link from "next/link";
 
 import { AccountingExpensesSection, type AccountingExpenseRow } from "@/app/admin/(panel)/accounting/accounting-expenses-section";
 import { AccountingRefundsSection, type AccountingRefundRow } from "@/app/admin/(panel)/accounting/accounting-refunds-section";
+import { XeroConnectionSection } from "@/app/admin/(panel)/accounting/xero-connection-section";
 import { getPerthYmd } from "@/lib/perth-calendar";
+import { getActiveXeroConnection, toPublicConnection } from "@/lib/xero/connection-db";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +17,8 @@ type Search = {
   refund_saved?: string;
   refund_deleted?: string;
   refund_error?: string;
+  xero?: string;
+  xero_error?: string;
 };
 
 export default async function AdminAccountingPage({ searchParams }: { searchParams: Promise<Search> }) {
@@ -83,8 +87,29 @@ export default async function AdminAccountingPage({ searchParams }: { searchPara
     refundLoadError = e instanceof Error ? e.message : "Failed to load refunds.";
   }
 
+  let xeroConnection = null;
+  let xeroLoadError: string | null = null;
+  try {
+    const row = await getActiveXeroConnection();
+    xeroConnection = row ? toPublicConnection(row) : null;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Failed to load Xero connection.";
+    xeroLoadError =
+      msg.includes("xero_connections") || msg.includes("does not exist") || msg.includes("schema cache")
+        ? `${msg} — Run supabase/migrations/20260521_xero_integration.sql (or sql-editor/xero_integration.sql) in Supabase, then reload schema.`
+        : msg;
+  }
+
   let banner: { kind: "ok" | "err"; text: string } | null = null;
-  if (q.created === "1") banner = { kind: "ok", text: "Expense saved." };
+  if (q.xero === "connected") banner = { kind: "ok", text: "Xero connected successfully." };
+  else if (q.xero === "disconnected") banner = { kind: "ok", text: "Xero disconnected." };
+  else if (q.xero_error) {
+    try {
+      banner = { kind: "err", text: decodeURIComponent(q.xero_error.replace(/\+/g, " ")) };
+    } catch {
+      banner = { kind: "err", text: q.xero_error };
+    }
+  } else if (q.created === "1") banner = { kind: "ok", text: "Expense saved." };
   else if (q.deleted === "1") banner = { kind: "ok", text: "Expense deleted." };
   else if (q.refund_created === "1") banner = { kind: "ok", text: "Refund added." };
   else if (q.refund_saved === "1") banner = { kind: "ok", text: "Refund updated." };
@@ -135,6 +160,8 @@ export default async function AdminAccountingPage({ searchParams }: { searchPara
           Stripe refunds report →
         </Link>
       </header>
+
+      <XeroConnectionSection connection={xeroConnection} loadError={xeroLoadError} />
 
       {banner ? (
         <div
