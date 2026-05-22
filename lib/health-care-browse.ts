@@ -47,6 +47,9 @@ const HEALTH_CARE_TOPS_EXCLUSIVE_STYLE_CODES = new Set(
 /** Fashion Biz SKUs that must live only under Health care → Miscellaneous (no Tops/Pants or other mains). */
 const HEALTH_CARE_MISCELLANEOUS_EXCLUSIVE_STYLE_CODES = new Set(["CID940U"].map((c) => c.toUpperCase()));
 
+/** Fashion Biz SKUs forced to Health care → Pants (e.g. jogger scrub pant; avoid misc match on “work bag” in copy). */
+const HEALTH_CARE_PANTS_EXCLUSIVE_STYLE_CODES = new Set(["CSP241LL"].map((c) => c.toUpperCase()));
+
 function isHealthCareTopsExclusiveStyleListing(productName: string, meta?: HealthCareListingMeta): boolean {
   const code = fashionBizStyleCodeFromListing(productName, meta?.slug ?? null);
   if (!code) {
@@ -73,6 +76,15 @@ function isHealthCareMiscExclusiveStyleListing(productName: string, meta?: Healt
   return false;
 }
 
+function isHealthCarePantsExclusiveStyleListing(productName: string, meta?: HealthCareListingMeta): boolean {
+  const code = fashionBizStyleCodeFromListing(productName, meta?.slug ?? null);
+  if (!code) {
+    return false;
+  }
+  const base = code.toUpperCase().replace(/-CLEARANCE$/i, "");
+  return HEALTH_CARE_PANTS_EXCLUSIVE_STYLE_CODES.has(base);
+}
+
 export function isHealthCareCatalogListing(productName: string, meta?: HealthCareListingMeta): boolean {
   return (
     isBizCareListingInMiscGeneratedSet(productName, meta?.slug ?? null) ||
@@ -96,6 +108,9 @@ export function resolveHealthCareBrowseSubSlug(
   }
   if (isHealthCareMiscExclusiveStyleListing(productName, meta)) {
     return "miscellaneous";
+  }
+  if (isHealthCarePantsExclusiveStyleListing(productName, meta)) {
+    return "pants";
   }
   const blob = listingTextBlob(productName, meta);
 
