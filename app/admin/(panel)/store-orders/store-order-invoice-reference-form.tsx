@@ -2,10 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 
-import {
-  resendStoreOrderInvoiceEmail,
-  submitStoreOrderInvoiceReferenceForm,
-} from "@/app/admin/(panel)/store-orders/actions";
+import { submitStoreOrderInvoiceReferenceForm } from "@/app/admin/(panel)/store-orders/actions";
 
 const TRACKING_TOKEN_RE = /^[0-9a-f-]{36}$/i;
 
@@ -122,11 +119,26 @@ export function StoreOrderInvoiceReferenceForm({
           onClick={() => {
             setResendMsg(null);
             startResend(async () => {
-              const res = await resendStoreOrderInvoiceEmail(orderId);
-              if (res.ok) {
-                setResendMsg({ kind: "ok", text: "Invoice email sent." });
-              } else {
-                setResendMsg({ kind: "err", text: res.error });
+              try {
+                const res = await fetch("/api/admin/store-orders/resend-invoice-email", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ orderId }),
+                });
+                const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+                if (res.ok && data.ok) {
+                  setResendMsg({ kind: "ok", text: "Invoice email sent." });
+                } else {
+                  setResendMsg({
+                    kind: "err",
+                    text: data.error ?? `Request failed (${res.status}).`,
+                  });
+                }
+              } catch (e) {
+                setResendMsg({
+                  kind: "err",
+                  text: e instanceof Error ? e.message : "Network error.",
+                });
               }
             });
           }}

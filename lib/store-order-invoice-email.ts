@@ -14,6 +14,17 @@ export type ResendStoreOrderInvoiceEmailResult = { ok: true } | { ok: false; err
 
 /** Admin: resend tax invoice PDF email only (Resend). Requires invoice_reference on the order. */
 export async function resendStoreOrderTaxInvoiceEmail(orderId: string): Promise<ResendStoreOrderInvoiceEmailResult> {
+  try {
+    return await resendStoreOrderTaxInvoiceEmailInner(orderId);
+  } catch (e) {
+    console.error("[resendStoreOrderTaxInvoiceEmail]", e);
+    return { ok: false, error: e instanceof Error ? e.message : "Unexpected error sending invoice email." };
+  }
+}
+
+async function resendStoreOrderTaxInvoiceEmailInner(
+  orderId: string,
+): Promise<ResendStoreOrderInvoiceEmailResult> {
   if (!/^[0-9a-f-]{36}$/i.test(orderId.trim())) {
     return { ok: false, error: "Invalid order." };
   }
@@ -25,11 +36,12 @@ export async function resendStoreOrderTaxInvoiceEmail(orderId: string): Promise<
     return { ok: false, error: "Database not configured." };
   }
 
+  const orderSelect =
+    "id, order_number, tracking_token, customer_email, customer_name, total_cents, currency, invoice_reference";
+
   const { data: order, error: orderErr } = await supabase
     .from("store_orders")
-    .select(
-      "id, order_number, tracking_token, customer_email, customer_name, total_cents, currency, invoice_reference, xero_invoice_number, status",
-    )
+    .select(orderSelect)
     .eq("id", orderId)
     .maybeSingle();
 
@@ -37,7 +49,14 @@ export async function resendStoreOrderTaxInvoiceEmail(orderId: string): Promise<
     return { ok: false, error: orderErr?.message ?? "Order not found." };
   }
 
-  const invoiceNumber = (order.xero_invoice_number ?? order.invoice_reference ?? "").trim();
+  let xeroInvoiceNumber: string | null = null;
+  const xeroNumRes = await supabase.from("store_orders").select("xero_invoice_number").eq("id", orderId).maybeSingle();
+  if (!xeroNumRes.error && xeroNumRes.data) {
+    const v = (xeroNumRes.data as { xero_invoice_number?: string | null }).xero_invoice_number;
+    xeroInvoiceNumber = v == null ? null : String(v).trim() || null;
+  }
+
+  const invoiceNumber = (xeroInvoiceNumber ?? order.invoice_reference ?? "").trim();
   if (!invoiceNumber) {
     return {
       ok: false,
