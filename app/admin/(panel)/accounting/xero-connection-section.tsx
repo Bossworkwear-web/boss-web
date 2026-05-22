@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import type { XeroConnectionPublic } from "@/lib/xero/connection-db";
-import { getXeroRedirectUri, isXeroOAuthConfigured } from "@/lib/xero/config";
+import { getXeroClientIdPrefix, getXeroRedirectUri, isXeroOAuthConfigured } from "@/lib/xero/config";
 
 type Props = {
   connection: XeroConnectionPublic | null;
@@ -22,6 +22,7 @@ function formatPerthDateTime(iso: string): string {
 
 export function XeroConnectionSection({ connection, loadError }: Props) {
   const configured = isXeroOAuthConfigured();
+  const clientIdPrefix = getXeroClientIdPrefix();
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -83,6 +84,12 @@ export function XeroConnectionSection({ connection, loadError }: Props) {
         Redirect URI must match your Xero app:{" "}
         <code className="break-all">{getXeroRedirectUri()}</code>
       </p>
+      {configured && clientIdPrefix ? (
+        <p className="mt-2 text-xs text-slate-500">
+          This deployment&apos;s Client id starts with:{" "}
+          <code className="font-mono">{clientIdPrefix}</code> (should match Xero → Configuration → Client id)
+        </p>
+      ) : null}
     </section>
   );
 }

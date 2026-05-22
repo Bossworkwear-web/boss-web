@@ -21,8 +21,20 @@ export const XERO_OAUTH_STATE_COOKIE = "boss_xero_oauth_state";
 
 export type XeroSyncStatus = "pending" | "synced" | "failed" | "skipped";
 
+/** Strip whitespace and accidental quotes from Vercel / .env paste. */
+function cleanEnvVar(value: string | undefined): string {
+  const trimmed = (value ?? "").trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
 export function getXeroClientId(): string {
-  const id = process.env.XERO_CLIENT_ID?.trim();
+  const id = cleanEnvVar(process.env.XERO_CLIENT_ID);
   if (!id) {
     throw new Error("XERO_CLIENT_ID is not set.");
   }
@@ -30,7 +42,7 @@ export function getXeroClientId(): string {
 }
 
 export function getXeroClientSecret(): string {
-  const secret = process.env.XERO_CLIENT_SECRET?.trim();
+  const secret = cleanEnvVar(process.env.XERO_CLIENT_SECRET);
   if (!secret) {
     throw new Error("XERO_CLIENT_SECRET is not set.");
   }
@@ -38,7 +50,13 @@ export function getXeroClientSecret(): string {
 }
 
 export function isXeroOAuthConfigured(): boolean {
-  return Boolean(process.env.XERO_CLIENT_ID?.trim() && process.env.XERO_CLIENT_SECRET?.trim());
+  return Boolean(cleanEnvVar(process.env.XERO_CLIENT_ID) && cleanEnvVar(process.env.XERO_CLIENT_SECRET));
+}
+
+/** First 4 chars of Client id on this deployment (for admin troubleshooting). */
+export function getXeroClientIdPrefix(): string | null {
+  const id = cleanEnvVar(process.env.XERO_CLIENT_ID);
+  return id.length >= 4 ? id.slice(0, 4) : id || null;
 }
 
 export function getXeroRedirectUri(): string {
