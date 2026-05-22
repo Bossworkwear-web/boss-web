@@ -86,21 +86,28 @@ export function XeroConnectionSection({ connection, loadError }: Props) {
               </Link>
             </div>
           )}
-          {connectionHasInvoiceScope(connection.scopes) && !connectionHasPaymentScope(connection.scopes) ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-              <p>
-                Payment recording needs <code className="text-xs">accounting.payments</code>. Re-authorise once
-                (keeps invoice access).
-              </p>
-              <Link
-                href="/api/xero/connect?upgrade=1"
-                className="mt-3 inline-flex rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-orange/90"
-              >
-                Upgrade Xero for payments
-              </Link>
-            </div>
-          ) : connectionHasPaymentScope(connection.scopes) ? (
-            <p className="text-sm text-emerald-800">Payment sync permission: enabled</p>
+          {connectionHasInvoiceScope(connection.scopes) ? (
+            connectionHasPaymentScope(connection.scopes) ? (
+              <p className="text-sm text-emerald-800">Payment sync permission: enabled</p>
+            ) : (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                <p>
+                  <strong>Payment permission missing.</strong> Marking invoices Paid in Xero needs{" "}
+                  <code className="text-xs">accounting.payments</code> (separate from invoices).
+                </p>
+                <Link
+                  href="/api/xero/connect?upgrade=1"
+                  className="mt-3 inline-flex rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-orange/90"
+                >
+                  Upgrade Xero for payments
+                </Link>
+              </div>
+            )
+          ) : null}
+          {connectionHasInvoiceScope(connection.scopes) ? (
+            <p className="text-xs text-slate-500">
+              Scopes: <span className="font-mono break-all">{connection.scopes ?? "(none recorded)"}</span>
+            </p>
           ) : null}
           <form action="/api/xero/disconnect" method="post">
             <button
