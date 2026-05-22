@@ -31,5 +31,7 @@ export async function POST(request: Request) {
     ok: true,
     invoiceNumber: result.invoiceNumber,
     invoiceId: result.invoiceId,
+    paymentRecorded: result.paymentRecorded ?? false,
+    paymentAlreadyPaid: result.paymentAlreadyPaid ?? false,
   });
 }

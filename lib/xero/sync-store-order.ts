@@ -3,10 +3,18 @@ import { connectionHasInvoiceScope } from "@/lib/xero/config";
 import { findOrCreateXeroContact } from "@/lib/xero/contacts";
 import { getActiveXeroConnection } from "@/lib/xero/connection-db";
 import { createAuthorisedSalesInvoice, type XeroInvoiceLineInput } from "@/lib/xero/invoices";
+import { recordStoreOrderPaymentInXero } from "@/lib/xero/sync-store-order-payment";
 import { XeroApiError } from "@/lib/xero/api-client";
 
 export type SyncStoreOrderToXeroResult =
-  | { ok: true; invoiceNumber: string; invoiceId: string; contactId: string }
+  | {
+      ok: true;
+      invoiceNumber: string;
+      invoiceId: string;
+      contactId: string;
+      paymentRecorded?: boolean;
+      paymentAlreadyPaid?: boolean;
+    }
   | { ok: false; error: string; skipped?: boolean };
 
 function centsToAudInclGst(cents: number): number {
@@ -38,7 +46,7 @@ export async function syncStoreOrderToXero(storeOrderId: string): Promise<SyncSt
   const { data: order, error: orderErr } = await supabase
     .from("store_orders")
     .select(
-      "id, order_number, status, customer_email, customer_name, delivery_fee_cents, promotion_discount_cents, currency, created_at, xero_sync_status, xero_invoice_id",
+      "id, order_number, status, customer_email, customer_name, delivery_fee_cents, promotion_discount_cents, currency, created_at, xero_sync_status, xero_invoice_id, xero_invoice_number, xero_contact_id, xero_payment_id",
     )
     .eq("id", storeOrderId)
     .maybeSingle();
@@ -140,7 +148,16 @@ export async function syncStoreOrderToXero(storeOrderId: string): Promise<SyncSt
       error: null,
     });
 
-    return { ok: true, invoiceNumber, invoiceId, contactId };
+    const payRes = await recordStoreOrderPaymentInXero(storeOrderId);
+
+    return {
+      ok: true,
+      invoiceNumber,
+      invoiceId,
+      contactId,
+      paymentRecorded: payRes.ok && Boolean(payRes.paymentId),
+      paymentAlreadyPaid: payRes.ok ? payRes.alreadyPaid : undefined,
+    };
   } catch (e) {
     const msg =
       e instanceof XeroApiError

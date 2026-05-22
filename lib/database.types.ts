@@ -884,6 +884,10 @@ export type Database = {
           xero_sync_status: string;
           xero_sync_error: string | null;
           xero_synced_at: string | null;
+          xero_payment_id: string | null;
+          xero_payment_error: string | null;
+          xero_credit_notes: Json;
+          xero_refund_sync_error: string | null;
         };
         Insert: {
           id?: string;
@@ -919,6 +923,10 @@ export type Database = {
           xero_sync_status?: string;
           xero_sync_error?: string | null;
           xero_synced_at?: string | null;
+          xero_payment_id?: string | null;
+          xero_payment_error?: string | null;
+          xero_credit_notes?: Json;
+          xero_refund_sync_error?: string | null;
         };
         Update: {
           id?: string;
@@ -954,6 +962,10 @@ export type Database = {
           xero_sync_status?: string;
           xero_sync_error?: string | null;
           xero_synced_at?: string | null;
+          xero_payment_id?: string | null;
+          xero_payment_error?: string | null;
+          xero_credit_notes?: Json;
+          xero_refund_sync_error?: string | null;
         };
         Relationships: [
           {

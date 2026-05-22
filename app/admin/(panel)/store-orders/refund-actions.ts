@@ -244,6 +244,18 @@ export async function refundStoreOrderViaStripe(
     };
   }
 
+  try {
+    const { syncStoreOrderRefundToXero } = await import("@/lib/xero/sync-store-order-refund");
+    await syncStoreOrderRefundToXero({
+      storeOrderId: order.id,
+      stripeRefundId: refundRes.refundId,
+      amountCents: refundRes.amountCents,
+      refundedAt: new Date().toISOString(),
+    });
+  } catch {
+    // Stripe refund succeeded; Xero credit note can be retried from admin sync.
+  }
+
   revalidateStoreOrderPaths(order.id);
   return { ok: true };
 }

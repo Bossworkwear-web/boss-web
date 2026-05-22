@@ -33,7 +33,8 @@ export function getXeroOAuthScopes(includeInvoices: boolean): string {
 }
 
 export function connectionHasInvoiceScope(scopes: string | null): boolean {
-  return (scopes ?? "").includes(XERO_OAUTH_SCOPES_INVOICES);
+  const s = scopes ?? "";
+  return s.includes(XERO_OAUTH_SCOPES_INVOICES) || s.includes("accounting.transactions");
 }
 
 export const XERO_OAUTH_STATE_COOKIE = "boss_xero_oauth_state";

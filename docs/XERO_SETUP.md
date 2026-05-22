@@ -79,7 +79,7 @@ After a **paid** Stripe order:
 
 ### Extra setup
 
-1. **Upgrade connection** — Accounting → **Upgrade Xero for invoices** (adds `accounting.transactions`). Required once after phase 1 connect.
+1. **Upgrade connection** — Accounting → **Upgrade Xero for invoices** (adds `accounting.invoices`). Required once after phase 1 connect.
 2. **Sales account code** — In Vercel / `.env.local`:
 
    ```env
@@ -92,6 +92,34 @@ After a **paid** Stripe order:
 
 Orders without invoice permission stay `xero_sync_status=skipped` until you upgrade and retry.
 
+## Phase 3 — Paid in Xero + refund credit notes
+
+After the sales invoice is created:
+
+1. Record a **payment** on the invoice (same total as the order) so Xero shows **Paid**, not “Awaiting payment”.
+2. On **Stripe refund** (admin), create an **ACCRECCREDIT** credit note allocated to that invoice.
+
+### Extra env
+
+```env
+XERO_BANK_ACCOUNT_CODE=090
+```
+
+Use the **Account code** of the bank account you use for Stripe settlements (Xero → Accounting → Chart of accounts → type Bank). Common codes vary by organisation (not always `090`).
+
+### Database
+
+Run `supabase/sql-editor/xero_payments_refunds.sql` (or migration `20260522_xero_payments_refunds.sql`), then reload schema.
+
+### Backfill existing orders
+
+For orders already invoiced in Xero (e.g. still “Awaiting payment”):
+
+1. Set `XERO_BANK_ACCOUNT_CODE` on Vercel and redeploy.
+2. Admin: `POST /api/admin/xero/sync-order` with `{ "orderId": "<uuid>" }` — records payment if the invoice exists.
+
+Refunds after phase 3 create credit notes automatically; check `xero_credit_notes` on the order if sync fails (`xero_refund_sync_error`).
+
 ## Troubleshooting
 
 | Issue | Fix |
@@ -100,3 +128,5 @@ Orders without invoice permission stay `xero_sync_status=skipped` until you upgr
 | `Invalid OAuth state` | Connect again from Accounting (don’t open callback URL directly) |
 | Table `xero_connections` missing | Run SQL migration above |
 | Connect button missing | Set `XERO_CLIENT_ID` and `XERO_CLIENT_SECRET`, redeploy |
+| Invoice “Awaiting payment” in Xero | Set `XERO_BANK_ACCOUNT_CODE`, run sync-order for that order |
+| `XERO_BANK_ACCOUNT_CODE is not set` | Add bank account code from Chart of accounts |
