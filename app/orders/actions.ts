@@ -518,14 +518,36 @@ export async function placeStoreOrder(
     console.error("[placeStoreOrder] xero sync:", e);
   }
 
-  void sendStoreOrderConfirmationEmail({
+  let taxInvoicePdf: { filename: string; base64: string } | undefined;
+  if (xeroInvoiceNumber) {
+    try {
+      const { buildStoreTaxInvoicePdfForOrderId } = await import("@/lib/store-tax-invoice-for-order");
+      const pdfRes = await buildStoreTaxInvoicePdfForOrderId(orderId);
+      if (pdfRes.ok) {
+        taxInvoicePdf = {
+          filename: pdfRes.filename,
+          base64: pdfRes.buffer.toString("base64"),
+        };
+      } else {
+        console.error("[placeStoreOrder] tax invoice PDF:", pdfRes.error);
+      }
+    } catch (e) {
+      console.error("[placeStoreOrder] tax invoice PDF:", e);
+    }
+  }
+
+  const emailRes = await sendStoreOrderConfirmationEmail({
     to: customerEmail,
     customerName,
     orderNumber,
     trackingToken,
     totalFormatted,
     xeroInvoiceNumber,
+    taxInvoicePdf,
   });
+  if (!emailRes.ok) {
+    console.error("[placeStoreOrder] confirmation email:", emailRes.error);
+  }
 
   const trackUrl = `${siteBaseUrl()}/orders/track/${trackingToken}`;
   return { ok: true, orderNumber, trackingToken, trackUrl };

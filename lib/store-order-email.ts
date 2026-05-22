@@ -16,6 +16,8 @@ export async function sendStoreOrderConfirmationEmail(args: {
   totalFormatted: string;
   /** Xero tax invoice number when phase 2 sync succeeded. */
   xeroInvoiceNumber?: string;
+  /** Tax invoice PDF attachment (base64 content for Resend). */
+  taxInvoicePdf?: { filename: string; base64: string };
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL ?? "Boss Web <onboarding@resend.dev>";
@@ -29,7 +31,7 @@ export async function sendStoreOrderConfirmationEmail(args: {
     ? `Order confirmed — ${args.orderNumber} (Invoice ${invoiceNo})`
     : `Order confirmed — ${args.orderNumber}`;
   const invoiceLine = invoiceNo
-    ? `<p>Tax invoice number: <strong>${escapeHtml(invoiceNo)}</strong></p>`
+    ? `<p>Tax invoice number: <strong>${escapeHtml(invoiceNo)}</strong>${args.taxInvoicePdf ? " — PDF attached." : ""}</p>`
     : "";
   const html = `
     <p>Hi ${escapeHtml(args.customerName)},</p>
@@ -55,6 +57,16 @@ export async function sendStoreOrderConfirmationEmail(args: {
         to: [args.to],
         subject,
         html,
+        ...(args.taxInvoicePdf
+          ? {
+              attachments: [
+                {
+                  filename: args.taxInvoicePdf.filename,
+                  content: args.taxInvoicePdf.base64,
+                },
+              ],
+            }
+          : {}),
       }),
     });
     const json = (await res.json().catch(() => ({}))) as { message?: string };
