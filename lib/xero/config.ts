@@ -15,8 +15,11 @@ const XERO_OAUTH_SCOPE_BASE = [
   "accounting.contacts",
 ] as const;
 
-/** Required for creating sales invoices (phase 2). */
-export const XERO_OAUTH_SCOPES_INVOICES = "accounting.transactions";
+/**
+ * Granular scope for invoices (replaces deprecated accounting.transactions on new Xero apps).
+ * @see https://developer.xero.com/faq/granular-scopes
+ */
+export const XERO_OAUTH_SCOPES_INVOICES = "accounting.invoices";
 
 /** Scopes for initial Connect (phase 1) — omit transactions if authorize fails. */
 export const XERO_OAUTH_SCOPES = [...XERO_OAUTH_SCOPE_BASE].join(" ");

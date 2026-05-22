@@ -64,7 +64,7 @@ Then **Settings → API → Reload schema**.
 - `openid`, `profile`, `email`, `offline_access` (refresh token)
 - `accounting.settings.read`, `accounting.contacts`
 
-`accounting.transactions` is added before phase 2 automatic invoices (may require disconnect + reconnect).
+`accounting.invoices` is added on upgrade (replaces legacy `accounting.transactions` on new Xero apps).
 
 If Connect shows `unauthorized_client`, confirm Client id start/end match Xero and redeploy after env changes.
 

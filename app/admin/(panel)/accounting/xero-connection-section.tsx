@@ -74,7 +74,7 @@ export function XeroConnectionSection({ connection, loadError }: Props) {
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
               <p>
                 Invoice permission is not granted yet. Click below to re-authorise (adds{" "}
-                <code className="text-xs">accounting.transactions</code>).
+                <code className="text-xs">accounting.invoices</code>).
               </p>
               <Link
                 href="/api/xero/connect?upgrade=1"
