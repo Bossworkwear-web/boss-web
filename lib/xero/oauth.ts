@@ -31,12 +31,12 @@ function basicAuthHeader(): string {
   return `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`;
 }
 
-export function buildXeroAuthorizeUrl(state: string, includeInvoices = false): string {
+export function buildXeroAuthorizeUrl(state: string, includeUpgradeScopes = false): string {
   const params = new URLSearchParams({
     response_type: "code",
     client_id: getXeroClientId(),
     redirect_uri: getXeroRedirectUri(),
-    scope: getXeroOAuthScopes(includeInvoices),
+    scope: getXeroOAuthScopes(includeUpgradeScopes),
     state,
   });
   return `${XERO_AUTHORIZE_URL}?${params.toString()}`;

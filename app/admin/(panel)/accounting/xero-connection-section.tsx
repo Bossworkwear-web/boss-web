@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { XeroConnectionPublic } from "@/lib/xero/connection-db";
 import {
   connectionHasInvoiceScope,
+  connectionHasPaymentScope,
   getXeroClientIdLength,
   getXeroClientIdPrefix,
   getXeroClientIdSuffix,
@@ -74,16 +75,33 @@ export function XeroConnectionSection({ connection, loadError }: Props) {
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
               <p>
                 Invoice permission is not granted yet. Click below to re-authorise (adds{" "}
-                <code className="text-xs">accounting.invoices</code>).
+                <code className="text-xs">accounting.invoices</code> and{" "}
+                <code className="text-xs">accounting.payments</code>).
               </p>
               <Link
                 href="/api/xero/connect?upgrade=1"
                 className="mt-3 inline-flex rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-orange/90"
               >
-                Upgrade Xero for invoices
+                Upgrade Xero for invoices &amp; payments
               </Link>
             </div>
           )}
+          {connectionHasInvoiceScope(connection.scopes) && !connectionHasPaymentScope(connection.scopes) ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              <p>
+                Payment recording needs <code className="text-xs">accounting.payments</code>. Re-authorise once
+                (keeps invoice access).
+              </p>
+              <Link
+                href="/api/xero/connect?upgrade=1"
+                className="mt-3 inline-flex rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-orange/90"
+              >
+                Upgrade Xero for payments
+              </Link>
+            </div>
+          ) : connectionHasPaymentScope(connection.scopes) ? (
+            <p className="text-sm text-emerald-800">Payment sync permission: enabled</p>
+          ) : null}
           <form action="/api/xero/disconnect" method="post">
             <button
               type="submit"

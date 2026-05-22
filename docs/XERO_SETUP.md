@@ -79,7 +79,7 @@ After a **paid** Stripe order:
 
 ### Extra setup
 
-1. **Upgrade connection** — Accounting → **Upgrade Xero for invoices** (adds `accounting.invoices`). Required once after phase 1 connect.
+1. **Upgrade connection** — Accounting → **Upgrade Xero for invoices & payments** (adds `accounting.invoices` and `accounting.payments`). Required once after phase 1 connect. Payments need the separate `accounting.payments` scope (invoice-only upgrade is not enough for Paid status).
 2. **Sales account code** — In Vercel / `.env.local`:
 
    ```env
@@ -130,3 +130,4 @@ Refunds after phase 3 create credit notes automatically; check `xero_credit_note
 | Connect button missing | Set `XERO_CLIENT_ID` and `XERO_CLIENT_SECRET`, redeploy |
 | Invoice “Awaiting payment” in Xero | Set `XERO_BANK_ACCOUNT_CODE`, run sync-order for that order |
 | `XERO_BANK_ACCOUNT_CODE is not set` | Add bank account code from Chart of accounts |
+| Xero API `401 Unauthorized` on payment | Accounting → **Upgrade Xero for payments** (`accounting.payments`), then retry sync-order |

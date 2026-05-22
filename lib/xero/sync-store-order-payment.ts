@@ -1,5 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase";
-import { connectionHasInvoiceScope } from "@/lib/xero/config";
+import { connectionHasInvoiceScope, connectionHasPaymentScope } from "@/lib/xero/config";
 import { getActiveXeroConnection } from "@/lib/xero/connection-db";
 import { recordPaymentForInvoice } from "@/lib/xero/payments";
 import { XeroApiError } from "@/lib/xero/api-client";
@@ -52,7 +52,20 @@ export async function recordStoreOrderPaymentInXero(
   }
 
   if (!connectionHasInvoiceScope(connection.scopes)) {
-    return { ok: false, error: "Xero invoice permission required.", skipped: true };
+    return {
+      ok: false,
+      error: "Reconnect Xero with invoice permission (Accounting → Upgrade Xero).",
+      skipped: true,
+    };
+  }
+
+  if (!connectionHasPaymentScope(connection.scopes)) {
+    return {
+      ok: false,
+      error:
+        "Xero payment permission missing. Accounting → Upgrade Xero for invoices (adds accounting.payments), then retry.",
+      skipped: true,
+    };
   }
 
   const totalCents = Math.max(0, Number(order.total_cents) || 0);

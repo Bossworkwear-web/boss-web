@@ -21,13 +21,17 @@ const XERO_OAUTH_SCOPE_BASE = [
  */
 export const XERO_OAUTH_SCOPES_INVOICES = "accounting.invoices";
 
+/** Record payments on invoices (separate from accounting.invoices on granular scopes). */
+export const XERO_OAUTH_SCOPES_PAYMENTS = "accounting.payments";
+
 /** Scopes for initial Connect (phase 1) — omit transactions if authorize fails. */
 export const XERO_OAUTH_SCOPES = [...XERO_OAUTH_SCOPE_BASE].join(" ");
 
-export function getXeroOAuthScopes(includeInvoices: boolean): string {
+/** Upgrade / phase 2+ adds invoices + payments (and credit notes via invoices scope). */
+export function getXeroOAuthScopes(includeUpgradeScopes: boolean): string {
   const scopes: string[] = [...XERO_OAUTH_SCOPE_BASE];
-  if (includeInvoices) {
-    scopes.push(XERO_OAUTH_SCOPES_INVOICES);
+  if (includeUpgradeScopes) {
+    scopes.push(XERO_OAUTH_SCOPES_INVOICES, XERO_OAUTH_SCOPES_PAYMENTS);
   }
   return scopes.join(" ");
 }
@@ -35,6 +39,11 @@ export function getXeroOAuthScopes(includeInvoices: boolean): string {
 export function connectionHasInvoiceScope(scopes: string | null): boolean {
   const s = scopes ?? "";
   return s.includes(XERO_OAUTH_SCOPES_INVOICES) || s.includes("accounting.transactions");
+}
+
+export function connectionHasPaymentScope(scopes: string | null): boolean {
+  const s = scopes ?? "";
+  return s.includes(XERO_OAUTH_SCOPES_PAYMENTS) || s.includes("accounting.transactions");
 }
 
 export const XERO_OAUTH_STATE_COOKIE = "boss_xero_oauth_state";
