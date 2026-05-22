@@ -56,7 +56,18 @@ export async function syncStoreOrderToXero(storeOrderId: string): Promise<SyncSt
   }
 
   if (order.xero_invoice_id) {
-    return { ok: false, error: "Order already has a Xero invoice.", skipped: true };
+    const payRes = await recordStoreOrderPaymentInXero(storeOrderId);
+    if (!payRes.ok) {
+      return { ok: false, error: payRes.error, skipped: payRes.skipped };
+    }
+    return {
+      ok: true,
+      invoiceNumber: (order.xero_invoice_number ?? "").trim() || "—",
+      invoiceId: order.xero_invoice_id,
+      contactId: (order.xero_contact_id ?? "").trim(),
+      paymentRecorded: Boolean(payRes.paymentId),
+      paymentAlreadyPaid: payRes.alreadyPaid,
+    };
   }
 
   if (order.status !== "paid") {
