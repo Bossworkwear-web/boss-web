@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 
-import { submitStoreOrderInvoiceReferenceForm } from "@/app/admin/(panel)/store-orders/actions";
+import {
+  resendStoreOrderInvoiceEmail,
+  submitStoreOrderInvoiceReferenceForm,
+} from "@/app/admin/(panel)/store-orders/actions";
 
 const TRACKING_TOKEN_RE = /^[0-9a-f-]{36}$/i;
 
@@ -38,6 +41,8 @@ export function StoreOrderInvoiceReferenceForm({
 }) {
   const [reference, setReference] = useState(() => initialReference ?? "");
   const [invoicePreviewOpen, setInvoicePreviewOpen] = useState(false);
+  const [resendMsg, setResendMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [resendPending, startResend] = useTransition();
 
   const orderIdOk =
     typeof taxInvoicePreviewOrderId === "string" &&
@@ -105,7 +110,41 @@ export function StoreOrderInvoiceReferenceForm({
             Show Invoice
           </button>
         ) : null}
+        <button
+          type="button"
+          disabled={!hasInvoiceReferenceText || resendPending}
+          title={
+            hasInvoiceReferenceText
+              ? "Email tax invoice PDF to the customer"
+              : "Enter or sync an invoice number first"
+          }
+          className={`rounded border border-brand-orange/40 bg-brand-orange/10 px-2 py-1 ${btnTextClass} font-semibold whitespace-nowrap text-brand-navy shadow-sm hover:bg-brand-orange/20 disabled:cursor-not-allowed disabled:opacity-50`}
+          onClick={() => {
+            setResendMsg(null);
+            startResend(async () => {
+              const res = await resendStoreOrderInvoiceEmail(orderId);
+              if (res.ok) {
+                setResendMsg({ kind: "ok", text: "Invoice email sent." });
+              } else {
+                setResendMsg({ kind: "err", text: res.error });
+              }
+            });
+          }}
+        >
+          {resendPending ? "Sending…" : "Resend invoice email"}
+        </button>
       </div>
+      {resendMsg ? (
+        <p
+          className={
+            resendMsg.kind === "ok"
+              ? `${btnTextClass} text-emerald-700`
+              : `${btnTextClass} text-red-700`
+          }
+        >
+          {resendMsg.text}
+        </p>
+      ) : null}
     </>
   );
 

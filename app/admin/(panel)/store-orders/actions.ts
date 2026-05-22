@@ -11,6 +11,8 @@ export type MoveStoreOrderToWarehouseResult = { ok: true } | { ok: false; error:
 
 export type UpdateInvoiceReferenceResult = { ok: true } | { ok: false; error: string };
 
+export type ResendInvoiceEmailResult = { ok: true } | { ok: false; error: string };
+
 const INVOICE_REFERENCE_MAX = 500;
 
 /** Optional value shown on customer tax invoice as “Invoice number” (Order ID stays `order_number`). */
@@ -55,6 +57,23 @@ export async function updateStoreOrderInvoiceReference(
   /** So admin lists (e.g. Customer Invoices) refetch RSC payload instead of showing stale `invoice_reference`. */
   refresh();
   return { ok: true };
+}
+
+/** Admin: resend tax invoice PDF email to the customer (Resend). */
+export async function resendStoreOrderInvoiceEmail(orderId: string): Promise<ResendInvoiceEmailResult> {
+  try {
+    await assertAdminSession();
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const { resendStoreOrderTaxInvoiceEmail } = await import("@/lib/store-order-invoice-email");
+  const res = await resendStoreOrderTaxInvoiceEmail(orderId);
+  if (res.ok) {
+    revalidatePath("/admin/store-orders");
+    revalidatePath("/admin/customer-invoices");
+  }
+  return res;
 }
 
 function sanitizeAdminReturnTo(raw: string): string | null {
