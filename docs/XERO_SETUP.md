@@ -68,9 +68,29 @@ Then **Settings → API → Reload schema**.
 
 If Connect shows `unauthorized_client`, confirm Client id start/end match Xero and redeploy after env changes.
 
-## Phase 2 (planned)
+## Phase 2 — automatic invoices (deployed)
 
-After Stripe payment: create/update Xero contact, create **AUTHORISED** sales invoice, store `xero_invoice_number` on the order and copy to `invoice_reference` for PDFs, email customer.
+After a **paid** Stripe order:
+
+1. Create or match Xero **contact** (customer email)
+2. Create **AUTHORISED** sales invoice (GST-inclusive line amounts)
+3. Save `xero_invoice_number` and copy to `invoice_reference` for tax invoice PDFs
+4. Mention invoice number in the order confirmation email (when sync succeeds)
+
+### Extra setup
+
+1. **Upgrade connection** — Accounting → **Upgrade Xero for invoices** (adds `accounting.transactions`). Required once after phase 1 connect.
+2. **Sales account code** — In Vercel / `.env.local`:
+
+   ```env
+   XERO_SALES_ACCOUNT_CODE=200
+   ```
+
+   Use the **Account code** for sales/revenue in Xero → Accounting → Chart of accounts (often `200`).
+
+3. Admin **retry**: `POST /api/admin/xero/sync-order` with JSON `{ "orderId": "<uuid>" }`.
+
+Orders without invoice permission stay `xero_sync_status=skipped` until you upgrade and retry.
 
 ## Troubleshooting
 

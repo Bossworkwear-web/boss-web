@@ -14,6 +14,8 @@ export async function sendStoreOrderConfirmationEmail(args: {
   orderNumber: string;
   trackingToken: string;
   totalFormatted: string;
+  /** Xero tax invoice number when phase 2 sync succeeded. */
+  xeroInvoiceNumber?: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL ?? "Boss Web <onboarding@resend.dev>";
@@ -22,10 +24,17 @@ export async function sendStoreOrderConfirmationEmail(args: {
   }
 
   const trackUrl = `${siteBaseUrl()}/orders/track/${args.trackingToken}`;
-  const subject = `Order confirmed — ${args.orderNumber}`;
+  const invoiceNo = (args.xeroInvoiceNumber ?? "").trim();
+  const subject = invoiceNo
+    ? `Order confirmed — ${args.orderNumber} (Invoice ${invoiceNo})`
+    : `Order confirmed — ${args.orderNumber}`;
+  const invoiceLine = invoiceNo
+    ? `<p>Tax invoice number: <strong>${escapeHtml(invoiceNo)}</strong></p>`
+    : "";
   const html = `
     <p>Hi ${escapeHtml(args.customerName)},</p>
     <p>Your customer order ID is <strong>${escapeHtml(args.orderNumber)}</strong> — keep it for invoices and support.</p>
+    ${invoiceLine}
     <p>Total: <strong>${escapeHtml(args.totalFormatted)}</strong></p>
     <p>You can check status and tracking any time:</p>
     <p><a href="${escapeHtml(trackUrl)}">View order &amp; delivery tracking</a></p>

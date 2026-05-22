@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import type { XeroConnectionPublic } from "@/lib/xero/connection-db";
 import {
+  connectionHasInvoiceScope,
   getXeroClientIdLength,
   getXeroClientIdPrefix,
   getXeroClientIdSuffix,
@@ -36,8 +37,8 @@ export function XeroConnectionSection({ connection, loadError }: Props) {
     <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-medium text-brand-navy">Xero connection</h2>
       <p className="mt-2 max-w-2xl text-sm text-slate-600">
-        Phase 1: connect your Xero organisation so the site can create sales invoices automatically (phase 2).
-        Invoice numbers will come from <strong>Xero</strong>, not the web store.
+        Paid store orders can create <strong>AUTHORISED</strong> sales invoices in Xero. Invoice numbers come from{" "}
+        <strong>Xero</strong> and are copied to the order for tax invoice PDFs.
       </p>
 
       {loadError ? (
@@ -67,6 +68,22 @@ export function XeroConnectionSection({ connection, loadError }: Props) {
               Token refreshed / saved: {formatPerthDateTime(connection.updated_at)}
             </p>
           </div>
+          {connectionHasInvoiceScope(connection.scopes) ? (
+            <p className="text-sm text-emerald-800">Invoice sync permission: enabled</p>
+          ) : (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              <p>
+                Invoice permission is not granted yet. Click below to re-authorise (adds{" "}
+                <code className="text-xs">accounting.transactions</code>).
+              </p>
+              <Link
+                href="/api/xero/connect?upgrade=1"
+                className="mt-3 inline-flex rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-orange/90"
+              >
+                Upgrade Xero for invoices
+              </Link>
+            </div>
+          )}
           <form action="/api/xero/disconnect" method="post">
             <button
               type="submit"

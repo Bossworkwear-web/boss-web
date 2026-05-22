@@ -7,7 +7,7 @@ import { getSiteUrl } from "@/lib/site-url";
 import { XERO_OAUTH_STATE_COOKIE } from "@/lib/xero/config";
 import { buildXeroAuthorizeUrl } from "@/lib/xero/oauth";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await assertAdminSession();
   } catch {
@@ -15,6 +15,8 @@ export async function GET() {
   }
 
   try {
+    const url = new URL(request.url);
+    const includeInvoices = url.searchParams.get("upgrade") === "1" || url.searchParams.get("invoices") === "1";
     const state = randomBytes(24).toString("hex");
     const cookieStore = await cookies();
     cookieStore.set(XERO_OAUTH_STATE_COOKIE, state, {
@@ -25,7 +27,7 @@ export async function GET() {
       path: "/",
     });
 
-    return NextResponse.redirect(buildXeroAuthorizeUrl(state));
+    return NextResponse.redirect(buildXeroAuthorizeUrl(state, includeInvoices));
   } catch (e) {
     const msg = encodeURIComponent(e instanceof Error ? e.message : "Xero connect failed");
     return NextResponse.redirect(`${getSiteUrl()}/admin/accounting?xero_error=${msg}`);

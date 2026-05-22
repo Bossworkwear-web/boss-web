@@ -2,9 +2,9 @@ import {
   getXeroClientId,
   getXeroClientSecret,
   getXeroRedirectUri,
+  getXeroOAuthScopes,
   XERO_AUTHORIZE_URL,
   XERO_CONNECTIONS_URL,
-  XERO_OAUTH_SCOPES,
   XERO_TOKEN_URL,
 } from "@/lib/xero/config";
 
@@ -31,12 +31,12 @@ function basicAuthHeader(): string {
   return `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`;
 }
 
-export function buildXeroAuthorizeUrl(state: string): string {
+export function buildXeroAuthorizeUrl(state: string, includeInvoices = false): string {
   const params = new URLSearchParams({
     response_type: "code",
     client_id: getXeroClientId(),
     redirect_uri: getXeroRedirectUri(),
-    scope: XERO_OAUTH_SCOPES,
+    scope: getXeroOAuthScopes(includeInvoices),
     state,
   });
   return `${XERO_AUTHORIZE_URL}?${params.toString()}`;

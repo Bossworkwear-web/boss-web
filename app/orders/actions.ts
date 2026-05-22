@@ -505,12 +505,26 @@ export async function placeStoreOrder(
   revalidatePath("/admin/click-up-sheet");
 
   const totalFormatted = formatMoneyFromCents(totalCents, "AUD");
+  let xeroInvoiceNumber: string | undefined;
+  try {
+    const { syncStoreOrderToXero } = await import("@/lib/xero/sync-store-order");
+    const xeroRes = await syncStoreOrderToXero(orderId);
+    if (xeroRes.ok) {
+      xeroInvoiceNumber = xeroRes.invoiceNumber;
+    } else if (!xeroRes.skipped) {
+      console.error("[placeStoreOrder] xero sync:", xeroRes.error);
+    }
+  } catch (e) {
+    console.error("[placeStoreOrder] xero sync:", e);
+  }
+
   void sendStoreOrderConfirmationEmail({
     to: customerEmail,
     customerName,
     orderNumber,
     trackingToken,
     totalFormatted,
+    xeroInvoiceNumber,
   });
 
   const trackUrl = `${siteBaseUrl()}/orders/track/${trackingToken}`;

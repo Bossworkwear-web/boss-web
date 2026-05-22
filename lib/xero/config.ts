@@ -6,21 +6,32 @@ export const XERO_AUTHORIZE_URL = "https://login.xero.com/identity/connect/autho
 export const XERO_TOKEN_URL = "https://identity.xero.com/connect/token";
 export const XERO_CONNECTIONS_URL = "https://api.xero.com/connections";
 
-/** Scopes requested at Connect (phase 1). */
-export const XERO_OAUTH_SCOPES = [
+const XERO_OAUTH_SCOPE_BASE = [
   "openid",
   "profile",
   "email",
   "offline_access",
   "accounting.settings.read",
   "accounting.contacts",
-].join(" ");
+] as const;
 
-/**
- * Added before phase 2 invoice sync — reconnect Xero after enabling.
- * Some tenants hit unauthorized_client when accounting.transactions is in the initial authorize URL.
- */
+/** Required for creating sales invoices (phase 2). */
 export const XERO_OAUTH_SCOPES_INVOICES = "accounting.transactions";
+
+/** Scopes for initial Connect (phase 1) — omit transactions if authorize fails. */
+export const XERO_OAUTH_SCOPES = [...XERO_OAUTH_SCOPE_BASE].join(" ");
+
+export function getXeroOAuthScopes(includeInvoices: boolean): string {
+  const scopes: string[] = [...XERO_OAUTH_SCOPE_BASE];
+  if (includeInvoices) {
+    scopes.push(XERO_OAUTH_SCOPES_INVOICES);
+  }
+  return scopes.join(" ");
+}
+
+export function connectionHasInvoiceScope(scopes: string | null): boolean {
+  return (scopes ?? "").includes(XERO_OAUTH_SCOPES_INVOICES);
+}
 
 export const XERO_OAUTH_STATE_COOKIE = "boss_xero_oauth_state";
 
