@@ -3,7 +3,22 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** Absolute project root — avoids Turbopack mis-inferring `app/` when the repo path has spaces. */
-const projectRoot = path.dirname(fileURLToPath(import.meta.url));
+function getProjectRoot(): string {
+  if (process.env.VERCEL) {
+    return process.cwd();
+  }
+  try {
+    const url = import.meta.url;
+    if (typeof url === "string" && url.length > 0) {
+      return path.dirname(fileURLToPath(url));
+    }
+  } catch {
+    // fall through
+  }
+  return process.cwd();
+}
+
+const projectRoot = getProjectRoot();
 /** On Vercel, forcing `turbopack.root` can break the deployed output (edge returns NOT_FOUND). Only use locally when needed. */
 const useCustomTurbopackRoot = !process.env.VERCEL && projectRoot.includes(" ");
 
