@@ -6,6 +6,7 @@ import { playStorefrontChatGuestDing } from "@/lib/storefront-chat-admin-sound";
 import {
   STOREFRONT_CHAT_STATUS_CLOSED,
   STOREFRONT_CHAT_STATUS_OPEN,
+  isStorefrontChatAssistantMessage,
   isStorefrontChatSystemMessage,
   isStorefrontChatThreadClosed,
 } from "@/lib/storefront-chat-status";
@@ -316,6 +317,7 @@ export function StorefrontChatAdminClient() {
                 {messages.map((m) => {
                   const staff = m.sender === "staff";
                   const system = isStorefrontChatSystemMessage(m.staff_identifier);
+                  const assistant = isStorefrontChatAssistantMessage(m.staff_identifier);
                   if (system) {
                     return (
                       <div key={m.id} className="flex justify-center py-1">
@@ -334,7 +336,9 @@ export function StorefrontChatAdminClient() {
                       >
                         {staff ? (
                           <p className="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-white/70">
-                            Staff{m.staff_identifier ? ` (${m.staff_identifier})` : ""}
+                            {assistant
+                              ? "Virtual assistant"
+                              : `Staff${m.staff_identifier ? ` (${m.staff_identifier})` : ""}`}
                           </p>
                         ) : (
                           <p className="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500">

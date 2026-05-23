@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { maybeReplyWithStorefrontChatAssistant } from "@/lib/storefront-chat-assistant";
 import { bumpStorefrontChatThreadUpdatedAt } from "@/lib/storefront-chat-db";
 import { requireStorefrontCustomerEmail } from "@/lib/storefront-chat-customer-session";
 import { isStorefrontChatThreadClosed } from "@/lib/storefront-chat-status";
@@ -129,6 +130,16 @@ export async function POST(request: Request) {
   }
 
   await bumpStorefrontChatThreadUpdatedAt(supabase, thread.id);
+
+  try {
+    await maybeReplyWithStorefrontChatAssistant(supabase, {
+      threadId: thread.id,
+      customerEmail: emailNorm,
+      guestMessage: text,
+    });
+  } catch (err) {
+    console.error("[storefront/chat/messages] assistant reply failed", err);
+  }
 
   return NextResponse.json({ ok: true as const });
 }

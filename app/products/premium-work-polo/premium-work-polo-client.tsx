@@ -2925,6 +2925,7 @@ export function PremiumWorkPoloClient({
         </div>
         <button
           type="button"
+          data-cyber-guide="pdp-add-to-cart"
           disabled={cartSubmitBusy}
           onClick={() => void handleAddToCart()}
           className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-white/25 bg-white/10 px-5 py-3 text-[1.26rem] font-medium text-white transition hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
@@ -2945,6 +2946,7 @@ export function PremiumWorkPoloClient({
     const isMobile = placement === "mobile";
     return (
       <header
+        {...(placement === "desktop" ? { "data-cyber-guide": "pdp-header" } : {})}
         className={
           isMobile
             ? "product-detail-meta-header order-1 space-y-1.5 max-lg:[&_.product-detail-google-rating]:text-[calc(1.2rem*0.6)] lg:hidden"
@@ -3005,7 +3007,10 @@ export function PremiumWorkPoloClient({
         <section className={`${SITE_PAGE_INSET_X_CLASS} pb-6 pt-6 sm:pb-10 sm:pt-10`}>
         <div className="mx-auto grid w-full max-w-none grid-cols-1 gap-8 lg:grid-cols-[1fr_1fr] lg:gap-10">
         {renderProductMetaHeader("mobile")}
-        <section className="order-2 space-y-3 sm:space-y-4 lg:col-start-1 lg:row-start-1 lg:self-start">
+        <section
+          data-cyber-guide="pdp-gallery"
+          className="order-2 space-y-3 sm:space-y-4 lg:col-start-1 lg:row-start-1 lg:self-start"
+        >
           <button
             type="button"
             onClick={() => activeImage && setHeroLightboxOpen(true)}
@@ -3232,7 +3237,7 @@ export function PremiumWorkPoloClient({
             </div>
           ) : null}
 
-          <div className="space-y-3">
+          <div data-cyber-guide="pdp-colour" className="space-y-3">
             <div className="flex flex-wrap items-end justify-between gap-2">
               <h2 className="text-[1.26rem] font-medium uppercase tracking-[0.1em] text-brand-navy/75">
                 1. Colour
@@ -3283,7 +3288,7 @@ export function PremiumWorkPoloClient({
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div data-cyber-guide="pdp-size" className="space-y-3">
             <h2 className="text-[1.26rem] font-medium uppercase tracking-[0.1em] text-brand-navy/75">
               2. Size &amp; quantity
             </h2>
@@ -3357,7 +3362,7 @@ export function PremiumWorkPoloClient({
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div data-cyber-guide="pdp-service" className="space-y-3">
             <h2 className="text-[1.26rem] font-medium uppercase tracking-[0.1em] text-brand-navy/75">
               3. Service Type
             </h2>
@@ -3450,7 +3455,7 @@ export function PremiumWorkPoloClient({
 
           {showDecoratedServiceFlow && (
             <>
-              <div className="space-y-3">
+              <div data-cyber-guide="pdp-placement" className="space-y-3">
                 <h2 className="text-[1.26rem] font-medium uppercase tracking-[0.1em] text-brand-navy/75">
                   4. Placement Selector
                 </h2>
@@ -3543,7 +3548,7 @@ export function PremiumWorkPoloClient({
                 </div>
               </div>
 
-              <div className="space-y-3">
+              <div data-cyber-guide="pdp-logo" className="space-y-3">
                 <h2 className="text-[1.26rem] font-medium uppercase tracking-[0.1em] text-brand-navy/75">
                   5. Logo Upload
                 </h2>

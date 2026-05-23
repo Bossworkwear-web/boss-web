@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { CategoryBrowseTitle } from "@/app/components/category-browse-title";
 import { CategorySubcategoryPicker } from "@/app/components/category-subcategory-picker";
 import { CategoryBrandFilter } from "@/app/components/category-brand-filter";
+import { CategoryBrowseProductsGrid } from "@/app/components/category-browse-products-grid";
 import { CategoryGetAQuoteCta } from "@/app/components/category-get-a-quote-cta";
 import { CategoryPaginationPageSummary } from "@/app/components/category-pagination-page-summary";
 import { ProductGridPriceCells } from "@/app/components/product-grid-price";
@@ -22,7 +23,6 @@ import { getDiscountPercent } from "@/lib/discounts";
 import { categoryBrowseCardImageUrl } from "@/lib/category-browse-card-image";
 import { getMainCategory, getSubCategoriesForMain, HEALTH_CARE_MAIN_SLUG, SUB_CATEGORIES } from "@/lib/catalog";
 import {
-  CATEGORY_BROWSE_GRID_CLASS,
   CATEGORY_BROWSE_PAGE_SIZE,
   filterProductsForSubCategoryBrowse,
   resolveChefCategoryBrowseSubSlug,
@@ -324,9 +324,9 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
         {slug === HEALTH_CARE_MAIN_SLUG ? <HealthCareCategoryTopAd /> : null}
         {slug === "ppe" ? <PpeCategoryTopAd /> : null}
         {slug === "chef" ? <ChefCategoryTopAd /> : null}
-        <section className={`${SITE_PAGE_ROW_CLASS} pb-10 pt-0`}>
+        <section className={`category-browse-panel ${SITE_PAGE_ROW_CLASS} pb-10 pt-0`}>
           <CategoryGetAQuoteCta />
-          <header className="mb-7 mt-10 space-y-6">
+          <header data-cyber-guide="cat-header" className="mb-7 mt-10 space-y-6">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-brand-navy/70">Category</p>
             <div className="flex flex-wrap items-center justify-between gap-4">
               <CategoryBrowseTitle>
@@ -334,7 +334,9 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
                 <span className="text-brand-navy/50"> / </span>
                 {subMeta.label}
               </CategoryBrowseTitle>
-              <CategoryBrandFilter brands={brandsForDropdown} />
+              <div data-cyber-guide="cat-brand-filter">
+                <CategoryBrandFilter brands={brandsForDropdown} />
+              </div>
             </div>
             <div className="space-y-1.5">
               <p className="text-sm text-brand-navy/65">
@@ -350,14 +352,16 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
             </div>
           </header>
 
-          <CategorySubcategoryPicker
-            mainSlug={slug}
-            mainLabel={main.label}
-            subs={subsForMain}
-            activeSubSlug={subMeta.slug}
-          />
+          <div data-cyber-guide="cat-subcategories">
+            <CategorySubcategoryPicker
+              mainSlug={slug}
+              mainLabel={main.label}
+              subs={subsForMain}
+              activeSubSlug={subMeta.slug}
+            />
+          </div>
 
-          <div className={CATEGORY_BROWSE_GRID_CLASS}>
+          <CategoryBrowseProductsGrid>
             {pageItems.map((item) => {
               const discountPercent = getDiscountPercent(item.name);
               const listPrice = storefrontRetailFromSupplierBase(item.base_price);
@@ -433,14 +437,17 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
                 </ProductNavLink>
               );
             })}
-          </div>
+          </CategoryBrowseProductsGrid>
 
           {totalPages > 1 && sorted.length > 0 ? (
             <nav
               className="mt-10 w-full max-w-full min-w-0 border-t border-brand-navy/10 pt-8 text-[1.05rem] leading-snug"
               aria-label="Product list pagination"
             >
-              <div className="flex w-full max-w-full min-w-0 flex-wrap items-center justify-center gap-4">
+              <div
+                data-cyber-guide="cat-pagination"
+                className="flex w-full max-w-full min-w-0 flex-wrap items-center justify-center gap-4"
+              >
               {currentPage > 1 ? (
                 <Link
                   href={subPageHref(slug, subSlug, currentPage - 1, brandParamEffective, sortEffective)}

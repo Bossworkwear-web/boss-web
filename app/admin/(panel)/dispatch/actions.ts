@@ -230,6 +230,8 @@ export async function completeDispatchQueueRow(formData: FormData): Promise<void
   if (result.trackingToken) {
     revalidatePath(`/orders/track/${result.trackingToken}`);
   }
+  revalidatePath("/admin/online-orders");
+  revalidatePath("/admin/instore-orders");
   revalidatePath("/admin/store-orders");
   redirect("/admin/complete-orders");
 }

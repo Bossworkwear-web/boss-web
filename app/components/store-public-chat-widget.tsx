@@ -6,13 +6,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getBrowserCookie } from "@/lib/customer-browser-cookie";
 import {
+  dispatchStorefrontChatLayout,
+} from "@/lib/storefront-chat-layout";
+import {
+  isStorefrontChatAssistantMessage,
   isStorefrontChatSystemMessage,
   isStorefrontChatThreadClosed,
 } from "@/lib/storefront-chat-status";
 
-const STORAGE_KEY = "bossworkwear_storefront_chat_visitor_id";
+/** Chat panel copy — 30% larger than default xs/sm (0.75rem / 0.875rem). */
+const CHAT_TEXT_XS = "text-[0.975rem]";
+const CHAT_TEXT_SM = "text-[1.1375rem]";
+const CHAT_TEXT_SYSTEM = "text-[0.91rem]";
+const CHAT_TEXT_META = "text-[0.845rem]";
 const POLL_MS = 3500;
 const CHAT_Z = "z-[115]";
+/** Bump when replacing `public/storefront-chat/fab.png`. */
+const CHAT_FAB_SRC = "/storefront-chat/fab.png?v=20260525";
 
 type ChatRow = {
   id: string;
@@ -60,6 +70,7 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setVisitorKey(getOrCreateVisitorId());
@@ -224,6 +235,30 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
 
   const showPanel = open || closing;
 
+  useEffect(() => {
+    if (!showPanel) {
+      dispatchStorefrontChatLayout({ open: false, height: 0 });
+      return;
+    }
+
+    const measure = () => {
+      const height = panelRef.current?.getBoundingClientRect().height ?? 0;
+      dispatchStorefrontChatLayout({ open: true, height });
+    };
+
+    measure();
+    const panel = panelRef.current;
+    const ro = panel ? new ResizeObserver(measure) : null;
+    if (panel && ro) {
+      ro.observe(panel);
+    }
+    window.addEventListener("resize", measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [showPanel]);
+
   const openPanel = useCallback(() => {
     setClosing(false);
     setOpen(true);
@@ -253,8 +288,8 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
   );
 
   const title = "Chat with US";
-  const fabClass = `storefront-chat-fab-enter fixed bottom-5 right-5 ${CHAT_Z} flex h-14 w-14 items-center justify-center rounded-full border border-brand-navy/15 bg-brand-navy text-white shadow-lg transition hover:bg-brand-navy/95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2`;
-  const panelClass = `fixed bottom-5 right-5 ${CHAT_Z} flex max-h-[min(52rem,90vh)] w-[min(22rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-brand-navy/15 bg-white shadow-2xl`;
+  const fabClass = `storefront-chat-fab-enter fixed bottom-5 right-5 ${CHAT_Z} flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full shadow-lg transition hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2`;
+  const panelClass = `storefront-chat-panel fixed bottom-5 right-5 ${CHAT_Z} flex max-h-[min(52rem,90vh)] w-[min(22rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-brand-navy/15 bg-white shadow-2xl`;
 
   return (
     <div className="print:hidden">
@@ -267,12 +302,19 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
           aria-expanded={false}
           aria-label={title}
         >
-          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-          </svg>
+          {/* eslint-disable-next-line @next/next/no-img-element -- fixed FAB asset; plain img avoids Image SSR hydration drift */}
+          <img
+            src={CHAT_FAB_SRC}
+            alt=""
+            width={56}
+            height={56}
+            className="h-14 w-14 object-cover"
+            decoding="async"
+          />
         </button>
       ) : (
         <div
+          ref={panelRef}
           className={`${panelClass} ${closing ? "storefront-chat-panel-exit" : "storefront-chat-panel-enter"}`}
           role="dialog"
           aria-label="Store chat"
@@ -281,18 +323,18 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
         >
           <div className="border-b border-brand-navy/10 bg-brand-navy px-3 py-2.5 text-white">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold">{title}</p>
+              <p className={`${CHAT_TEXT_SM} font-semibold`}>{title}</p>
               <button
                 type="button"
                 onClick={closePanel}
-                className="rounded-lg px-2 py-1 text-xs font-medium text-white/90 hover:bg-white/10"
+                className={`rounded-lg px-2 py-1 ${CHAT_TEXT_XS} font-medium text-white/90 hover:bg-white/10`}
                 aria-label="Close chat"
               >
                 Close
               </button>
             </div>
             {signedIn ? (
-              <p className="mt-1.5 text-sm font-medium text-white/90">
+              <p className={`mt-1.5 ${CHAT_TEXT_SM} font-medium text-white/90`}>
                 Hi, {customerDisplayName ? customerDisplayName : "there"}
               </p>
             ) : null}
@@ -300,16 +342,16 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
 
           {!signedIn ? (
             <div className="min-h-[min(14rem,24vh)] space-y-3 px-4 py-5">
-              <p className="text-sm leading-relaxed text-brand-navy/85">
+              <p className={`${CHAT_TEXT_SM} leading-relaxed text-brand-navy/85`}>
                 Sign in to your account to send messages and see replies from our team.
               </p>
               <Link
                 href="/log-in"
-                className="inline-flex w-full items-center justify-center rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-semibold text-brand-navy transition hover:bg-brand-orange/90"
+                className={`inline-flex w-full items-center justify-center rounded-xl bg-brand-orange px-4 py-2.5 ${CHAT_TEXT_SM} font-semibold text-brand-navy transition hover:bg-brand-orange/90`}
               >
                 Sign in
               </Link>
-              <p className="text-xs text-brand-navy/60">
+              <p className={`${CHAT_TEXT_XS} text-brand-navy/60`}>
                 After signing in, open this window again — or it will connect automatically within a few seconds.
               </p>
             </div>
@@ -320,17 +362,19 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
                 className="min-h-[min(22rem,40vh)] flex-1 max-h-[min(44rem,80vh)] space-y-2 overflow-y-auto px-3 py-3"
               >
                 {messages.length === 0 ? (
-                  <p className="text-xs leading-relaxed text-brand-navy/70">
-                    Send us a message — our team will reply here when they are available.
+                  <p className={`${CHAT_TEXT_XS} leading-relaxed text-brand-navy/70`}>
+                    Ask about orders, delivery, or quotes — our virtual assistant replies in English right away,
+                    and our team can follow up here when needed.
                   </p>
                 ) : (
                   messages.map((m) => {
                     const mine = m.sender === "guest";
                     const system = isStorefrontChatSystemMessage(m.staff_identifier);
+                    const assistant = isStorefrontChatAssistantMessage(m.staff_identifier);
                     if (system) {
                       return (
                         <div key={m.id} className="flex justify-center px-1 py-1">
-                          <p className="max-w-[95%] rounded-xl bg-brand-surface px-3 py-2 text-center text-[0.7rem] leading-relaxed text-brand-navy/75">
+                          <p className={`max-w-[95%] rounded-xl bg-brand-surface px-3 py-2 text-center ${CHAT_TEXT_SYSTEM} leading-relaxed text-brand-navy/75`}>
                             {m.body}
                           </p>
                         </div>
@@ -339,13 +383,13 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
                     return (
                       <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                         <div
-                          className={`max-w-[85%] rounded-2xl px-3 py-2 text-xs leading-relaxed ${
+                          className={`max-w-[85%] rounded-2xl px-3 py-2 ${CHAT_TEXT_XS} leading-relaxed ${
                             mine ? "bg-brand-orange text-brand-navy" : "bg-brand-surface text-brand-navy"
                           }`}
                         >
                           {!mine && (
-                            <p className="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-brand-navy/55">
-                              Boss Workwear
+                            <p className={`${CHAT_TEXT_META} mb-1 font-semibold uppercase tracking-wide text-brand-navy/55`}>
+                              {assistant ? "Virtual assistant" : "Boss Workwear"}
                             </p>
                           )}
                           <p className="whitespace-pre-wrap break-words">{m.body}</p>
@@ -355,17 +399,17 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
                   })
                 )}
               </div>
-              {error ? <p className="px-3 pb-1 text-xs text-red-600">{error}</p> : null}
+              {error ? <p className={`px-3 pb-1 ${CHAT_TEXT_XS} text-red-600`}>{error}</p> : null}
               {threadClosed ? (
                 <div className="space-y-2 border-t border-brand-navy/10 p-3">
-                  <p className="text-center text-xs leading-relaxed text-brand-navy/75">
+                  <p className={`text-center ${CHAT_TEXT_XS} leading-relaxed text-brand-navy/75`}>
                     This conversation has ended. You cannot send more messages here.
                   </p>
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => void reopenConversation()}
-                    className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#ffb366] to-[#ff6600] px-4 py-2.5 text-sm font-semibold text-brand-navy disabled:opacity-50"
+                    className={`inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#ffb366] to-[#ff6600] px-4 py-2.5 ${CHAT_TEXT_SM} font-semibold text-brand-navy disabled:opacity-50`}
                   >
                     Start a new conversation
                   </button>
@@ -383,13 +427,13 @@ export function StorePublicChatWidget({ initialCustomerSignedIn }: { initialCust
                     }}
                     rows={2}
                     placeholder="Type a message…"
-                    className="min-h-[2.75rem] flex-1 resize-none rounded-xl border border-brand-navy/15 px-2 py-1.5 text-xs text-brand-navy"
+                    className={`min-h-[3.575rem] flex-1 resize-none rounded-xl border border-brand-navy/15 px-2 py-1.5 ${CHAT_TEXT_XS} text-brand-navy`}
                   />
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => void sendGuest()}
-                    className="shrink-0 self-end rounded-xl bg-brand-orange px-3 py-2 text-xs font-semibold text-brand-navy disabled:opacity-50"
+                    className={`shrink-0 self-end rounded-xl bg-brand-orange px-3 py-2 ${CHAT_TEXT_XS} font-semibold text-brand-navy disabled:opacity-50`}
                   >
                     Send
                   </button>

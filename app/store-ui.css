@@ -158,8 +158,17 @@
 }
 
 /* Grid item default min-width:auto prevents card innards from shrinking — allow truncation */
-.subcategory-browse-grid > a {
+.subcategory-browse-grid > a,
+.subcategory-browse-grid > .category-browse-grid-first-row > a {
   min-width: 0 !important;
+}
+
+/* Cyber-assist: highlight first product row only (subgrid aligns cards with parent columns). */
+.subcategory-browse-grid > .category-browse-grid-first-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  gap: var(--store-ui-browse-grid-gap);
 }
 
 /*

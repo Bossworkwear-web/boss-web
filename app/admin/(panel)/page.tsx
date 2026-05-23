@@ -80,16 +80,19 @@ export default async function AdminDashboardPage() {
                       key: "day",
                       title: "Daily",
                       subtitle: `Today (${orderStatsRes.stats.labels.asOfPerthYmd})`,
-                      href: buildStoreOrdersListHref(
-                        { ship: "all", from: orderStatsRes.stats.labels.asOfPerthYmd, to: orderStatsRes.stats.labels.asOfPerthYmd, q: "" },
-                      ),
+                      href: buildStoreOrdersListHref("/admin/online-orders", {
+                        ship: "all",
+                        from: orderStatsRes.stats.labels.asOfPerthYmd,
+                        to: orderStatsRes.stats.labels.asOfPerthYmd,
+                        q: "",
+                      }),
                       bucket: orderStatsRes.stats.day,
                     },
                     {
                       key: "week",
                       title: "Weekly",
                       subtitle: `This week · Mon ${orderStatsRes.stats.labels.weekStartsYmd} → ${orderStatsRes.stats.labels.asOfPerthYmd}`,
-                      href: buildStoreOrdersListHref({
+                      href: buildStoreOrdersListHref("/admin/online-orders", {
                         ship: "all",
                         from: orderStatsRes.stats.labels.weekStartsYmd,
                         to: orderStatsRes.stats.labels.asOfPerthYmd,
@@ -101,7 +104,7 @@ export default async function AdminDashboardPage() {
                       key: "month",
                       title: "Monthly",
                       subtitle: `Month to date · from ${orderStatsRes.stats.labels.monthStartsYmd}`,
-                      href: buildStoreOrdersListHref({
+                      href: buildStoreOrdersListHref("/admin/online-orders", {
                         ship: "all",
                         from: orderStatsRes.stats.labels.monthStartsYmd,
                         to: orderStatsRes.stats.labels.asOfPerthYmd,
@@ -113,7 +116,7 @@ export default async function AdminDashboardPage() {
                       key: "year",
                       title: "Yearly",
                       subtitle: `Year to date · from ${orderStatsRes.stats.labels.yearStartsYmd}`,
-                      href: buildStoreOrdersListHref({
+                      href: buildStoreOrdersListHref("/admin/online-orders", {
                         ship: "all",
                         from: orderStatsRes.stats.labels.yearStartsYmd,
                         to: orderStatsRes.stats.labels.asOfPerthYmd,
@@ -250,8 +253,8 @@ export default async function AdminDashboardPage() {
             </Link>
           </li>
           <li>
-            <Link href="/admin/store-orders" className="hover:underline">
-              Store orders &amp; delivery dockets →
+            <Link href="/admin/online-orders" className="hover:underline">
+              Online orders &amp; delivery dockets →
             </Link>
           </li>
           <li>

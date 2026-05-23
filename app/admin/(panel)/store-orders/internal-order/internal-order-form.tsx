@@ -167,7 +167,7 @@ export function InternalOrderForm({
   const [saveQuotePending, startSaveQuoteTransition] = useTransition();
   const [saveQuoteError, setSaveQuoteError] = useState<string | null>(null);
   const quoteSaveReturnBase =
-    quoteSubmitContext === "internal-order" ? "/admin/store-orders/internal-order" : "/admin/customer-quote";
+    quoteSubmitContext === "internal-order" ? "/admin/instore-orders/internal-order" : "/admin/customer-quote";
 
   const [baseOrderNumber, setBaseOrderNumber] = useState(template.baseOrderNumber);
   const [customerEmail, setCustomerEmail] = useState(template.customerEmail);

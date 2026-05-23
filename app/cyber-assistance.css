@@ -1,0 +1,130 @@
+/* Cyber Assistance — desktop guided tour (driver.js overrides) */
+
+.cyber-assist-popover.driver-popover {
+  max-width: min(22rem, calc(100vw - 12rem));
+  border-radius: 1rem;
+  border: 1px solid rgb(15 23 42 / 0.12);
+  box-shadow: 0 20px 50px -12px rgb(15 23 42 / 0.35);
+  padding: 0;
+  overflow: visible;
+}
+
+.cyber-assist-popover .driver-popover-arrow {
+  display: none;
+}
+
+.cyber-assist-popover .driver-popover-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-brand-navy, #0f172a);
+  margin: 0;
+  padding: 1rem 1rem 0.35rem;
+}
+
+.cyber-assist-popover .driver-popover-description {
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: rgb(15 23 42 / 0.72);
+  margin: 0;
+  padding: 0 1rem 0.75rem;
+}
+
+.cyber-assist-popover .driver-popover-footer {
+  padding: 0.5rem 1rem 0.85rem;
+  border-top: 1px solid rgb(15 23 42 / 0.08);
+}
+
+.cyber-assist-popover .driver-popover-progress-text {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgb(15 23 42 / 0.45);
+}
+
+.cyber-assist-popover .driver-popover-prev-btn,
+.cyber-assist-popover .driver-popover-next-btn {
+  border-radius: 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-shadow: none;
+}
+
+.cyber-assist-popover .driver-popover-next-btn {
+  background: var(--color-brand-orange, #ff851b);
+  color: var(--color-brand-navy, #0f172a);
+  border: none;
+}
+
+.cyber-assist-popover .driver-popover-prev-btn {
+  color: var(--color-brand-navy, #0f172a);
+  border: 1px solid rgb(15 23 42 / 0.15);
+}
+
+/* Clerk floats beside the popover — hidden while the box moves between steps */
+.cyber-assist-clerk-float {
+  position: fixed;
+  pointer-events: none;
+  width: 9.25rem;
+  transform: translateY(-50%);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+}
+
+.cyber-assist-clerk-float--visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.cyber-assist-clerk-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  filter: drop-shadow(0 10px 24px rgb(15 23 42 / 0.22));
+}
+
+/* Popover on the left — clerk on the right faces the dialog */
+.cyber-assist-clerk-float--right .cyber-assist-clerk-img {
+  transform: scaleX(-1);
+}
+
+.cyber-assist-bell {
+  animation: cyber-bell-wiggle 2.8s ease-in-out infinite;
+}
+
+@keyframes cyber-bell-wiggle {
+  0%,
+  88%,
+  100% {
+    transform: rotate(0deg);
+  }
+  90% {
+    transform: rotate(-8deg);
+  }
+  94% {
+    transform: rotate(8deg);
+  }
+  98% {
+    transform: rotate(-4deg);
+  }
+}
+
+.cyber-assist-bell:active {
+  animation: none;
+  transform: scale(0.96);
+}
+
+.cyber-assist-bell-anchor {
+  transition: bottom 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cyber-assist-bell-anchor {
+    transition: none;
+  }
+}
+
+/* driver.js: `:not(body):has(>.driver-active-element){overflow:hidden}` clips overlapping quote CTA */
+body.driver-active .category-quote-cta-shell:has(> .driver-active-element[data-cyber-guide="cat-quote"]),
+body.driver-active .category-browse-panel:has(.driver-active-element[data-cyber-guide="cat-quote"]) {
+  overflow: visible !important;
+}

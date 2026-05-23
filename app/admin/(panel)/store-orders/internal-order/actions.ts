@@ -139,14 +139,14 @@ export async function loadInternalOrderTemplate(formData: FormData): Promise<voi
   const companyName = normalizeText(formData.get("company_name"));
 
   if (orderNumber) {
-    redirect(`/admin/store-orders/internal-order?from=${encodeURIComponent(orderNumber)}`);
+    redirect(`/admin/instore-orders/internal-order?from=${encodeURIComponent(orderNumber)}`);
   }
   if (customerId && companyName) {
     redirect(
-      `/admin/store-orders/internal-order?customer_id=${encodeURIComponent(customerId)}&company=${encodeURIComponent(companyName)}`,
+      `/admin/instore-orders/internal-order?customer_id=${encodeURIComponent(customerId)}&company=${encodeURIComponent(companyName)}`,
     );
   }
-  redirect("/admin/store-orders/internal-order?error=missing_lookup_fields");
+  redirect("/admin/instore-orders/internal-order?error=missing_lookup_fields");
 }
 
 /** Same as {@link loadInternalOrderTemplate} but redirects into Customer Quote. */
@@ -176,7 +176,7 @@ export async function createInternalOrderFromTemplate(formData: FormData): Promi
   const source = normalizeText(formData.get("source"));
   const useQuotePricing = source === "customer-quote" || source === "internal-quote";
   const returnBase =
-    source === "customer-quote" ? "/admin/customer-quote" : "/admin/store-orders/internal-order";
+    source === "customer-quote" ? "/admin/customer-quote" : "/admin/instore-orders/internal-order";
 
   let baseOrderNumber = normalizeText(formData.get("base_order_number"));
   if (!baseOrderNumber) {
@@ -316,6 +316,8 @@ export async function createInternalOrderFromTemplate(formData: FormData): Promi
     redirect(`${returnBase}?error=${encodeURIComponent(short)}`);
   }
 
+  revalidatePath("/admin/instore-orders");
+  revalidatePath("/admin/online-orders");
   revalidatePath("/admin/store-orders");
   revalidatePath("/admin/customer-quote");
   redirect(`${returnBase}?created=${encodeURIComponent(newOrderNumber)}`);
@@ -447,7 +449,11 @@ function adminSheetToInternalTemplate(sheet: AdminCustomerQuoteSheetV1): Interna
 }
 
 function resolveQuoteSaveReturnBase(returnBaseInput: string | null | undefined): string {
-  const allowedReturn = new Set(["/admin/customer-quote", "/admin/store-orders/internal-order"]);
+  const allowedReturn = new Set([
+    "/admin/customer-quote",
+    "/admin/instore-orders/internal-order",
+    "/admin/store-orders/internal-order",
+  ]);
   const raw = normalizeText(returnBaseInput);
   return allowedReturn.has(raw) ? raw : "/admin/customer-quote";
 }
@@ -504,7 +510,7 @@ export async function saveCustomerQuoteSheet(
       redirect(`${returnBase}?error=${encodeURIComponent(short)}`);
     }
     revalidatePath("/admin/customer-quote");
-    revalidatePath("/admin/store-orders/internal-order");
+    revalidatePath("/admin/instore-orders/internal-order");
     redirect(`${returnBase}?quote_id=${encodeURIComponent(existingId)}&quote_saved=1`);
   }
 
@@ -533,7 +539,7 @@ export async function saveCustomerQuoteSheet(
   }
 
   revalidatePath("/admin/customer-quote");
-  revalidatePath("/admin/store-orders/internal-order");
+  revalidatePath("/admin/instore-orders/internal-order");
   redirect(`${returnBase}?quote_id=${encodeURIComponent(String(ins.id))}&quote_saved=1`);
 }
 

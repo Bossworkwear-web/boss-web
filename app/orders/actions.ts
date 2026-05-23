@@ -499,6 +499,8 @@ export async function placeStoreOrder(
     console.error("[placeStoreOrder] click_up_sheet_list:", clickUpRes.error);
   }
   revalidatePath("/admin/supplier-orders");
+  revalidatePath("/admin/online-orders");
+  revalidatePath("/admin/instore-orders");
   revalidatePath("/admin/store-orders");
   revalidatePath("/admin/reports");
   revalidatePath("/admin/work-process");

@@ -5,6 +5,7 @@ import { DocketPrintBar } from "@/app/admin/(panel)/store-orders/[id]/docket/doc
 import { StoreOrderRefundPanel } from "@/app/admin/(panel)/store-orders/store-order-refund-panel";
 import { serviceTypeColoredContent } from "@/lib/service-type-colored";
 import { resolveStorefrontImageUrlList } from "@/lib/storefront-image-url";
+import { storeOrderDetailBackHref } from "@/lib/store-order-channel";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -153,8 +154,11 @@ export default async function OrderedItemsListPage({ params }: Props) {
       <div className="docket-page p-4">
         <div className="docket-box">
           <div className="no-print mb-3 flex flex-wrap items-center justify-between gap-3">
-            <Link href="/admin/store-orders" className="text-sm font-semibold text-brand-orange hover:underline">
-              ← Back to Store orders
+            <Link
+              href={storeOrderDetailBackHref(order)}
+              className="text-sm font-semibold text-brand-orange hover:underline"
+            >
+              ← Back to {order.stripe_checkout_session_id || order.stripe_payment_intent_id ? "Online orders" : "Instore orders"}
             </Link>
           </div>
           <p className="docket-label">Order info</p>

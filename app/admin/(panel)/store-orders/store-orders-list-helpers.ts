@@ -61,7 +61,11 @@ export function parseStoreOrderListQuery(sp: Record<string, string | string[] | 
   return { ship, from, to, q };
 }
 
-export function buildStoreOrdersListHref(query: StoreOrderListQuery, patch?: Partial<StoreOrderListQuery>): string {
+export function buildStoreOrdersListHref(
+  basePath: string,
+  query: StoreOrderListQuery,
+  patch?: Partial<StoreOrderListQuery>,
+): string {
   const next = { ...query, ...patch };
   const p = new URLSearchParams();
   if (next.ship !== "all") {
@@ -77,7 +81,7 @@ export function buildStoreOrdersListHref(query: StoreOrderListQuery, patch?: Par
     p.set("q", next.q);
   }
   const s = p.toString();
-  return s ? `/admin/store-orders?${s}` : "/admin/store-orders";
+  return s ? `${basePath}?${s}` : basePath;
 }
 
 /** Inclusive start of calendar day in Perth, as UTC ISO for `created_at` filter. */

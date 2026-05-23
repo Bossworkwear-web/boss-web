@@ -120,8 +120,8 @@ export default async function AdminCustomerQuotePage({ searchParams }: { searchP
           <p className="mt-2 max-w-3xl text-sm text-slate-600 print:hidden">
             <strong>Internal order</strong>와 동일한 품목·금액 표를 사용합니다. 기존 주문을 불러오거나 빈 견적으로 시작한 뒤 라인·가격·주소를
             수정하세요. <strong>Save Quote</strong>로 CRM 견적 목록에 저장하고, 확정 시 <strong>Make Store order</strong>로 새 스토어 주문을 만듭니다 (
-            <Link href="/admin/store-orders/internal-order" className="font-semibold text-brand-orange hover:underline">
-              Internal order
+            <Link href="/admin/instore-orders/internal-order" className="font-semibold text-brand-orange hover:underline">
+              Instore order
             </Link>
             과 동일한 주문 생성 규칙).
           </p>

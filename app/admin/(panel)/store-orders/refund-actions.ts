@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { assertAdminSession } from "@/lib/admin-auth";
+import { revalidateStoreOrderListPaths } from "@/lib/revalidate-store-order-lists";
 import {
   createStripeRefundForPaymentIntent,
   retrievePaidCheckoutSession,
@@ -65,7 +66,7 @@ async function loadOrderForRefund(orderId: string): Promise<
 }
 
 function revalidateStoreOrderPaths(orderId: string) {
-  revalidatePath("/admin/store-orders", "page");
+  revalidateStoreOrderListPaths();
   revalidatePath(`/admin/store-orders/${orderId}/ordered-items-list`);
 }
 

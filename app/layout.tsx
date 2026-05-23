@@ -7,6 +7,7 @@ import "./product-listing-cards.css";
 import { GlobalLatinInputGuard } from "@/app/components/global-latin-input-guard";
 import { RouteLoading } from "@/app/components/route-loading";
 import { SiteFooter } from "@/app/components/site-footer";
+import { CyberAssistanceGate } from "@/app/components/cyber-assistance/cyber-assistance-gate";
 import { StorePublicChatGate } from "@/app/components/store-public-chat-gate";
 import { finalizeCustomerAuthSession, getAuthenticatedCustomerUser } from "@/lib/customer-auth";
 import { getSiteUrl } from "@/lib/site-url";
@@ -79,6 +80,7 @@ export default async function RootLayout({
         <RouteLoading />
         <div className="flex-1 min-w-0">{children}</div>
         <SiteFooter />
+        <CyberAssistanceGate />
         <StorePublicChatGate initialCustomerSignedIn={storeChatCustomerSignedIn} />
       </body>
     </html>

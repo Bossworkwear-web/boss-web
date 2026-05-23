@@ -4,6 +4,7 @@ import { refresh, revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { assertAdminSession } from "@/lib/admin-auth";
+import { revalidateStoreOrderListPaths } from "@/lib/revalidate-store-order-lists";
 import { deleteStoreOrderById, type DeleteStoreOrderResult } from "@/lib/admin-delete-store-order";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -49,7 +50,7 @@ export async function updateStoreOrderInvoiceReference(
     return { ok: false, error: msg };
   }
 
-  revalidatePath("/admin/store-orders");
+  revalidateStoreOrderListPaths();
   revalidatePath("/admin/customer-invoices");
   revalidatePath("/customer");
   /** So admin lists (e.g. Customer Invoices) refetch RSC payload instead of showing stale `invoice_reference`. */
@@ -82,7 +83,7 @@ export async function submitStoreOrderInvoiceReferenceForm(formData: FormData): 
     if (returnTo) {
       redirect(appendQueryParam(returnTo, q));
     }
-    redirect(appendQueryParam("/admin/store-orders", q));
+    redirect(appendQueryParam("/admin/online-orders", q));
   }
 
   if (returnTo) {
@@ -128,7 +129,7 @@ export async function updateStoreOrderHoldFields(formData: FormData): Promise<vo
     return;
   }
 
-  revalidatePath("/admin/store-orders");
+  revalidateStoreOrderListPaths();
 }
 
 /**
@@ -184,7 +185,7 @@ export async function moveStoreOrderToWarehouseCompleted(orderId: string): Promi
     return { ok: false, error: updErr.message };
   }
 
-  revalidatePath("/admin/store-orders");
+  revalidateStoreOrderListPaths();
   revalidatePath("/admin/warehouse/worker/store-orders");
   revalidatePath(`/admin/store-orders/${id}/docket`);
   return { ok: true };
@@ -212,7 +213,7 @@ export async function deleteStoreOrder(orderId: string): Promise<DeleteStoreOrde
     return res;
   }
 
-  revalidatePath("/admin/store-orders");
+  revalidateStoreOrderListPaths();
   revalidatePath("/admin/supplier-orders");
   revalidatePath("/admin/reports");
   revalidatePath("/customer");
