@@ -19,6 +19,7 @@ const CHAT_TEXT_XS = "text-[0.975rem]";
 const CHAT_TEXT_SM = "text-[1.1375rem]";
 const CHAT_TEXT_SYSTEM = "text-[0.91rem]";
 const CHAT_TEXT_META = "text-[0.845rem]";
+const STORAGE_KEY = "bossworkwear_storefront_chat_visitor_id";
 const POLL_MS = 3500;
 const CHAT_Z = "z-[115]";
 /** Bump when replacing `public/storefront-chat/fab.png`. */
