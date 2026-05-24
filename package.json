@@ -19,6 +19,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest",
+    "test:run": "vitest run",
     "seed:sample-products": "node scripts/seed-sample-products.mjs",
     "import:products": "node scripts/import-products.mjs",
     "import:bisley": "node scripts/import-bisley-csv.mjs --file=data/supplier/bisley/myPIP_Product_Listing.20260420.csv",
@@ -74,6 +76,7 @@
     "eslint-config-next": "16.2.0",
     "sharp": "^0.34.5",
     "tailwindcss": "^4",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }
