@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.bossworkwear.supabase-db-backup</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/bin/bash</string>
+      <string>-lc</string>
+      <string>
+        export PATH="/opt/homebrew/opt/libpq/bin:/usr/local/opt/libpq/bin:$PATH";
+        cd "/Users/kyliewang/Desktop/Bosss WW_Web/dev/boss-web";
+        BACKUP_EXTERNAL_ROOT="/Volumes/External 4T HD/Boss Workwear";
+        BACKUP_DB_KEEP=8;
+        bash scripts/backup-supabase-db.sh
+      </string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+      <key>Hour</key>
+      <integer>2</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/tmp/bossworkwear-supabase-db-backup.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/bossworkwear-supabase-db-backup.err.log</string>
+  </dict>
+</plist>

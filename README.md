@@ -2,6 +2,8 @@
 
 Backups (`scripts/backup-boss-web.sh`) **exclude** `node_modules` and `.next`, so a copied tree is not runnable until you install dependencies.
 
+**Supabase database:** use `scripts/backup-supabase-db.sh` or `npm run backup:db` — see [docs/SUPABASE_DB_BACKUP.md](docs/SUPABASE_DB_BACKUP.md).
+
 1. **Get the code** — either:
    - Copy the `boss-web` folder from Google Drive **`Boss_Web/boss-web/`**, or from **`Boss Workwear/boss-web/`** on an external drive (e.g. External 4T HD or a USB stick under **`Boss Workwear/`**), **or**
    - Extract a `boss-web-backup-*.tar.gz` from the matching **`archives/`** folder into your `dev/` (or any) directory.

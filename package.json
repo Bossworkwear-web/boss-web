@@ -46,6 +46,7 @@
     "clear:sample-products": "node scripts/clear-sample-products.mjs",
     "migrate:customer-passwords": "node scripts/hash-legacy-customer-passwords.mjs",
     "migrate:customer-passwords:dry": "node scripts/hash-legacy-customer-passwords.mjs --dry-run",
+    "backup:db": "bash scripts/backup-supabase-db.sh",
     "check:product-images": "node scripts/check-product-images.mjs",
     "generate:biz-care-misc-skus": "node scripts/generate-biz-care-misc-skus.mjs",
     "generate:fashion-biz-gender": "node scripts/generate-fashion-biz-gender.mjs",
