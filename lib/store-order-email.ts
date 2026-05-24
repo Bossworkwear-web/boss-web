@@ -1,4 +1,5 @@
 import { australiaPostTrackingUrl, siteBaseUrl } from "@/lib/store-order-utils";
+import { getEmailTemplateContent, renderEmailTemplate } from "@/lib/store-email-templates";
 
 function escapeHtml(s: string) {
   return s
@@ -6,6 +7,10 @@ function escapeHtml(s: string) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function normalizeEmailHtml(html: string): string {
+  return html.replace(/\n\s+/g, " ").trim();
 }
 
 export async function sendStoreOrderConfirmationEmail(args: {
@@ -27,23 +32,22 @@ export async function sendStoreOrderConfirmationEmail(args: {
 
   const trackUrl = `${siteBaseUrl()}/orders/track/${args.trackingToken}`;
   const invoiceNo = (args.xeroInvoiceNumber ?? "").trim();
-  const subject = invoiceNo
-    ? `Order confirmed — ${args.orderNumber} (Invoice ${invoiceNo})`
-    : `Order confirmed — ${args.orderNumber}`;
   const invoiceLine = invoiceNo
     ? `<p>Tax invoice number: <strong>${escapeHtml(invoiceNo)}</strong>${args.taxInvoicePdf ? " — PDF attached." : ""}</p>`
     : "";
-  const html = `
-    <p>Hi ${escapeHtml(args.customerName)},</p>
-    <p>Your customer order ID is <strong>${escapeHtml(args.orderNumber)}</strong> — keep it for invoices and support.</p>
-    ${invoiceLine}
-    <p>Total: <strong>${escapeHtml(args.totalFormatted)}</strong></p>
-    <p>You can check status and tracking any time:</p>
-    <p><a href="${escapeHtml(trackUrl)}">View order &amp; delivery tracking</a></p>
-    <p>If the link does not work, copy this URL:<br/><code>${escapeHtml(trackUrl)}</code></p>
-  `
-    .replace(/\n\s+/g, " ")
-    .trim();
+  const invoiceSubjectSuffix = invoiceNo ? ` (Invoice ${invoiceNo})` : "";
+
+  const template = await getEmailTemplateContent("order_confirmation");
+  const vars = {
+    customerName: escapeHtml(args.customerName),
+    orderNumber: escapeHtml(args.orderNumber),
+    totalFormatted: escapeHtml(args.totalFormatted),
+    trackUrl: escapeHtml(trackUrl),
+    invoiceLine,
+    invoiceSubjectSuffix: escapeHtml(invoiceSubjectSuffix),
+  };
+  const subject = renderEmailTemplate(template.subject, vars);
+  const html = normalizeEmailHtml(renderEmailTemplate(template.html, vars));
 
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -100,20 +104,21 @@ export async function sendStoreOrderShippedEmail(args: {
       ? australiaPostTrackingUrl(args.trackingNumber)
       : null;
 
-  const subject = `Shipped — ${args.orderNumber}`;
-  const html = `
-    <p>Hi ${escapeHtml(args.customerName)},</p>
-    <p>Your order <strong>${escapeHtml(args.orderNumber)}</strong> has been dispatched.</p>
-    <p><strong>${escapeHtml(args.carrier)}</strong> tracking: <code>${escapeHtml(args.trackingNumber)}</code></p>
-    ${
-      apUrl
-        ? `<p><a href="${escapeHtml(apUrl)}">Track on Australia Post</a></p>`
-        : `<p>Use your carrier’s website with the tracking number above.</p>`
-    }
-    <p>Order summary &amp; status: <a href="${escapeHtml(trackUrl)}">${escapeHtml(trackUrl)}</a></p>
-  `
-    .replace(/\n\s+/g, " ")
-    .trim();
+  const carrierTrackHtml = apUrl
+    ? `<p><a href="${escapeHtml(apUrl)}">Track on Australia Post</a></p>`
+    : `<p>Use your carrier’s website with the tracking number above.</p>`;
+
+  const template = await getEmailTemplateContent("order_shipped");
+  const vars = {
+    customerName: escapeHtml(args.customerName),
+    orderNumber: escapeHtml(args.orderNumber),
+    trackUrl: escapeHtml(trackUrl),
+    carrier: escapeHtml(args.carrier),
+    trackingNumber: escapeHtml(args.trackingNumber),
+    carrierTrackHtml,
+  };
+  const subject = renderEmailTemplate(template.subject, vars);
+  const html = normalizeEmailHtml(renderEmailTemplate(template.html, vars));
 
   try {
     const res = await fetch("https://api.resend.com/emails", {

@@ -82,8 +82,8 @@ export default async function AdminSitePage({ searchParams }: { searchParams: Pr
           {
             title: "Email templates",
             desc: "Order confirmation and shipping emails",
-            href: null,
-            label: "Coming soon",
+            href: "/admin/site/emails",
+            label: "Edit email templates",
           },
         ].map((item) => (
           <div key={item.title} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

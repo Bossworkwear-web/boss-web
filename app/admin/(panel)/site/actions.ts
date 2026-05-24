@@ -13,10 +13,20 @@ import {
   legalPageContentKey,
   type LegalPageSlug,
 } from "@/lib/site-content";
+import {
+  EMAIL_TEMPLATE_SLUGS,
+  emailTemplateHtmlKey,
+  emailTemplateSubjectKey,
+  type EmailTemplateSlug,
+} from "@/lib/store-email-templates";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 function isLegalSlug(raw: string): raw is LegalPageSlug {
   return (LEGAL_PAGE_SLUGS as readonly string[]).includes(raw);
+}
+
+function isEmailTemplateSlug(raw: string): raw is EmailTemplateSlug {
+  return (EMAIL_TEMPLATE_SLUGS as readonly string[]).includes(raw);
 }
 
 async function upsertSiteContent(key: string, body: string): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -105,4 +115,48 @@ export async function saveLegalPageContent(formData: FormData): Promise<void> {
   revalidatePath(`/admin/site/legal/${slug}`);
   revalidatePath("/admin/site/legal");
   redirect(`/admin/site/legal/${slug}?saved=1`);
+}
+
+export async function saveEmailTemplateContent(formData: FormData): Promise<void> {
+  try {
+    await assertAdminSessionForPathSegment("/admin/site");
+  } catch {
+    redirect("/admin/login");
+  }
+
+  const slug = String(formData.get("slug") ?? "").trim();
+  if (!isEmailTemplateSlug(slug)) {
+    redirect("/admin/site/emails?error=invalid_slug");
+  }
+
+  const clear = formData.get("clear") === "1";
+  const supabase = createSupabaseAdminClient();
+
+  if (clear) {
+    await supabase.from("site_content").delete().eq("key", emailTemplateSubjectKey(slug));
+    await supabase.from("site_content").delete().eq("key", emailTemplateHtmlKey(slug));
+  } else {
+    const subject = String(formData.get("subject") ?? "").trim();
+    const html = String(formData.get("html") ?? "").trim();
+    if (!subject || !html) {
+      redirect(`/admin/site/emails/${slug}?error=missing_fields`);
+    }
+
+    const results = await Promise.all([
+      upsertSiteContent(emailTemplateSubjectKey(slug), subject),
+      upsertSiteContent(emailTemplateHtmlKey(slug), html),
+    ]);
+    const failed = results.find((r) => !r.ok);
+    if (failed && !failed.ok) {
+      const msg = failed.error.includes("site_content")
+        ? "Run supabase/migrations/20260525_site_content.sql in Supabase, then try again."
+        : failed.error;
+      redirect(`/admin/site/emails/${slug}?error=${encodeURIComponent(msg)}`);
+    }
+  }
+
+  revalidatePath(`/admin/site/emails/${slug}`);
+  revalidatePath("/admin/site/emails");
+  revalidatePath("/admin/site");
+  redirect(`/admin/site/emails/${slug}?saved=1`);
 }

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { assertAdminSessionForPathSegment } from "@/lib/admin-auth";
+import { sendStoreOrderShippedEmail } from "@/lib/store-order-email";
 import { appendClickUpCompleteOrdersQueueSetupHint } from "@/lib/supabase-click-up-complete-orders-queue-hint";
 import { appendClickUpDispatchQueueSetupHint } from "@/lib/supabase-click-up-dispatch-queue-hint";
 import { createSupabaseAdminClient } from "@/lib/supabase";
@@ -107,7 +108,9 @@ async function markStoreOrderDispatchedForCustomerTimeline(
   const nowIso = new Date().toISOString();
   const { data: row, error: selErr } = await supabase
     .from("store_orders")
-    .select("status, shipped_at, tracking_token")
+    .select(
+      "status, shipped_at, tracking_token, customer_email, customer_name, order_number, tracking_number, carrier",
+    )
     .eq("id", storeOrderId)
     .maybeSingle();
 
@@ -121,6 +124,8 @@ async function markStoreOrderDispatchedForCustomerTimeline(
     return { ok: true, trackingToken: row.tracking_token?.trim() ?? null };
   }
 
+  const wasAlreadyShipped = (row.status ?? "").toLowerCase() === "shipped";
+
   const { error: upErr } = await supabase
     .from("store_orders")
     .update({
@@ -133,7 +138,24 @@ async function markStoreOrderDispatchedForCustomerTimeline(
     return { ok: false, error: upErr.message };
   }
 
-  return { ok: true, trackingToken: row.tracking_token?.trim() ?? null };
+  const trackingToken = row.tracking_token?.trim() ?? null;
+  const customerEmail = row.customer_email?.trim() ?? "";
+  const trackingNumber = row.tracking_number?.trim() ?? "";
+  if (!wasAlreadyShipped && customerEmail && trackingToken && trackingNumber) {
+    const emailRes = await sendStoreOrderShippedEmail({
+      to: customerEmail,
+      customerName: row.customer_name?.trim() || "Customer",
+      orderNumber: row.order_number?.trim() || "Order",
+      trackingToken,
+      trackingNumber,
+      carrier: row.carrier?.trim() || "Carrier",
+    });
+    if (!emailRes.ok) {
+      console.error("[markStoreOrderDispatchedForCustomerTimeline] shipped email failed:", emailRes.error);
+    }
+  }
+
+  return { ok: true, trackingToken };
 }
 
 export type MoveDispatchQueueToCompleteResult =
