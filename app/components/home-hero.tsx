@@ -1,4 +1,5 @@
 import { HomeHeroCarousel } from "@/app/components/home-hero-carousel";
+import { getHomepageHeroContent } from "@/lib/site-content";
 import { Boldonse } from "next/font/google";
 
 const boldonse = Boldonse({
@@ -11,7 +12,9 @@ const boldonse = Boldonse({
 /**
  * Home hero: centered slideshow + copy overlaid on top (`public/Hero_1.jpg` … `Hero_3.jpg`).
  */
-export function HomeHero() {
+export async function HomeHero() {
+  const { line1, line2, subtext } = await getHomepageHeroContent();
+
   return (
     <div className="home-hero-strip">
       <div className="home-hero-strip-inner home-hero-strip-overlay">
@@ -23,12 +26,11 @@ export function HomeHero() {
             <h1
               className={`${boldonse.className} mt-4 flex flex-col items-center gap-1 text-center text-[clamp(0.924rem,3.696vw+0.5808rem,4.8896rem)] font-normal leading-[1.08] text-white`}
             >
-              <span className="text-balance sm:whitespace-nowrap">Trusted Workwear for Teams</span>
-              <span className="text-balance sm:whitespace-nowrap">That Keeps Industries Moving.</span>
+              <span className="text-balance sm:whitespace-nowrap">{line1}</span>
+              <span className="text-balance sm:whitespace-nowrap">{line2}</span>
             </h1>
             <p className="mx-auto mt-[calc((1.25rem+2.4024rem)/4)] max-w-[46.8rem] text-[calc(1.57872rem/2)] leading-[calc(2.76276rem/2)] text-white/95 sm:mt-[calc((1.25rem+2.5744rem)/2)] sm:text-[1.77652rem] sm:leading-[2.96056rem]">
-              From corporate polos to medical scrubs, we deliver professional uniforms designed for durability,
-              comfort, and branding impact.
+              {subtext}
             </p>
           </div>
         </div>

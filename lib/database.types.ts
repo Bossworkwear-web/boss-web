@@ -1199,6 +1199,72 @@ export type Database = {
           },
         ];
       };
+      site_content: {
+        Row: {
+          key: string;
+          body: string;
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          body?: string;
+          updated_at?: string;
+        };
+        Update: {
+          key?: string;
+          body?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      store_checkout_pending: {
+        Row: {
+          id: string;
+          stripe_checkout_session_id: string;
+          customer_email: string;
+          customer_name: string;
+          delivery_address: string;
+          cart_payload: Json;
+          promotion_code_id: string | null;
+          pick_up: boolean;
+          reordered_from_store_order_id: string | null;
+          status: string;
+          store_order_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          stripe_checkout_session_id: string;
+          customer_email: string;
+          customer_name: string;
+          delivery_address: string;
+          cart_payload: Json;
+          promotion_code_id?: string | null;
+          pick_up?: boolean;
+          reordered_from_store_order_id?: string | null;
+          status?: string;
+          store_order_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          stripe_checkout_session_id?: string;
+          customer_email?: string;
+          customer_name?: string;
+          delivery_address?: string;
+          cart_payload?: Json;
+          promotion_code_id?: string | null;
+          pick_up?: boolean;
+          reordered_from_store_order_id?: string | null;
+          status?: string;
+          store_order_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       incoming_goods_receipts: {
         Row: {
           id: string;

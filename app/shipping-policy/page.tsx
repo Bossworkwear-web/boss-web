@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
+import { LegalPageWithCmsFallback } from "@/app/components/legal-page-with-cms-fallback";
 import { TopNav } from "@/app/components/top-nav";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
@@ -9,9 +10,10 @@ export const metadata: Metadata = {
   title: "Shipping Policy",
 };
 
-export default function ShippingPolicyPage() {
+export default async function ShippingPolicyPage() {
   return (
-    <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
+    <LegalPageWithCmsFallback slug="shipping" shell="storefront">
+      <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
       <TopNav />
       <MainWithSupplierRail>
         <section className={`${SITE_PAGE_ROW_CLASS} max-w-4xl py-10`}>
@@ -125,5 +127,6 @@ export default function ShippingPolicyPage() {
         </section>
       </MainWithSupplierRail>
     </main>
+    </LegalPageWithCmsFallback>
   );
 }

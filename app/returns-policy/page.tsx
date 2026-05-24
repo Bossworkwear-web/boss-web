@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
+import { LegalPageWithCmsFallback } from "@/app/components/legal-page-with-cms-fallback";
 import { TopNav } from "@/app/components/top-nav";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 import { STOREFRONT_QUOTE_EMAIL_RECIPIENT } from "@/lib/storefront-quote-mailto";
@@ -12,9 +13,10 @@ export const metadata: Metadata = {
 
 const returnRequestMailto = `mailto:${STOREFRONT_QUOTE_EMAIL_RECIPIENT}?subject=${encodeURIComponent("Return request")}`;
 
-export default function ReturnsPolicyPage() {
+export default async function ReturnsPolicyPage() {
   return (
-    <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
+    <LegalPageWithCmsFallback slug="returns" shell="storefront">
+      <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
       <TopNav />
       <MainWithSupplierRail>
         <section className={`${SITE_PAGE_ROW_CLASS} max-w-4xl py-10`}>
@@ -129,5 +131,6 @@ export default function ReturnsPolicyPage() {
         </section>
       </MainWithSupplierRail>
     </main>
+    </LegalPageWithCmsFallback>
   );
 }

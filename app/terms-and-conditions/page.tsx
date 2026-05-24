@@ -2,9 +2,18 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 
+import { LegalPageWithCmsFallback } from "@/app/components/legal-page-with-cms-fallback";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
-export default function TermsAndConditionsPage() {
+export default async function TermsAndConditionsPage() {
+  return (
+    <LegalPageWithCmsFallback slug="terms">
+      <TermsAndConditionsDefault />
+    </LegalPageWithCmsFallback>
+  );
+}
+
+function TermsAndConditionsDefault() {
   return (
     <main className="min-h-screen bg-white py-6 text-brand-navy sm:py-8 md:py-10">
       <div className={`${SITE_PAGE_ROW_CLASS}`}>

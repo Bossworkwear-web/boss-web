@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { redirect } from "next/navigation";
 
 import { createSupabaseAdminClient } from "@/lib/supabase";
+import { applyCustomerPasswordChange } from "@/lib/customer-password-update";
 
 function sha256Hex(input: string): string {
   return crypto.createHash("sha256").update(input, "utf8").digest("hex");
@@ -49,7 +50,7 @@ export async function submitPasswordReset(formData: FormData) {
 
   const { data: profile, error: profErr } = await supabase
     .from("customer_profiles")
-    .select("id, email_address")
+    .select("id, email_address, auth_user_id")
     .eq("id", reset.customer_profile_id)
     .maybeSingle();
 
@@ -57,8 +58,15 @@ export async function submitPasswordReset(formData: FormData) {
     redirect("/reset-password?status=invalid");
   }
 
-  const { error: upErr } = await supabase.from("customer_profiles").update({ login_password: password }).eq("id", profile.id);
-  if (upErr) {
+  const pwRes = await applyCustomerPasswordChange(
+    {
+      id: profile.id,
+      email_address: String(profile.email_address),
+      auth_user_id: profile.auth_user_id,
+    },
+    password,
+  );
+  if (!pwRes.ok) {
     redirect("/reset-password?status=invalid");
   }
 
