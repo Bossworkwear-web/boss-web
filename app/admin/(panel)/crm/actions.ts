@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
 import { assertAdminSession } from "@/lib/admin-auth";
+import { applyCustomerPasswordChange } from "@/lib/customer-password-update";
 import {
   buildQuoteCustomerEmailBody,
   computeTotalCentsFromProductLines,
@@ -529,7 +530,7 @@ export async function updateCustomerProfile(
   const contact_number = fields.contact_number.trim();
   const delivery_address = fields.delivery_address.trim();
   const billing_address = fields.billing_address.trim();
-  const login_password = fields.login_password.trim() || null;
+  const login_password = fields.login_password.trim();
 
   if (!organisation || !customer_name || !email_address || !contact_number) {
     return { ok: false, error: "Organisation, contact name, email, and phone are required." };
@@ -539,6 +540,15 @@ export async function updateCustomerProfile(
   }
 
   const supabase = createSupabaseAdminClient();
+  const { data: existing, error: loadErr } = await supabase
+    .from("customer_profiles")
+    .select("auth_user_id")
+    .eq("id", customerProfileId)
+    .maybeSingle();
+  if (loadErr || !existing) {
+    return { ok: false, error: loadErr?.message ?? "Customer not found." };
+  }
+
   const { error } = await supabase
     .from("customer_profiles")
     .update({
@@ -548,12 +558,25 @@ export async function updateCustomerProfile(
       contact_number,
       delivery_address,
       billing_address,
-      login_password,
     })
     .eq("id", customerProfileId);
 
   if (error) {
     return { ok: false, error: error.message };
+  }
+
+  if (login_password) {
+    const pwRes = await applyCustomerPasswordChange(
+      {
+        id: customerProfileId,
+        email_address,
+        auth_user_id: existing.auth_user_id,
+      },
+      login_password,
+    );
+    if (!pwRes.ok) {
+      return { ok: false, error: pwRes.error };
+    }
   }
 
   revalidatePath("/admin/crm");

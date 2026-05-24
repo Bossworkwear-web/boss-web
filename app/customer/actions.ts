@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import type { StoreOrderCartLine } from "@/lib/store-order-cart-payload";
+import { applyCustomerPasswordChange, verifyCustomerCurrentPassword } from "@/lib/customer-password-update";
 import { productPathSegment } from "@/lib/product-path-slug";
 import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
 import { createSupabaseAdminClient } from "@/lib/supabase";
@@ -198,7 +199,7 @@ export async function submitChangePassword(formData: FormData) {
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
       .from("customer_profiles")
-      .select("id, login_password")
+      .select("id, login_password, auth_user_id, email_address")
       .eq("email_address", emailNorm)
       .maybeSingle();
 
@@ -206,20 +207,25 @@ export async function submitChangePassword(formData: FormData) {
       redirect("/customer?password=error");
     }
 
-    const stored = data.login_password;
-    if (stored === null || stored === "") {
+    const hasPasswordAuth = Boolean(data.auth_user_id) || Boolean(data.login_password?.trim());
+    if (!hasPasswordAuth) {
       redirect("/customer?password=oauth");
     }
-    if (stored !== current) {
+
+    const verified = await verifyCustomerCurrentPassword(data, emailNorm, current);
+    if (!verified) {
       redirect("/customer?password=wrong");
     }
 
-    const { error: updateError } = await supabase
-      .from("customer_profiles")
-      .update({ login_password: next })
-      .eq("id", data.id);
-
-    if (updateError) {
+    const pwRes = await applyCustomerPasswordChange(
+      {
+        id: data.id,
+        email_address: String(data.email_address ?? emailNorm),
+        auth_user_id: data.auth_user_id,
+      },
+      next,
+    );
+    if (!pwRes.ok) {
       redirect("/customer?password=error");
     }
   } catch (error) {

@@ -5,6 +5,7 @@ import { refresh, revalidatePath } from "next/cache";
 
 import { deleteCustomerAndAllRecords } from "@/lib/admin-delete-customer";
 import { assertAdminSession } from "@/lib/admin-auth";
+import { customerSignInStatus } from "@/lib/customer-password-update";
 import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -191,8 +192,7 @@ export type CustomerInfoPayload = {
     delivery_address: string;
     billing_address: string;
     created_at: string;
-    /** Plain-text storefront password when set (admin-only surface). */
-    login_password: string | null;
+    sign_in_status: "supabase_auth" | "legacy_hashed" | "legacy_plain" | "oauth_only";
   } | null;
   masterLogo: { public_url: string; storage_bucket: string; storage_path: string } | null;
   specialRequest: { body: string; updated_at: string | null } | null;
@@ -234,7 +234,7 @@ export async function getCustomerInfoPayload(
     const { data: profile } = await supabase
       .from("customer_profiles")
       .select(
-        "id, customer_name, organisation, contact_number, email_address, delivery_address, billing_address, created_at, login_password",
+        "id, customer_name, organisation, contact_number, email_address, delivery_address, billing_address, created_at, login_password, auth_user_id",
       )
       .eq("email_address", email)
       .maybeSingle();
@@ -308,10 +308,10 @@ export async function getCustomerInfoPayload(
               delivery_address: String(profile.delivery_address ?? ""),
               billing_address: String(profile.billing_address ?? ""),
               created_at: String(profile.created_at ?? ""),
-              login_password:
-                profile.login_password != null && String(profile.login_password).trim()
-                  ? String(profile.login_password)
-                  : null,
+              sign_in_status: customerSignInStatus({
+                auth_user_id: profile.auth_user_id ?? null,
+                login_password: profile.login_password ?? null,
+              }),
             }
           : null,
         masterLogo,

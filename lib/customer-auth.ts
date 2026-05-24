@@ -5,6 +5,7 @@ import {
   CUSTOMER_OAUTH_FLOW_COOKIE,
   type CustomerOAuthFlow,
 } from "@/lib/customer-oauth-flow";
+import { verifyCustomerPassword } from "@/lib/customer-password-hash";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -233,7 +234,7 @@ export async function finalizeCustomerAuthSession(user: User): Promise<
 
 /**
  * Link a legacy customer_profiles row to Supabase Auth using the given password.
- * When login_password is empty (e.g. admin-created row), the supplied password is stored.
+ * Legacy plain/hash values in login_password are verified then cleared after migration.
  */
 export async function migrateLegacyPasswordToAuth(emailNorm: string, password: string): Promise<boolean> {
   const admin = createSupabaseAdminClient();
@@ -243,17 +244,17 @@ export async function migrateLegacyPasswordToAuth(emailNorm: string, password: s
   }
 
   const storedPw = profile.login_password?.trim() ?? "";
-  if (storedPw && storedPw !== password) {
+  if (storedPw && !verifyCustomerPassword(password, storedPw)) {
     return false;
-  }
-
-  if (!storedPw) {
-    await admin.from("customer_profiles").update({ login_password: password }).eq("id", profile.id);
   }
 
   if (profile.auth_user_id) {
     const { error } = await admin.auth.admin.updateUserById(profile.auth_user_id, { password });
-    return !error;
+    if (error) {
+      return false;
+    }
+    await admin.from("customer_profiles").update({ login_password: null }).eq("id", profile.id);
+    return true;
   }
 
   const existingAuth = await findAuthUserByEmail(emailNorm);
@@ -263,6 +264,7 @@ export async function migrateLegacyPasswordToAuth(emailNorm: string, password: s
       return false;
     }
     await linkProfileToAuthUser(profile.id, existingAuth.id);
+    await admin.from("customer_profiles").update({ login_password: null }).eq("id", profile.id);
     return true;
   }
 
@@ -278,6 +280,7 @@ export async function migrateLegacyPasswordToAuth(emailNorm: string, password: s
   }
 
   await linkProfileToAuthUser(profile.id, created.user.id);
+  await admin.from("customer_profiles").update({ login_password: null }).eq("id", profile.id);
   return true;
 }
 
@@ -381,7 +384,7 @@ export async function linkAuthUserToNewProfileFromSignup(
       organisation: "",
       contact_number: "",
       email_address: emailNorm,
-      login_password: password,
+      login_password: null,
       delivery_address: "",
       billing_address: "",
       auth_user_id: authUser.id,

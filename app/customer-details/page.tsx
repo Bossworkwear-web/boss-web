@@ -7,6 +7,7 @@ import { CustomerDetailsForm } from "@/app/customer-details/customer-details-for
 import { ArrowLeftIcon, BuildingIcon, NotesIcon, XCircleIcon } from "@/app/components/icons";
 import { getAuthenticatedCustomerUser, linkProfileToAuthUser } from "@/lib/customer-auth";
 import { combineCustomerName, splitCustomerName } from "@/lib/customer-name";
+import { applyCustomerPasswordChange } from "@/lib/customer-password-update";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
@@ -177,7 +178,7 @@ async function submitCustomerDetails(formData: FormData) {
 
       const { data: currentRow, error: currentRowError } = await supabase
         .from("customer_profiles")
-        .select("login_password")
+        .select("login_password, auth_user_id, email_address")
         .eq("id", profileId)
         .maybeSingle();
 
@@ -185,19 +186,13 @@ async function submitCustomerDetails(formData: FormData) {
         redirect("/customer-details?status=error");
       }
 
-      const storedPw = currentRow?.login_password ?? null;
-      const isOauthOnlyRow = storedPw === null || storedPw === "";
+      const rowAuthUserId = currentRow?.auth_user_id ?? authUserId;
+      const isOauthOnlyRow =
+        Boolean(rowAuthUserId) ||
+        currentRow?.login_password === null ||
+        currentRow?.login_password === "";
 
-      let resolvedPassword: string | null;
-      if (passwordCandidate) {
-        resolvedPassword = passwordCandidate;
-      } else if (isOauthOnlyRow) {
-        resolvedPassword = null;
-      } else {
-        resolvedPassword = storedPw;
-      }
-
-      if (!isOauthOnlyRow && (resolvedPassword === null || resolvedPassword === "")) {
+      if (!isOauthOnlyRow && !passwordCandidate) {
         redirect("/customer-details?status=invalid");
       }
 
@@ -208,15 +203,29 @@ async function submitCustomerDetails(formData: FormData) {
           organisation,
           contact_number: contactNumber,
           email_address: emailNorm,
-          login_password: resolvedPassword,
+          login_password: rowAuthUserId ? null : currentRow?.login_password ?? null,
           delivery_address: deliveryAddress,
           billing_address: billingAddress,
-          ...(authUserId ? { auth_user_id: authUserId } : {}),
+          ...(rowAuthUserId ? { auth_user_id: rowAuthUserId } : {}),
         })
         .eq("id", profileId);
 
       if (updateError) {
         redirect("/customer-details?status=error");
+      }
+
+      if (passwordCandidate) {
+        const pwRes = await applyCustomerPasswordChange(
+          {
+            id: profileId,
+            email_address: emailNorm,
+            auth_user_id: rowAuthUserId,
+          },
+          passwordCandidate,
+        );
+        if (!pwRes.ok) {
+          redirect("/customer-details?status=error");
+        }
       }
     } else {
       const { data: existingByEmail, error: existingProfileError } = await supabase
@@ -235,14 +244,11 @@ async function submitCustomerDetails(formData: FormData) {
         );
       }
 
-      let insertPassword: string | null;
-      if (isOauthNewSignup) {
-        insertPassword = null;
-      } else if (!passwordCandidate) {
+      if (!isOauthNewSignup && !authUserId && !passwordCandidate) {
         redirect("/customer-details?status=invalid");
-      } else {
-        insertPassword = passwordCandidate;
       }
+
+      let insertPassword: string | null = null;
 
       const { data: inserted, error } = await supabase
         .from("customer_profiles")
@@ -261,6 +267,20 @@ async function submitCustomerDetails(formData: FormData) {
 
       if (!error && inserted?.id && authUserId) {
         await linkProfileToAuthUser(inserted.id, authUserId);
+      }
+
+      if (!error && inserted?.id && passwordCandidate && !authUserId && !isOauthNewSignup) {
+        const pwRes = await applyCustomerPasswordChange(
+          {
+            id: inserted.id,
+            email_address: emailNorm,
+            auth_user_id: null,
+          },
+          passwordCandidate,
+        );
+        if (!pwRes.ok) {
+          redirect("/customer-details?status=error");
+        }
       }
 
       if (error?.code === "23505") {
@@ -338,6 +358,7 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
     delivery_address: string;
     billing_address: string;
     login_password: string | null;
+    auth_user_id: string | null;
   } | null = null;
 
   if (loggedInEmail) {
@@ -346,7 +367,7 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
       const { data } = await supabase
         .from("customer_profiles")
         .select(
-          "id, customer_name, organisation, contact_number, email_address, delivery_address, billing_address, login_password",
+          "id, customer_name, organisation, contact_number, email_address, delivery_address, billing_address, login_password, auth_user_id",
         )
         .eq("email_address", loggedInEmail)
         .maybeSingle();
@@ -371,7 +392,9 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
   const skipLoginPasswordField = oauthFlowCompleting || emailSignupCompleting || Boolean(pendingPassword);
   const isOauthOnlyAccount =
     existingProfile !== null &&
-    (existingProfile.login_password === null || existingProfile.login_password === "");
+    (Boolean(existingProfile.auth_user_id) ||
+      existingProfile.login_password === null ||
+      existingProfile.login_password === "");
   const prefilledOrganisation = existingProfile?.organisation ?? "";
   const prefilledContact = existingProfile?.contact_number ?? "";
   const prefilledDeliveryAddress = existingProfile?.delivery_address ?? "";

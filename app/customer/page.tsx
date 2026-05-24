@@ -54,6 +54,7 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
     delivery_address: string;
     billing_address: string;
     login_password: string | null;
+    auth_user_id: string | null;
   } | null = null;
 
   let orders: {
@@ -89,7 +90,7 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
     const { data: p } = await supabase
       .from("customer_profiles")
       .select(
-        "customer_name, organisation, contact_number, email_address, delivery_address, billing_address, login_password",
+        "customer_name, organisation, contact_number, email_address, delivery_address, billing_address, login_password, auth_user_id",
       )
       .eq("email_address", emailNorm)
       .maybeSingle();
@@ -180,7 +181,8 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
   }
 
   const canChangePassword =
-    profile !== null && profile.login_password !== null && profile.login_password !== "";
+    profile !== null &&
+    (Boolean(profile.auth_user_id) || Boolean(profile.login_password?.trim()));
 
   return (
     <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">

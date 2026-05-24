@@ -882,7 +882,7 @@ function CustomerEditDialog({
   const [customerName, setCustomerName] = useState(customer.customer_name);
   const [email, setEmail] = useState(customer.email_address);
   const [phone, setPhone] = useState(customer.contact_number);
-  const [password, setPassword] = useState(customer.login_password ?? "");
+  const [password, setPassword] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState(customer.delivery_address);
   const [billingAddress, setBillingAddress] = useState(customer.billing_address);
 
@@ -961,16 +961,17 @@ function CustomerEditDialog({
 
           <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Sign-in</p>
           <label className="block text-xs font-medium text-slate-600">
-            Password (stored value)
+            Set new password
             <input
               className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 font-mono text-sm"
-              autoComplete="off"
+              type="password"
+              autoComplete="new-password"
               value={password}
               disabled={pending}
               onChange={(e) => setPassword(e.target.value)}
             />
             <span className="mt-0.5 block text-[11px] font-normal text-slate-500">
-              Leave empty for OAuth-only accounts (email/password login disabled).
+              Leave empty to keep the current password. Stored in Supabase Auth, not as plain text in the database.
             </span>
           </label>
 

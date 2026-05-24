@@ -25,6 +25,23 @@ function audFromCents(cents: number): string {
   return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(n);
 }
 
+function signInStatusLabel(
+  status: NonNullable<CustomerInfoPayload["profile"]>["sign_in_status"],
+): string {
+  switch (status) {
+    case "supabase_auth":
+      return "Email/password via Supabase Auth (password not stored in database).";
+    case "legacy_hashed":
+      return "Legacy account — hashed password only; migrates to Supabase Auth on next login.";
+    case "legacy_plain":
+      return "Legacy account — plain password still in database until customer logs in again.";
+    case "oauth_only":
+      return "OAuth-only — no email/password login until a password is set.";
+    default:
+      return "Unknown sign-in status.";
+  }
+}
+
 export function CustomerInfoClient() {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Array<{ email: string; name: string | null; phone: string | null; organisation: string | null }>>([]);
@@ -37,7 +54,6 @@ export function CustomerInfoClient() {
 
   const [logoLightboxOpen, setLogoLightboxOpen] = useState(false);
   const [masterLogoFile, setMasterLogoFile] = useState<File | null>(null);
-  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   const profileStats = useMemo(() => {
     if (!payload) return null;
@@ -88,10 +104,6 @@ export function CustomerInfoClient() {
   useEffect(() => {
     setSpecialRequestBody(payload?.specialRequest?.body ?? "");
   }, [payload?.specialRequest?.body]);
-
-  useEffect(() => {
-    setShowLoginPassword(false);
-  }, [payload?.profile?.id]);
 
   function refreshCustomerList() {
     startTransition(() => {
@@ -528,32 +540,10 @@ export function CustomerInfoClient() {
                   />
                 </label>
                 <div className="block">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Login password</span>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    {payload.profile.login_password ? (
-                      <>
-                        <input
-                          readOnly
-                          type={showLoginPassword ? "text" : "password"}
-                          value={payload.profile.login_password}
-                          autoComplete="off"
-                          className="min-w-[12rem] flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-brand-navy"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowLoginPassword((v) => !v)}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                          aria-pressed={showLoginPassword}
-                        >
-                          {showLoginPassword ? "Hide" : "Show"}
-                        </button>
-                      </>
-                    ) : (
-                      <p className="text-sm text-slate-600">
-                        Not set — email/password login is disabled until the customer sets a password (e.g. OAuth-only).
-                      </p>
-                    )}
-                  </div>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sign-in</span>
+                  <p className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    {signInStatusLabel(payload.profile.sign_in_status)}
+                  </p>
                 </div>
                 {(
                   [
