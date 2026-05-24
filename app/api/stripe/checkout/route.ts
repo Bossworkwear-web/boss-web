@@ -5,33 +5,25 @@ import { getStripeServer } from "@/lib/stripe-server";
 import { totalEstimatedShippingWeightKg } from "@/lib/delivery-shipping-weight";
 import { computeStorefrontCheckoutFees } from "@/lib/storefront-cart-checkout-fees";
 import { hasPriorEmbroideryOrderForCustomerEmail } from "@/lib/storefront-prior-embroidery-order";
+import type { StoreOrderCartLine } from "@/lib/store-order-cart-payload";
+import { saveStoreCheckoutPending } from "@/lib/store-checkout-pending";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { validatePromotionCodeForCheckout } from "@/lib/promotion-codes";
 import { validateSpecialDealPackageCartLines } from "@/lib/storefront-special-deal-package-cart";
 import { storefrontCartNetProductSubtotalAfterVolumeAud, storefrontVolumeAdjustedCartLines } from "@/lib/storefront-volume-discount";
 
-type CartItem = {
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  listUnitPrice?: number;
-  category?: string | null;
-  serviceType?: string;
-  referenceImageUrls?: string[];
-  placements?: string[];
-  specialDealPackageId?: string;
-};
+type CheckoutCartItem = StoreOrderCartLine;
 
 function dollarsToCents(d: number): number {
   return Math.round(d * 100);
 }
 
-function assertCart(items: CartItem[]): { ok: true } | { ok: false; error: string } {
+function assertCart(items: CheckoutCartItem[]): { ok: true } | { ok: false; error: string } {
   if (!Array.isArray(items) || items.length === 0) return { ok: false, error: "Cart is empty." };
   if (items.length > 80) return { ok: false, error: "Too many cart lines." };
   for (const it of items) {
     if (!it.productName?.trim()) return { ok: false, error: "Invalid product name." };
+    if (!it.productId?.trim()) return { ok: false, error: "Invalid product id." };
     if (!Number.isFinite(it.quantity) || it.quantity < 1 || it.quantity > 999) return { ok: false, error: "Invalid qty." };
     if (!Number.isFinite(it.unitPrice) || it.unitPrice < 0) return { ok: false, error: "Invalid unit price." };
     if (!Number.isFinite(it.totalPrice) || it.totalPrice < 0) return { ok: false, error: "Invalid line total." };
@@ -50,10 +42,11 @@ export async function POST(req: Request) {
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}` : "http://localhost:3000");
 
   let body: {
-    items?: CartItem[];
+    items?: CheckoutCartItem[];
     deliveryAddress?: string | null;
     promotionCodeId?: string | null;
     pickUp?: boolean;
+    reorderedFromStoreOrderId?: string | null;
   } = {};
   try {
     body = (await req.json()) as typeof body;
@@ -83,6 +76,9 @@ export async function POST(req: Request) {
   }
 
   const deliveryAddress = (body.deliveryAddress ?? "").trim();
+  if (!deliveryAddress) {
+    return Response.json({ ok: false, error: "Delivery address is required." }, { status: 400 });
+  }
   const postcode = extractAustralianPostcodeFromAddress(deliveryAddress);
   const estimatedWeightKg = totalEstimatedShippingWeightKg(items);
 
@@ -91,8 +87,9 @@ export async function POST(req: Request) {
 
   const cookieStore = await cookies();
   const customerEmail = (cookieStore.get("customer_email")?.value ?? "").trim();
-  if (!customerEmail) {
-    return Response.json({ ok: false, error: "Sign in to pay." }, { status: 401 });
+  const customerName = (cookieStore.get("customer_name")?.value ?? "").trim();
+  if (!customerEmail || !customerName) {
+    return Response.json({ ok: false, error: "Sign in and complete your details to pay." }, { status: 401 });
   }
 
   let hasPriorEmbroidery = false;
@@ -224,6 +221,33 @@ export async function POST(req: Request) {
           : {}),
       },
     });
+
+    if (!session.id) {
+      return Response.json({ ok: false, error: "Stripe did not return a session id." }, { status: 500 });
+    }
+
+    const reorderedFromStoreOrderId = (body.reorderedFromStoreOrderId ?? "").trim();
+    const pendingSave = await saveStoreCheckoutPending(supabase, {
+      stripeCheckoutSessionId: session.id,
+      customerEmail,
+      customerName,
+      deliveryAddress,
+      items,
+      promotionCodeId: validatedPromoId,
+      pickUp,
+      reorderedFromStoreOrderId: reorderedFromStoreOrderId || null,
+    });
+    if (!pendingSave.ok) {
+      console.error("[stripe/checkout] pending snapshot:", pendingSave.error);
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Could not save checkout snapshot. Run supabase/migrations/20260524_store_checkout_pending.sql in Supabase, then try again.",
+        },
+        { status: 503 },
+      );
+    }
 
     return Response.json({ ok: true, url: session.url, id: session.id });
   } catch (e) {

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { placeStoreOrder, type PlaceStoreOrderOptions } from "@/app/orders/actions";
 import { ArrowLeftIcon } from "@/app/components/icons";
 import { TopNav } from "@/app/components/top-nav";
+import { cartItemsToStoreOrderLines } from "@/lib/cart-to-store-order-line";
 import { extractAustralianPostcodeFromAddress } from "@/lib/customer-delivery-estimate";
 import {
   CHECKOUT_PICK_UP_SESSION_KEY,
@@ -300,25 +301,13 @@ export default function PaymentPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            items: items.map((i) => ({
-              productName: i.productName,
-              quantity: i.quantity,
-              unitPrice: i.unitPrice,
-              totalPrice: i.totalPrice,
-              ...(typeof i.listUnitPrice === "number" && Number.isFinite(i.listUnitPrice)
-                ? { listUnitPrice: i.listUnitPrice }
-                : {}),
-              serviceType: i.serviceType,
-              ...(i.category != null && String(i.category).trim() !== ""
-                ? { category: String(i.category).trim() }
-                : {}),
-              ...(Array.isArray(i.referenceImageUrls) && i.referenceImageUrls.length > 0
-                ? { referenceImageUrls: i.referenceImageUrls }
-                : {}),
-            })),
+            items: cartItemsToStoreOrderLines(items),
             deliveryAddress,
             ...(appliedPromo ? { promotionCodeId: appliedPromo.promotionCodeId } : {}),
             ...(pickUp ? { pickUp: true } : {}),
+            ...(getReorderSourceStoreOrderId()
+              ? { reorderedFromStoreOrderId: getReorderSourceStoreOrderId() }
+              : {}),
           }),
         });
         const json = (await res.json().catch(() => ({}))) as { ok?: boolean; url?: string; error?: string; hint?: string };
@@ -383,7 +372,7 @@ export default function PaymentPage() {
       if (!placeOpts && sessionId.startsWith("cs_")) {
         placeOpts = { stripeCheckoutSessionId: sessionId };
       }
-      const res = await placeStoreOrder(payloadItems, placeOpts);
+      const res = await placeStoreOrder(cartItemsToStoreOrderLines(payloadItems), placeOpts);
       if (res.ok) {
         clearCartItems();
         setItems([]);
