@@ -43,7 +43,7 @@ export function StorefrontDualCta({
         className={isHero ? quoteHeroClass : quoteCategoryClass}
         data-cyber-guide="cat-quote"
       >
-        Team quote (20+)
+        Team quote (50+)
       </Link>
     </div>
   );
