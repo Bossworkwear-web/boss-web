@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AdminGoogleMarketingLinks } from "@/app/admin/(panel)/analytics/admin-google-marketing-links";
 import { loadDashboardStoreOrderPeriodStats } from "@/lib/admin-dashboard-store-order-stats";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
@@ -197,6 +198,23 @@ export default async function AdminDashboardPage() {
         >
           Open stock table →
         </Link>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-medium text-brand-navy">Google marketing</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              GA4 traffic &amp; conversions · Search Console indexing &amp; search queries
+            </p>
+          </div>
+          <Link href="/admin/analytics" className="text-sm font-semibold text-brand-orange hover:underline">
+            Full analytics →
+          </Link>
+        </div>
+        <div className="mt-4">
+          <AdminGoogleMarketingLinks variant="dashboard" />
+        </div>
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

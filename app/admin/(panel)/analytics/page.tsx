@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AdminGoogleMarketingLinks } from "@/app/admin/(panel)/analytics/admin-google-marketing-links";
 import { formatAudFromCents, loadStoreSalesAnalytics, type BucketRow, type PeriodTotals } from "@/lib/store-analytics-sales";
 
 export const dynamic = "force-dynamic";
@@ -60,14 +61,18 @@ export default async function AdminAnalyticsPage() {
         </p>
         <h1 className="mt-1 text-3xl font-medium text-brand-navy">Analytics</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
-          <strong>Store revenue</strong> below is derived from paid store orders (excluding cancelled). Marketing traffic and
-          sessions can still be wired to GA / Plausible. The <strong>sales funnel</strong> (enquiry → completion) stays in{" "}
+          <strong>Store revenue</strong> below is from paid store orders (excluding cancelled). Use{" "}
+          <strong>Google marketing</strong> links for site traffic, search queries, and conversion events (
+          <code className="rounded bg-slate-100 px-1">purchase</code>,{" "}
+          <code className="rounded bg-slate-100 px-1">quote_request</code>). Sales funnel (enquiry → completion) is in{" "}
           <Link href="/admin/crm" className="font-semibold text-brand-orange hover:underline">
             CRM &amp; pipeline
           </Link>
           .
         </p>
       </header>
+
+      <AdminGoogleMarketingLinks variant="analytics" />
 
       {error ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">{error}</div>
@@ -138,13 +143,6 @@ export default async function AdminAnalyticsPage() {
           </ul>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="min-h-[180px] rounded-xl border-2 border-dashed border-slate-300 bg-white p-6">
-              <p className="text-sm font-medium text-slate-700">Traffic &amp; sessions</p>
-              <p className="mt-2 text-xs text-slate-500">
-                Embed Google Analytics, Plausible, or similar. Add the snippet in <code className="rounded bg-slate-100 px-1">layout.tsx</code>{" "}
-                or use environment-driven script tags.
-              </p>
-            </div>
             <Link
               href="/admin/store-orders"
               className="min-h-[180px] rounded-xl border border-brand-orange/40 bg-brand-orange/5 p-6 transition hover:bg-brand-orange/10"
