@@ -7,14 +7,7 @@
     <key>ProgramArguments</key>
     <array>
       <string>/bin/bash</string>
-      <string>-lc</string>
-      <string>
-        export PATH="/opt/homebrew/opt/libpq/bin:/usr/local/opt/libpq/bin:$PATH";
-        cd "/Users/kyliewang/Desktop/Bosss WW_Web/dev/boss-web";
-        BACKUP_EXTERNAL_ROOT="/Volumes/External 4T HD/Boss Workwear";
-        BACKUP_DB_KEEP=8;
-        bash scripts/backup-supabase-db.sh
-      </string>
+      <string>/Users/kyliewang/Library/Scripts/bossworkwear-supabase-db-backup.sh</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>

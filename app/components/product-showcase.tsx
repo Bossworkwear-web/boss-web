@@ -280,7 +280,10 @@ export function ProductShowcase({
     <>
       {hideTopNav ? null : <TopNavClient navSubsByMain={navSubsByMain} mainCategories={[...MAIN_CATEGORIES]} />}
 
-      <section className={`${SITE_PAGE_INNER_SHELL_CLASS} py-12`}>
+      <section
+        id={layout === "home" ? "shop-categories" : undefined}
+        className={`${SITE_PAGE_INNER_SHELL_CLASS} py-12`}
+      >
         {layout === "search" && !hasQuery ? (
           <div className="mx-auto flex max-w-lg flex-col items-center gap-6 text-center">
             <div className="space-y-2">

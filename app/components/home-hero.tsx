@@ -1,4 +1,5 @@
 import { HomeHeroCarousel } from "@/app/components/home-hero-carousel";
+import { StorefrontDualCta } from "@/app/components/storefront-dual-cta";
 import { getHomepageHeroContent } from "@/lib/site-content";
 import { Boldonse } from "next/font/google";
 
@@ -32,6 +33,12 @@ export async function HomeHero() {
             <p className="mx-auto mt-[calc((1.25rem+2.4024rem)/4)] max-w-[46.8rem] text-[calc(1.57872rem/2)] leading-[calc(2.76276rem/2)] text-white/95 sm:mt-[calc((1.25rem+2.5744rem)/2)] sm:text-[1.77652rem] sm:leading-[2.96056rem]">
               {subtext}
             </p>
+            <div className="pointer-events-auto mx-auto mt-6 max-w-xl space-y-2 sm:mt-8">
+              <StorefrontDualCta variant="hero" shopHref="#shop-categories" quoteHref="/quote" />
+              <p className="text-[0.85rem] leading-snug text-white/80 sm:text-sm">
+                Small team orders — shop online. Bulk branding for 20+ units — free quote.
+              </p>
+            </div>
           </div>
         </div>
       </div>

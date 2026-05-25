@@ -4,6 +4,7 @@ import { Encode_Sans_Condensed, Montserrat } from "next/font/google";
 import "./globals.css";
 import "./store-ui.css";
 import "./product-listing-cards.css";
+import { GoogleAnalytics } from "@/app/components/google-analytics";
 import { GlobalLatinInputGuard } from "@/app/components/global-latin-input-guard";
 import { RouteLoading } from "@/app/components/route-loading";
 import { SiteFooter } from "@/app/components/site-footer";
@@ -76,6 +77,7 @@ export default async function RootLayout({
       className={`${encodeSansCondensed.variable} ${montserrat.variable} font-sans h-full antialiased`}
     >
       <body suppressHydrationWarning className="flex min-h-full flex-col overflow-x-clip font-sans antialiased">
+        <GoogleAnalytics />
         <GlobalLatinInputGuard />
         <RouteLoading />
         <div className="flex-1 min-w-0">{children}</div>

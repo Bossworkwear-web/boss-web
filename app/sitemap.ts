@@ -9,6 +9,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   const staticPaths = [
     "",
+    "/quote",
     "/service",
     "/special-deals",
     "/contact-us",
@@ -23,7 +24,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     url: `${base}${path}`,
     lastModified: now,
     changeFrequency: path === "" ? "daily" : "monthly",
-    priority: path === "" ? 1 : 0.7,
+    priority: path === "" ? 1 : path === "/quote" ? 0.85 : 0.7,
   }));
 
   for (const main of MAIN_CATEGORIES) {

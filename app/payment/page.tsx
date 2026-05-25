@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
+import { PurchaseAnalyticsTracker } from "@/app/components/purchase-analytics-tracker";
 import { placeStoreOrder, type PlaceStoreOrderOptions } from "@/app/orders/actions";
 import { ArrowLeftIcon } from "@/app/components/icons";
 import { TopNav } from "@/app/components/top-nav";
@@ -66,7 +67,12 @@ export default function PaymentPage() {
   const [deliveryAddress, setDeliveryAddress] = useState<string>("");
   const [hasPriorEmbroideryOrder, setHasPriorEmbroideryOrder] = useState<boolean | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
-  const [placed, setPlaced] = useState<{ orderNumber: string; trackUrl: string } | null>(null);
+  const [placed, setPlaced] = useState<{
+    orderNumber: string;
+    trackUrl: string;
+    valueAud?: number;
+    itemCount?: number;
+  } | null>(null);
   const [payPending, startPayTransition] = useTransition();
   const [returningFromStripe, setReturningFromStripe] = useState(false);
   const [promoInput, setPromoInput] = useState("");
@@ -374,9 +380,15 @@ export default function PaymentPage() {
       }
       const res = await placeStoreOrder(cartItemsToStoreOrderLines(payloadItems), placeOpts);
       if (res.ok) {
+        const itemCount = payloadItems.reduce((sum, line) => sum + Math.max(1, line.quantity ?? 1), 0);
         clearCartItems();
         setItems([]);
-        setPlaced({ orderNumber: res.orderNumber, trackUrl: res.trackUrl });
+        setPlaced({
+          orderNumber: res.orderNumber,
+          trackUrl: res.trackUrl,
+          valueAud: payableTotal,
+          itemCount,
+        });
         try {
           sessionStorage.removeItem("boss_web_checkout_cart_v1");
           sessionStorage.removeItem("boss_web_checkout_delivery_address_v1");
@@ -397,6 +409,11 @@ export default function PaymentPage() {
   if (placed) {
     return (
       <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
+        <PurchaseAnalyticsTracker
+          orderNumber={placed.orderNumber}
+          valueAud={placed.valueAud}
+          itemCount={placed.itemCount}
+        />
         <TopNav />
         <div className={STORE_MAIN_SHELL_CLASS}>
           <section className={`${SITE_PAGE_ROW_CLASS} py-10`}>

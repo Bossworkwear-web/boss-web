@@ -361,6 +361,7 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
             />
           </div>
 
+          <div id="category-products">
           <CategoryBrowseProductsGrid>
             {pageItems.map((item) => {
               const discountPercent = getDiscountPercent(item.name);
@@ -438,6 +439,7 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
               );
             })}
           </CategoryBrowseProductsGrid>
+          </div>
 
           {totalPages > 1 && sorted.length > 0 ? (
             <nav

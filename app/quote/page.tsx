@@ -11,6 +11,7 @@ import {
 } from "@/app/components/icons";
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
 import { TopNav } from "@/app/components/top-nav";
+import { QuoteAnalyticsTracker } from "@/app/components/quote-analytics-tracker";
 import { QuoteBackNav } from "@/app/components/quote-back-nav";
 import { QuoteLogoDropzone } from "@/app/components/quote-logo-dropzone";
 import { runAfterQuoteSubmit } from "@/lib/crm/after-quote-submit";
@@ -393,10 +394,22 @@ export default async function QuotePage({ searchParams }: QuotePageProps) {
         >
         <header className="flex flex-col gap-3">
           <QuoteBackNav />
+          <QuoteAnalyticsTracker status={status} />
           <h1 className="text-4xl font-medium">Get a Quote</h1>
           <p className="max-w-2xl text-sm text-brand-navy/75">
-            Tell us what uniform products you need and we will prepare a tailored quote.
+            Shop online for small team orders, or use this form for tailored bulk pricing with logo embroidery
+            or printing.
           </p>
+          <div className="max-w-2xl space-y-2 rounded-xl border border-brand-navy/15 bg-brand-surface/40 px-4 py-3 text-sm text-brand-navy/85">
+            <p>
+              <strong className="text-brand-navy">Small orders (typical 5–20 units):</strong> Browse categories
+              and checkout online — embroidery and printing available on many products.
+            </p>
+            <p>
+              <strong className="text-brand-navy">Team &amp; bulk (20+ units):</strong> Submit this form for
+              better pricing, mock-ups, and company delivery. Larger corporate orders welcome.
+            </p>
+          </div>
         </header>
 
         {(prefilledProductIds.length > 0 ||
