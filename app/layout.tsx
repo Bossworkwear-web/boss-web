@@ -28,6 +28,7 @@ const montserrat = Montserrat({
 });
 
 const metadataBaseUrl = getSiteUrl();
+const googleSiteVerification = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION?.trim();
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -46,6 +47,7 @@ export const metadata: Metadata = {
   icons: {
     icon: [{ url: "/Boss_favicon.svg", type: "image/svg+xml" }],
   },
+  ...(googleSiteVerification ? { verification: { google: googleSiteVerification } } : {}),
 };
 
 export default async function RootLayout({
