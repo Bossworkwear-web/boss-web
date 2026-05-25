@@ -34,7 +34,7 @@ export async function HomeHero() {
               {subtext}
             </p>
             <div className="pointer-events-auto mx-auto mt-6 max-w-xl space-y-2 sm:mt-8">
-              <StorefrontDualCta variant="hero" shopHref="#shop-categories" quoteHref="/quote" />
+              <StorefrontDualCta variant="hero" shopHref="/categories/workwear" quoteHref="/quote" />
               <p className="text-[calc(0.85rem*1.3)] leading-snug text-white/80 sm:text-[calc(0.875rem*1.3)]">
                 Small team orders — shop online. Bulk branding for 50+ units — free quote.
               </p>
