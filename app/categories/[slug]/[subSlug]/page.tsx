@@ -324,8 +324,8 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
         {slug === HEALTH_CARE_MAIN_SLUG ? <HealthCareCategoryTopAd /> : null}
         {slug === "ppe" ? <PpeCategoryTopAd /> : null}
         {slug === "chef" ? <ChefCategoryTopAd /> : null}
-        <section className={`category-browse-panel ${SITE_PAGE_ROW_CLASS} pb-10 pt-0`}>
-          <CategoryGetAQuoteCta />
+        <CategoryGetAQuoteCta />
+        <section className={`category-browse-panel relative z-10 ${SITE_PAGE_ROW_CLASS} pb-10 pt-0`}>
           <header data-cyber-guide="cat-header" className="mb-7 mt-10 space-y-6">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-brand-navy/70">Category</p>
             <div className="flex flex-wrap items-center justify-between gap-4">

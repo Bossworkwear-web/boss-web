@@ -14,7 +14,7 @@ export function CategoryTopAdBanner({
   return (
     <div className="hidden w-full sm:block sm:pt-5">
       <aside
-        className="relative overflow-hidden border-b border-brand-navy/10 bg-white shadow-sm"
+        className="relative z-0 overflow-hidden border-b border-brand-navy/10 bg-white shadow-sm"
         aria-label="Promotion"
       >
         <Image
