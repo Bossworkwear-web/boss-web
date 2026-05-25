@@ -11,7 +11,7 @@ export function CategoryGetAQuoteCta() {
       >
         Free Quote
       </Link>
-      <p className="relative z-30 max-w-md px-4 text-center text-xs font-medium text-brand-navy/75 sm:text-sm">
+      <p className="relative z-30 max-w-md px-4 text-center text-[calc(0.75rem*1.3)] font-medium leading-snug text-brand-navy/75 sm:max-w-lg sm:text-[calc(0.875rem*1.3)]">
         Ordering 50+ units? Get a better deal with a free quote.
       </p>
     </div>
