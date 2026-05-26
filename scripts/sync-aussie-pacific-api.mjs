@@ -16,6 +16,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { getBossWebRoot, loadEnvLocal } from "./lib/load-env.mjs";
 import { maybeAppendAp2310BlackRedBackFallback } from "./lib/ap-2310-back-fallback.mjs";
+import { appendApGalleryColorCountsHash } from "./lib/ap-gallery-color-counts.mjs";
 
 loadEnvLocal();
 
@@ -318,7 +319,7 @@ function buildProductRow(apiProduct) {
         )
       : orderedImageUrls;
 
-  const imageUrls =
+  let imageUrls =
     orderedWith2310Back.length > 0
       ? orderedWith2310Back
       : dedupeOrderedHttpUrls(
@@ -327,6 +328,19 @@ function buildProductRow(apiProduct) {
             .map((img) => String(img?.filename ?? "").trim())
             .filter((u) => u.startsWith("http")),
         );
+
+  if (orderedWith2310Back.length > 0 && imageUrls.length > 0 && colors.length >= 2) {
+    const colorImageCounts = colors.map((colour) => {
+      const bucket = urlsByColourNorm.get(apColourNormKey(colour));
+      return bucket?.length ?? 0;
+    });
+    if (colorImageCounts.some((n) => n > 0)) {
+      imageUrls = [
+        appendApGalleryColorCountsHash(imageUrls[0], colorImageCounts),
+        ...imageUrls.slice(1),
+      ];
+    }
+  }
 
   const category = inferDbCategory(mainCategory, subCategory, name);
   const audience = inferAudience(mainCategory);

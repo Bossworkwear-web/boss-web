@@ -8,6 +8,10 @@ export type ProductColourSwatchPart = {
   hex: string;
 };
 
+export type ProductColourSwatchContext = {
+  productSlug?: string | null;
+};
+
 /** Longest keys first so "royal blue" wins over "blue". */
 const COLOUR_HEX_ENTRIES = ([
   ["fluoro yellow lime", "#c6f000"],
@@ -26,6 +30,8 @@ const COLOUR_HEX_ENTRIES = ([
   ["fluoro orange", "#ff6600"],
   ["fluoro pink", "#ff69b4"],
   ["fluoro", "#e8ff00"],
+  ["neon green", "#83ff6d"],
+  ["neon pink", "#ff384d"],
   ["royal blue", "#2563eb"],
   ["sky blue", "#87ceeb"],
   ["ceil blue", "#8fd6e8"],
@@ -42,9 +48,9 @@ const COLOUR_HEX_ENTRIES = ([
   ["p grey", "#6b7280"],
   ["pgrey", "#6b7280"],
   ["charcoal", "#36454f"],
+  ["bottle green", "#0a391b"],
   ["burgundy", "#800020"],
   ["maroon", "#7f1d1d"],
-  ["bottle green", "#006400"],
   ["forest green", "#228b22"],
   ["forest", "#228b22"],
   ["pea green", "#6b8e23"],
@@ -72,7 +78,6 @@ const COLOUR_HEX_ENTRIES = ([
   ["denim", "#1d4ed8"],
   ["orange", "#f97316"],
   ["yellow", "#eab308"],
-  ["gold", "#ca8a04"],
   ["silver", "#a8a29e"],
   ["bronze", "#a16207"],
   ["brown", "#92400e"],
@@ -86,6 +91,11 @@ const COLOUR_HEX_ENTRIES = ([
   ["olive", "#6b8e23"],
   ["blue", "#3b82f6"],
   ["navy", "#1e3a5f"],
+  ["slate", "#525252"],
+  ["ashe", "#525252"],
+  ["ash", "#525252"],
+  ["gold", "#ffb831"],
+  ["bottle", "#0a391b"],
   ["grey", "#6b7280"],
   ["gray", "#6b7280"],
   ["black", "#171717"],
@@ -110,7 +120,7 @@ function hashColourFallback(label: string): string {
   return `hsl(${hue} 42% 42%)`;
 }
 
-export function productColourPartToHex(part: string): string {
+export function productColourPartToHex(part: string, _context?: ProductColourSwatchContext): string {
   const normalized = normalizeColourPart(part);
   if (!normalized) {
     return hashColourFallback(part);
@@ -163,14 +173,17 @@ export function parseProductColourParts(label: string): string[] {
   return [trimmed];
 }
 
-export function productColourLabelToSwatches(label: string): ProductColourSwatchPart[] {
+export function productColourLabelToSwatches(
+  label: string,
+  context?: ProductColourSwatchContext,
+): ProductColourSwatchPart[] {
   const parts = parseProductColourParts(label);
   if (parts.length === 0) {
     return [{ label: label.trim() || "—", hex: hashColourFallback(label) }];
   }
   return parts.map((part) => ({
     label: part,
-    hex: productColourPartToHex(part),
+    hex: productColourPartToHex(part, context),
   }));
 }
 

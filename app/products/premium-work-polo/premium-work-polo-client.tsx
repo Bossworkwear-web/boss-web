@@ -16,8 +16,25 @@ import {
   ProductColourSwatch,
   ProductColourSwatchDots,
 } from "@/app/components/product-colour-swatch";
-import { filterAp2211ColorOptions, isStorefrontAp2211Slug } from "@/lib/ap-2211-storefront";
+import type { ProductColourSwatchContext } from "@/lib/product-colour-swatch";
+import {
+  applyAp2211GalleryAdjustments,
+  filterAp2211ColorOptions,
+  isStorefrontAp2211Slug,
+} from "@/lib/ap-2211-storefront";
+import {
+  ap2311ColorsSortedFullForGalleryCounts,
+  filterAp2311ColorImageCounts,
+  filterAp2311ColorOptions,
+  isStorefrontAp2311Slug,
+} from "@/lib/ap-2311-storefront";
 import { filterAp3309ColorOptions, isStorefrontAp3309Slug } from "@/lib/ap-3309-storefront";
+import {
+  apColorImageCountsAlignWithColors,
+  apColorIndexForGalleryImage,
+  apHeroIndexForColor,
+  stripApGalleryColorCountsHash,
+} from "@/lib/ap-gallery-color-counts";
 import { isPpeStorefrontProduct } from "@/lib/catalog";
 import { STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { storefrontLeadingSupplierBrand } from "@/lib/product-display-name";
@@ -187,6 +204,8 @@ export type ProductDetailData = {
   originalPrice?: number;
   imageUrls: string[];
   colorOptions: string[];
+  /** From `#apcc=` on first gallery URL — per-colour image block sizes (Aussie Pacific sync). */
+  apColorImageCounts?: number[] | null;
   sizeOptions: string[];
   /** From `data/product-google-ratings.json` or Google Places (store listing). */
   googleRating?: ProductGoogleRating;
@@ -313,6 +332,9 @@ function effectivePdpColorOptions(product: ProductDetailData): string[] {
   }
   if (isStorefrontAp3309Slug(product.slug ?? null)) {
     restricted = filterAp3309ColorOptions(restricted);
+  }
+  if (isStorefrontAp2311Slug(product.slug ?? null)) {
+    restricted = filterAp2311ColorOptions(restricted);
   }
   return restricted;
 }
@@ -1031,7 +1053,14 @@ function pickPrimaryImageForColor(color: string, urls: string[], opts?: GalleryC
         return list[2]!;
       }
     }
-    const sync = galleryIndexSyncHeroForColor(trimmed, list, colOpts, true, opts.opaqueProportionalBuckets ?? false);
+    const sync = galleryIndexSyncHeroForColor(
+      trimmed,
+      list,
+      colOpts,
+      true,
+      opts.opaqueProportionalBuckets ?? false,
+      opts.apColorImageCounts,
+    );
     if (sync) {
       return sync;
     }
@@ -1096,7 +1125,14 @@ function pickPrimaryImageForColor(color: string, urls: string[], opts?: GalleryC
 
   // Opaque CDN keys (e.g. Aussie Pacific): hero follows colour chip index when import order matches `colorOptions`.
   if (!galleryHasStructuredProductShots(list)) {
-    const sync = galleryIndexSyncHeroForColor(trimmed, list, colOpts, false);
+    const sync = galleryIndexSyncHeroForColor(
+      trimmed,
+      list,
+      colOpts,
+      false,
+      opts?.opaqueProportionalBuckets ?? false,
+      opts?.apColorImageCounts,
+    );
     if (sync) {
       return sync;
     }
@@ -1203,6 +1239,7 @@ function galleryImageIndexSyncColor(
   galleryUrls: readonly string[],
   forceOpaque = false,
   proportionalBuckets = false,
+  apColorImageCounts?: readonly number[] | null,
 ): string | null {
   if (colors.length <= 1 || galleryUrls.length <= 1) {
     return null;
@@ -1212,6 +1249,13 @@ function galleryImageIndexSyncColor(
   }
   const idx = galleryUrls.indexOf(imageUrl);
   if (idx < 0) {
+    return null;
+  }
+  if (apColorImageCountsAlignWithColors(apColorImageCounts, colors.length)) {
+    const ci = apColorIndexForGalleryImage(idx, apColorImageCounts);
+    if (ci >= 0 && ci < colors.length) {
+      return colors[ci] ?? null;
+    }
     return null;
   }
   if (proportionalBuckets && forceOpaque) {
@@ -1236,6 +1280,7 @@ function galleryIndexSyncHeroForColor(
   colOpts: readonly string[] | undefined,
   forceOpaque = false,
   proportionalBuckets = false,
+  apColorImageCounts?: readonly number[] | null,
 ): string | null {
   const trimmed = color.trim();
   if (!trimmed || !colOpts || colOpts.length <= 1 || list.length <= 1) {
@@ -1246,6 +1291,13 @@ function galleryIndexSyncHeroForColor(
   }
   const idx = indexOfColorOption(colOpts, trimmed);
   if (idx < 0) {
+    return null;
+  }
+  if (apColorImageCountsAlignWithColors(apColorImageCounts, colOpts.length)) {
+    const heroIdx = apHeroIndexForColor(idx, apColorImageCounts);
+    if (heroIdx != null && heroIdx >= 0 && heroIdx < list.length) {
+      return list[heroIdx] ?? null;
+    }
     return null;
   }
   if (proportionalBuckets && forceOpaque) {
@@ -1405,6 +1457,7 @@ function inferBestColorForGalleryImage(
     galleryUrls,
     pickOpts?.forceOpaqueColorIndex,
     pickOpts?.opaqueProportionalBuckets ?? false,
+    pickOpts?.apColorImageCounts,
   );
   if (opaqueSyncColor != null) {
     return opaqueSyncColor;
@@ -1498,8 +1551,11 @@ export type GalleryColorPickOpts = {
   /**
    * Aussie Pacific: image count per colour may differ — use proportional buckets instead of requiring
    * `galleryLength % colorCount === 0` (Bisley positional galleries keep uniform stride).
+   * When `#apcc=` is present on the first gallery URL, grouped colour blocks from sync take precedence.
    */
   opaqueProportionalBuckets?: boolean;
+  /** From `#apcc=` on first gallery URL — hero index per sorted colour chip. */
+  apColorImageCounts?: readonly number[] | null;
   /** For product-specific gallery ↔ chip fixes (e.g. `ap-1111`). */
   productSlug?: string | null;
   /**
@@ -1509,12 +1565,25 @@ export type GalleryColorPickOpts = {
   isAp2310Listing?: boolean;
 };
 
-function parseJbGalleryUrls(raw: readonly string[]): { urls: string[]; prefixCount: number } {
+function parseJbGalleryUrls(raw: readonly string[]): {
+  urls: string[];
+  prefixCount: number;
+  apColorImageCounts: number[] | null;
+} {
   if (!raw.length) {
-    return { urls: [], prefixCount: 0 };
+    return { urls: [], prefixCount: 0, apColorImageCounts: null };
   }
+  let apColorImageCounts: number[] | null = null;
+  const withApccStripped = raw.map((u, i) => {
+    if (i !== 0 || typeof u !== "string") {
+      return u;
+    }
+    const stripped = stripApGalleryColorCountsHash(u);
+    apColorImageCounts = stripped.counts;
+    return stripped.url;
+  });
   let prefixCount = 0;
-  const urls = raw
+  const urls = withApccStripped
     .map((u) => {
       const s = typeof u === "string" ? u : "";
       const m = JB_GALLERY_PREFIX_HASH_RE.exec(s);
@@ -1529,7 +1598,7 @@ function parseJbGalleryUrls(raw: readonly string[]): { urls: string[]; prefixCou
     })
     .map((u) => u.trim())
     .filter((u) => u.length > 0);
-  return { urls, prefixCount };
+  return { urls, prefixCount, apColorImageCounts };
 }
 
 function isJbWearStorefrontProduct(slug: string | null | undefined, supplierName: string | undefined): boolean {
@@ -1968,6 +2037,10 @@ export function PremiumWorkPoloClient({
 
   const colorOptions = useMemo(() => effectivePdpColorOptions(product), [product]);
 
+  const colourSwatchContext = useMemo((): ProductColourSwatchContext => {
+    return { productSlug: product.slug ?? null };
+  }, [product.slug]);
+
   const { productName, productCode } = useMemo(
     () =>
       product.displayProductName != null || product.displayProductCode != null
@@ -2094,9 +2167,30 @@ export function PremiumWorkPoloClient({
     [productImageUrlsForGallery],
   );
 
+  const resolvedApGallery = useMemo(() => {
+    let urls = galleryParsed.urls;
+    let apColorImageCounts = product.apColorImageCounts ?? galleryParsed.apColorImageCounts;
+    if (!product.apColorImageCounts && isStorefrontAp2211Slug(product.slug ?? null) && apColorImageCounts) {
+      const adjusted = applyAp2211GalleryAdjustments(urls, apColorImageCounts, colorOptions);
+      urls = adjusted.imageUrls;
+      apColorImageCounts = adjusted.apColorImageCounts;
+    } else if (!product.apColorImageCounts && isStorefrontAp2311Slug(product.slug ?? null) && apColorImageCounts) {
+      const sortedFull = ap2311ColorsSortedFullForGalleryCounts(colorOptions, apColorImageCounts);
+      apColorImageCounts = filterAp2311ColorImageCounts(sortedFull, apColorImageCounts);
+    }
+    return { urls, prefixCount: galleryParsed.prefixCount, apColorImageCounts };
+  }, [
+    colorOptions,
+    galleryParsed.apColorImageCounts,
+    galleryParsed.prefixCount,
+    galleryParsed.urls,
+    product.apColorImageCounts,
+    product.slug,
+  ]);
+
   const galleryImages = useMemo(
-    () => galleryForUrls(galleryParsed.urls),
-    [galleryParsed.urls],
+    () => galleryForUrls(resolvedApGallery.urls),
+    [resolvedApGallery.urls],
   );
 
   const galleryPickOpts = useMemo((): GalleryColorPickOpts => {
@@ -2109,22 +2203,24 @@ export function PremiumWorkPoloClient({
       isAussiePacific || bisleySlugUsesPositionalColorGallery(slugLower);
     return {
       colorOptions,
-      jbPrefixCount: galleryParsed.prefixCount,
+      jbPrefixCount: resolvedApGallery.prefixCount,
       isJbWear: isJb,
       jbStyleCodeUpper: jbStyleCodeUpperFromSlug(product.slug),
       forceOpaqueColorIndex,
       opaqueProportionalBuckets: isAussiePacific,
+      apColorImageCounts: resolvedApGallery.apColorImageCounts,
       productSlug: product.slug ?? null,
       isAp2310Listing: isAp2310StorefrontProduct(product),
     };
   }, [
     colorOptions,
-    galleryParsed.prefixCount,
     product.description,
     product.displayProductCode,
     product.name,
     product.slug,
     product.supplierName,
+    resolvedApGallery.apColorImageCounts,
+    resolvedApGallery.prefixCount,
   ]);
 
   const ppePlainOnly = useMemo(
@@ -2235,8 +2331,18 @@ export function PremiumWorkPoloClient({
       bisleySlugUsesPositionalColorGallery(slugLower) && rawUrls.length >= 4
         ? (bisleySortedPositionalImageUrlsIfComplete(rawUrls) ?? rawUrls)
         : rawUrls;
-    const { urls, prefixCount } = parseJbGalleryUrls(urlsForPick);
-    const g = galleryForUrls(urls);
+    const { urls, prefixCount, apColorImageCounts: rawApcc } = parseJbGalleryUrls(urlsForPick);
+    let pickUrls = urls;
+    let apColorImageCounts = product.apColorImageCounts ?? rawApcc;
+    if (!product.apColorImageCounts && isStorefrontAp2211Slug(product.slug ?? null) && apColorImageCounts) {
+      const adjusted = applyAp2211GalleryAdjustments(urls, apColorImageCounts, initialColors);
+      pickUrls = adjusted.imageUrls;
+      apColorImageCounts = adjusted.apColorImageCounts;
+    } else if (!product.apColorImageCounts && isStorefrontAp2311Slug(product.slug ?? null) && apColorImageCounts) {
+      const sortedFull = ap2311ColorsSortedFullForGalleryCounts(initialColors, apColorImageCounts);
+      apColorImageCounts = filterAp2311ColorImageCounts(sortedFull, apColorImageCounts);
+    }
+    const g = galleryForUrls(pickUrls);
     const supLower = (product.supplierName ?? "").trim().toLowerCase();
     const isAussiePacific =
       supLower === "aussie pacific" || slugLower.startsWith("ap-") || /\baussie\s+pacific\b/i.test(product.supplierName ?? "");
@@ -2248,6 +2354,7 @@ export function PremiumWorkPoloClient({
       isJbWear: isJbWearStorefrontProduct(product.slug, product.supplierName),
       forceOpaqueColorIndex,
       opaqueProportionalBuckets: isAussiePacific,
+      apColorImageCounts,
       productSlug: product.slug ?? null,
       isAp2310Listing: isAp2310StorefrontProduct(product),
     });
@@ -3280,7 +3387,7 @@ export function PremiumWorkPoloClient({
                           : "bg-transparent text-brand-navy hover:bg-brand-orange/10"
                       }`}
                     >
-                      <ProductColourSwatch label={color} compact={manyColours} />
+                      <ProductColourSwatch label={color} compact={manyColours} swatchContext={colourSwatchContext} />
                     </button>
                   );
                 })}
@@ -3300,7 +3407,7 @@ export function PremiumWorkPoloClient({
             <p className="flex flex-wrap items-center gap-2 text-[1.02rem] font-semibold text-brand-navy/80">
               <span>Editing:</span>
               {selectedColor ? (
-                <ProductColourSwatchDots label={selectedColor} size="large" />
+                <ProductColourSwatchDots label={selectedColor} size="large" swatchContext={colourSwatchContext} />
               ) : (
                 <span className="text-brand-navy/45">—</span>
               )}

@@ -3,6 +3,7 @@
 import {
   productColourLabelToSwatches,
   productColourSwatchIsWhite,
+  type ProductColourSwatchContext,
 } from "@/lib/product-colour-swatch";
 
 type ProductColourSwatchProps = {
@@ -10,6 +11,7 @@ type ProductColourSwatchProps = {
   /** Compact swatches when the colour grid is dense. */
   compact?: boolean;
   className?: string;
+  swatchContext?: ProductColourSwatchContext;
 };
 
 type SwatchDotSize = "compact" | "default" | "large";
@@ -44,6 +46,7 @@ type ProductColourSwatchDotsProps = {
   /** @deprecated Prefer `size="compact"`. */
   compact?: boolean;
   className?: string;
+  swatchContext?: ProductColourSwatchContext;
 };
 
 /** Circular colour dots only (no text label). */
@@ -52,9 +55,10 @@ export function ProductColourSwatchDots({
   size: sizeProp,
   compact = false,
   className = "",
+  swatchContext,
 }: ProductColourSwatchDotsProps) {
   const size: SwatchDotSize = sizeProp ?? (compact ? "compact" : "default");
-  const swatches = productColourLabelToSwatches(label);
+  const swatches = productColourLabelToSwatches(label, swatchContext);
   const gapClass = size === "large" ? "gap-1" : "gap-0.5";
 
   return (
@@ -79,10 +83,15 @@ export function ProductColourSwatchDots({
 /**
  * Circular colour swatches + label (e.g. Grey / Lime with two circles above text).
  */
-export function ProductColourSwatch({ label, compact = false, className = "" }: ProductColourSwatchProps) {
+export function ProductColourSwatch({
+  label,
+  compact = false,
+  className = "",
+  swatchContext,
+}: ProductColourSwatchProps) {
   return (
     <span className={`flex flex-col items-center gap-1 ${className}`.trim()}>
-      <ProductColourSwatchDots label={label} compact={compact} />
+      <ProductColourSwatchDots label={label} compact={compact} swatchContext={swatchContext} />
       <span className="block w-full text-center leading-snug">{label}</span>
     </span>
   );

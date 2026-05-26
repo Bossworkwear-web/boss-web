@@ -1,6 +1,7 @@
 /**
- * Aussie Pacific style `2211` PDP: remove standalone Black / Navy chips and drop gallery images that map
- * to those colours (opaque URLs — use the same proportional bucket index as `opaqueColorIndexForGalleryImage`).
+ * Aussie Pacific style `2211` PDP: hide standalone `BLACK` (no usable product shot in sync) and drop
+ * its gallery block so `#apcc=` stays aligned with visible chips. Standalone `NAVY` stays visible (1 image);
+ * combo colours use two (front + back).
  */
 
 export function isStorefrontAp2211Slug(slug: string | null | undefined): boolean {
@@ -13,34 +14,61 @@ export function isStorefrontAp2211Slug(slug: string | null | undefined): boolean
   return false;
 }
 
-function isHiddenStandaloneBlackOrNavyLabel(label: string): boolean {
-  const t = String(label).trim().toLowerCase();
-  return t === "black" || t === "navy";
+/** Standalone `BLACK` / `Black` only — not `Black/Red`, etc. */
+export function isHiddenStandaloneAp2211BlackLabel(label: string): boolean {
+  const t = String(label).trim().toLowerCase().replace(/\s+/g, "");
+  return t === "black";
 }
 
-/** Remove `Black` / `Navy` chips only (not combos like `Black/Red`). */
 export function filterAp2211ColorOptions(colors: readonly string[]): string[] {
-  return colors.filter((c) => !isHiddenStandaloneBlackOrNavyLabel(String(c)));
+  return colors.filter((c) => !isHiddenStandaloneAp2211BlackLabel(String(c)));
 }
 
 /**
- * `colorsSortedFull` must match API sync order (alphabetical). Each gallery index is assigned a colour bucket
- * via `floor(j * n / m)` — same as storefront opaque gallery ↔ chip sync.
+ * When storefront rules hide `BLACK`, rebuild the pre-filter sorted colour list so sync `#apcc=` can be
+ * trimmed (first bucket) in parallel with gallery URLs.
  */
-export function filterAp2211ImageUrls(urls: readonly string[], colorsSortedFull: readonly string[]): string[] {
-  const m = urls.length;
-  const n = colorsSortedFull.length;
-  if (m === 0 || n <= 0) {
-    return [...urls];
+export function ap2211ColorsSortedFullForGalleryCounts(
+  colorOptions: readonly string[],
+  apColorImageCounts: readonly number[] | null | undefined,
+): readonly string[] {
+  const sorted = [...colorOptions].sort((a, b) => String(a).localeCompare(String(b)));
+  if (!apColorImageCounts?.length || sorted.length === apColorImageCounts.length) {
+    return sorted;
   }
-  const out: string[] = [];
-  for (let j = 0; j < m; j++) {
-    const ci = Math.min(n - 1, Math.max(0, Math.floor((j * n) / m)));
-    const label = String(colorsSortedFull[ci] ?? "");
-    if (isHiddenStandaloneBlackOrNavyLabel(label)) {
-      continue;
-    }
-    out.push(String(urls[j]));
+  if (sorted.length + 1 !== apColorImageCounts.length) {
+    return sorted;
   }
-  return out;
+  if (sorted.some((c) => isHiddenStandaloneAp2211BlackLabel(String(c)))) {
+    return sorted;
+  }
+  return ["BLACK", ...sorted.map(String)];
+}
+
+/**
+ * Remove the hidden `BLACK` image block from the gallery and drop its `#apcc` count so chip index ↔ URLs
+ * match `filterAp2211ColorOptions` (incl. standalone `NAVY` with one front image).
+ */
+export function applyAp2211GalleryAdjustments(
+  imageUrls: readonly string[],
+  apColorImageCounts: readonly number[] | null | undefined,
+  colorOptionsEffective: readonly string[],
+): { imageUrls: string[]; apColorImageCounts: number[] | null } {
+  const urls = imageUrls.map(String);
+  if (!apColorImageCounts?.length) {
+    return { imageUrls: urls, apColorImageCounts: apColorImageCounts?.length ? [...apColorImageCounts] : null };
+  }
+
+  const sortedFull = ap2211ColorsSortedFullForGalleryCounts(colorOptionsEffective, apColorImageCounts);
+  if (!isHiddenStandaloneAp2211BlackLabel(String(sortedFull[0] ?? ""))) {
+    return { imageUrls: urls, apColorImageCounts: [...apColorImageCounts] };
+  }
+
+  const blackImages = Math.max(0, apColorImageCounts[0] ?? 0);
+  const trimmedUrls = blackImages > 0 ? urls.slice(blackImages) : urls;
+  const trimmedCounts = apColorImageCounts.slice(1);
+  return {
+    imageUrls: trimmedUrls,
+    apColorImageCounts: trimmedCounts.length > 0 ? [...trimmedCounts] : null,
+  };
 }

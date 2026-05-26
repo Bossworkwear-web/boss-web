@@ -50,10 +50,11 @@ import {
 } from "@/lib/biz-collection-metadata-colour-chips";
 import {
   filterAp2211ColorOptions,
-  filterAp2211ImageUrls,
   isStorefrontAp2211Slug,
 } from "@/lib/ap-2211-storefront";
 import { filterAp3309ColorOptions, isStorefrontAp3309Slug } from "@/lib/ap-3309-storefront";
+import { filterAp2311ColorOptions, isStorefrontAp2311Slug } from "@/lib/ap-2311-storefront";
+import { resolveApPdpGalleryState } from "@/lib/ap-pdp-gallery";
 import {
   isStorefrontYesChefCh234mPdp,
   isYesChefCh234mExcludedColourChip,
@@ -1667,13 +1668,15 @@ async function getDetailDataInternal(
     }
 
     if (isAussiePacificCatalog && isStorefrontAp2211Slug(productSlugLower)) {
-      const colorsSortedFull = [...colorOptionsEffective].sort((a, b) => String(a).localeCompare(String(b)));
-      normalizedImageUrls = filterAp2211ImageUrls(normalizedImageUrls, colorsSortedFull);
       colorOptionsEffective = filterAp2211ColorOptions(colorOptionsEffective);
     }
 
     if (isAussiePacificCatalog && isStorefrontAp3309Slug(productSlugLower)) {
       colorOptionsEffective = filterAp3309ColorOptions(colorOptionsEffective);
+    }
+
+    if (isAussiePacificCatalog && isStorefrontAp2311Slug(productSlugLower)) {
+      colorOptionsEffective = filterAp2311ColorOptions(colorOptionsEffective);
     }
 
     if (
@@ -1682,6 +1685,17 @@ async function getDetailDataInternal(
       normalizedImageUrls.some((u) => urlLooksLikeAp2310BackAsset(String(u)))
     ) {
       normalizedImageUrls = repositionAp2310BlackRedBackAfterSeventh(normalizedImageUrls);
+    }
+
+    let apColorImageCounts: number[] | null = null;
+    if (isAussiePacificCatalog && normalizedImageUrls.length > 0) {
+      const apGallery = resolveApPdpGalleryState(
+        normalizedImageUrls,
+        productSlugLower,
+        colorOptionsEffective,
+      );
+      normalizedImageUrls = apGallery.imageUrls;
+      apColorImageCounts = apGallery.apColorImageCounts;
     }
 
     const mappedProduct: ProductDetailData = {
@@ -1696,6 +1710,7 @@ async function getDetailDataInternal(
       ...((manualSale != null || discountPercent > 0) && { originalPrice: listRetail }),
       imageUrls: normalizedImageUrls,
       colorOptions: colorOptionsEffective,
+      ...(apColorImageCounts ? { apColorImageCounts } : {}),
       sizeOptions: normalizeProductSizeOptions(
         product.available_sizes,
         product.name,
