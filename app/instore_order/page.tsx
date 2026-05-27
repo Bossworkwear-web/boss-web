@@ -32,7 +32,7 @@ export default async function InstoreOrderPage({ searchParams }: PageProps) {
 
   let errorMessage: string | null = null;
   if (errorKey === "missing_name") errorMessage = "Customer name is required.";
-  else if (errorKey === "missing_contact") errorMessage = "Enter an email or phone number.";
+  else if (errorKey === "missing_contact") errorMessage = "Enter a phone number.";
   else if (errorKey === "no_items") errorMessage = "Add at least one garment / service line.";
   else if (errorKey) errorMessage = decodeError(errorKey);
 
@@ -41,35 +41,19 @@ export default async function InstoreOrderPage({ searchParams }: PageProps) {
       <TopNav />
       <MainWithSupplierRail>
         <section className={`${SITE_PAGE_ROW_CLASS} py-10`}>
-          <div className="mx-auto w-full max-w-3xl space-y-6">
-            <header className="space-y-2">
+          <div className="mx-auto w-full max-w-[67.2rem] space-y-6">
+            <header className="space-y-2 print:hidden">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-orange">Staff only</p>
               <h1 className="text-3xl font-medium text-brand-navy">Instore order</h1>
               <p className="text-sm leading-relaxed text-brand-navy/70">
-                Walk-in printing or embroidery jobs. Saved to{" "}
+                Walk-in printing or embroidery jobs. Staff login is required. Saved to{" "}
                 <strong>Admin → Instore orders</strong> — not synced to Xero. Customers cannot see this page; bookmark
                 the URL for floor staff.
               </p>
-              {process.env.NODE_ENV === "development" && process.env.INSTORE_ORDER_REQUIRE_AUTH !== "1" ? (
-                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-                  Local dev: open{" "}
-                  <a href="http://127.0.0.1:3000/instore_order" className="font-mono font-semibold text-brand-orange hover:underline">
-                    http://127.0.0.1:3000/instore_order
-                  </a>{" "}
-                  — staff login not required on localhost.
-                </p>
-              ) : (
-                <p className="text-xs text-brand-navy/50">
-                  Not signed in?{" "}
-                  <Link href="/admin/login?from=/instore_order" className="font-semibold text-brand-orange hover:underline">
-                    Staff login
-                  </Link>
-                </p>
-              )}
             </header>
 
             {created ? (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 print:hidden">
                 Order saved: <span className="font-mono font-semibold">{created}</span>. View in{" "}
                 <Link href="/admin/instore-orders" className="font-semibold text-brand-orange hover:underline">
                   Admin → Instore orders
@@ -79,12 +63,12 @@ export default async function InstoreOrderPage({ searchParams }: PageProps) {
             ) : null}
 
             {errorMessage ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 print:hidden">
                 {errorMessage}
               </div>
             ) : null}
 
-            <InstoreOrderForm />
+            <InstoreOrderForm savedOrderNumber={created || undefined} />
           </div>
         </section>
       </MainWithSupplierRail>

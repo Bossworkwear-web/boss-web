@@ -1131,3 +1131,42 @@ img.category-top-ad-wa-mark {
   box-shadow: 0 0 8px rgba(255, 133, 27, 0.45);
   transition: width 0.15s ease-out;
 }
+
+/* Instore order (/instore_order): print preview sheet without storefront chrome */
+@media print {
+  body.instore-order-print-mode {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background: #fff !important;
+  }
+
+  body.instore-order-print-mode .store-top-nav-shell,
+  body.instore-order-print-mode footer,
+  body.instore-order-print-mode .cyber-assist-bell-anchor,
+  body.instore-order-print-mode #instore-order-form,
+  body.instore-order-print-mode .instore-order-print-preview-chrome,
+  body.instore-order-print-mode .instore-order-print-preview-scroll {
+    display: none !important;
+  }
+
+  body.instore-order-print-mode #instore-order-print-preview-overlay {
+    position: static !important;
+    display: block !important;
+    background: #fff !important;
+    backdrop-filter: none !important;
+  }
+
+  body.instore-order-print-mode #instore-order-print-preview-sheet {
+    max-width: none !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  body.instore-order-print-mode main {
+    padding-top: 0 !important;
+    min-height: auto !important;
+  }
+}

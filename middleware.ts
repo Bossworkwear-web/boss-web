@@ -3,7 +3,6 @@ import type { NextRequest } from "next/server";
 
 import { ADMIN_PATHNAME_HEADER } from "./lib/admin-constants";
 import { homeLegacyQueryRedirectUrl } from "./lib/home-legacy-query-redirect";
-import { isInstoreOrderLocalDevAccess } from "./lib/instore-order-access";
 import { updateSupabaseAuthSession } from "./lib/supabase/middleware";
 
 /** Must stay in sync with `lib/admin-constants.ts` — middleware imports via relative path (no `@/`). */
@@ -61,19 +60,17 @@ export async function middleware(request: NextRequest) {
     return sessionResponse;
   }
 
-  const isInstoreStaffPage =
-    pathname === "/instore_order" || pathname.startsWith("/instore_order/");
+  const isInstoreStaffRoute =
+    pathname === "/instore_order" ||
+    pathname.startsWith("/instore_order/") ||
+    pathname.startsWith("/api/instore-order/");
   const isAdminPage = pathname.startsWith("/admin");
 
-  if (!isAdminPage && !isInstoreStaffPage) {
+  if (!isAdminPage && !isInstoreStaffRoute) {
     return sessionResponse;
   }
 
   if (pathname === "/admin/login" || pathname.startsWith("/admin/login/")) {
-    return sessionResponse;
-  }
-
-  if (isInstoreStaffPage && isInstoreOrderLocalDevAccess(request)) {
     return sessionResponse;
   }
 
@@ -89,7 +86,7 @@ export async function middleware(request: NextRequest) {
     return redirectRes;
   }
 
-  if (isInstoreStaffPage) {
+  if (isInstoreStaffRoute) {
     return sessionResponse;
   }
 
