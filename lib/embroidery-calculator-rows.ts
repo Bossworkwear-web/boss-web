@@ -16,7 +16,7 @@ export type EmbroideryCalculatorRow = {
 };
 
 export const EMBROIDERY_CALCULATOR_ROWS: readonly EmbroideryCalculatorRow[] = [
-  { id: "name", label: "Name", defaultUnitPrice: 12 },
+  { id: "name", label: "Name", defaultUnitPrice: 10 },
   { id: "company_logo", label: "Company Logo", defaultUnitPrice: 15 },
   { id: "towel_rob", label: "Towel/Rob", defaultUnitPrice: 30 },
   { id: "logo_20cm", label: "20cm width logo", defaultUnitPrice: 32 },
@@ -29,13 +29,13 @@ export const EMBROIDERY_CALCULATOR_ROWS: readonly EmbroideryCalculatorRow[] = [
  */
 export function embroideryQtyDiscountRate(qty: number): number {
   if (qty >= 100) {
-    return 0.15;
+    return 0.2;
   }
   if (qty >= 50) {
-    return 0.1;
+    return 0.15;
   }
   if (qty >= 25) {
-    return 0.075;
+    return 0.1;
   }
   if (qty >= 10) {
     return 0.05;

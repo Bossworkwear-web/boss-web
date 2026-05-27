@@ -1,0 +1,130 @@
+Boss Workwear — Quote CRM follow-up email templates
+====================================================
+Use from Admin → CRM. Replace {placeholders}. Pipeline: enquiry → quote → approval → completion.
+
+Store contact (use in signatures):
+  Phone: 0414 828 086
+  Email: sales@bossworkwear.au
+
+---
+TEMPLATE 1 — Auto (already in site): Quote received
+Trigger: Customer submits /quote (Resend: quote_received_customer)
+Subject: We received your quote request
+
+Hi {ContactName},
+
+Thanks for your enquiry from {CompanyName}. We have received your quote request and will be in touch shortly.
+
+If anything changes, reply to this email or call us on 0414 828 086 with your reference: {QuoteIdShort}
+
+sales@bossworkwear.au | 0414 828 086
+
+---
+TEMPLATE 2 — Internal: 24h reminder (send to yourself if no action)
+Subject: [ACTION] New quote — {CompanyName} — respond today
+
+New website quote (ID: {QuoteId})
+Company: {CompanyName}
+Contact: {ContactName} | {Email} | {Phone}
+Quantity / notes: {NotesFromForm}
+
+→ Admin CRM: move to Quote sent within 24 hours.
+
+---
+TEMPLATE 3 — Day 0 follow-up (if auto email not enough / personal touch)
+Subject: Re: Your workwear quote — {CompanyName}
+
+Hi {ContactName},
+
+Thanks for requesting a quote through Boss Workwear. I’m {YourName} and I’ll be looking after your enquiry.
+
+To prepare an accurate quote for 50+ units, could you confirm:
+1. Styles / products you’re interested in (polo, hi-vis, etc.)
+2. Quantities per size and colour
+3. Logo placement (embroidery or print) — your upload is attached if provided
+4. Delivery suburb or postcode
+
+You can reply here or complete details at: https://www.bossworkwear.au/quote
+
+We typically respond with pricing within 1 business day.
+
+Kind regards,
+{YourName}
+Boss Workwear
+0414 828 086 | sales@bossworkwear.au | https://www.bossworkwear.au
+
+---
+TEMPLATE 4 — Formal quote sent (aligns with Admin send-quote + accept link)
+Subject: Your quote — {CompanyName}
+
+Hi {ContactName},
+
+Please find your quote below for {CompanyName}.
+
+Total (GST included): {TotalAud}
+Expected lead time: {LeadTime}
+
+Review and accept online: {AcceptUrl}
+
+If the link doesn’t work, copy and paste it into your browser.
+
+Questions or changes to sizes/colours? Reply to this email or call 0414 828 086 — we’re happy to revise.
+
+Kind regards,
+Boss Workwear
+sales@bossworkwear.au | 0414 828 086
+
+---
+TEMPLATE 5 — Day 3 nudge (no reply after quote sent)
+Subject: Following up — workwear quote for {CompanyName}
+
+Hi {ContactName},
+
+Just checking you received our quote for {CompanyName}. Happy to adjust quantities, colours, or branding options if needed.
+
+If you’re ready to proceed, use the accept link in our last email or reply with “go ahead” and we’ll confirm next steps.
+
+If timing has changed, no problem — let me know and we’ll keep your quote on file.
+
+Kind regards,
+{YourName}
+Boss Workwear
+0414 828 086 | sales@bossworkwear.au
+
+---
+TEMPLATE 6 — Day 7 final follow-up
+Subject: Still interested? — Boss Workwear quote
+
+Hi {ContactName},
+
+I haven’t heard back on the workwear quote for {CompanyName}. I’ll close this enquiry for now unless you’d like to continue.
+
+Reply anytime if you still need uniforms — we can refresh pricing or start a new quote at https://www.bossworkwear.au/quote
+
+Thanks,
+{YourName}
+Boss Workwear
+sales@bossworkwear.au | 0414 828 086
+
+---
+TEMPLATE 7 — Won / order confirmed
+Subject: Order confirmed — {CompanyName} | Boss Workwear
+
+Hi {ContactName},
+
+Thank you for accepting the quote. Your order is confirmed.
+
+Next steps:
+• Artwork / logo proof (if applicable): we’ll email within 1 business day
+• Production lead time: {LeadTime}
+• We’ll contact you before dispatch
+
+Reference: {QuoteId}
+
+Kind regards,
+Boss Workwear
+sales@bossworkwear.au | 0414 828 086
+
+---
+SMS (optional — Twilio template quote_received_sms)
+Thanks {ContactName} — we received your quote request for {CompanyName}. Boss Workwear will be in touch soon. Call 0414 828 086 or reply to sales@bossworkwear.au.

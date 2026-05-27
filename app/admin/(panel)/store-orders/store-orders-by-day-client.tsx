@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { StoreOrderHoldForm } from "@/app/admin/(panel)/store-orders/store-order-hold-form";
 import { StoreOrderRefundPanel } from "@/app/admin/(panel)/store-orders/store-order-refund-panel";
+import { StoreOrderCreditPanel } from "@/app/admin/(panel)/store-orders/store-order-credit-panel";
 import { StoreOrderInvoiceReferenceForm } from "@/app/admin/(panel)/store-orders/store-order-invoice-reference-form";
 import {
   StoreOrderXeroLines,
@@ -278,6 +279,14 @@ export function StoreOrdersByDayClient({
                                 stripeCheckoutSessionId={r.stripe_checkout_session_id}
                                 stripePaymentIntentId={r.stripe_payment_intent_id}
                                 refundedAt={r.refunded_at}
+                              />
+                              <StoreOrderCreditPanel
+                                orderId={r.id}
+                                orderNumber={r.order_number}
+                                customerEmail={r.customer_email}
+                                totalCents={r.total_cents}
+                                refundedCents={r.refunded_cents}
+                                currency={r.currency}
                               />
                             </div>
                           </td>

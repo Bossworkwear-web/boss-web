@@ -21,6 +21,10 @@ export type PlaceStoreOrderOptions = {
   pickUp?: boolean;
   /** Stripe Checkout Session id (`cs_…`) after successful payment — verified server-side. */
   stripeCheckoutSessionId?: string;
+  /** Apply store credit at checkout (default true). */
+  applyStoreCredit?: boolean;
+  /** Credit-only checkout — amount locked server-side from /api/stripe/checkout. */
+  storeCreditAppliedCents?: number;
 };
 
 const CHECKOUT_REFERENCE_BUCKET = "production-order-assets";

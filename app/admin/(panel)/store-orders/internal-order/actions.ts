@@ -283,6 +283,8 @@ export async function createInternalOrderFromTemplate(formData: FormData): Promi
       carrier,
       tracking_number: null,
       shipped_at: null,
+      xero_sync_status: "skipped",
+      xero_sync_error: "Instore order — excluded from Xero",
     })
     .select("id")
     .single();

@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { DocketPrintBar } from "@/app/admin/(panel)/store-orders/[id]/docket/docket-print-bar";
 import { StoreOrderRefundPanel } from "@/app/admin/(panel)/store-orders/store-order-refund-panel";
+import { StoreOrderCreditPanel } from "@/app/admin/(panel)/store-orders/store-order-credit-panel";
 import { serviceTypeColoredContent } from "@/lib/service-type-colored";
 import { resolveStorefrontImageUrlList } from "@/lib/storefront-image-url";
 import { storeOrderDetailBackHref } from "@/lib/store-order-channel";
@@ -260,6 +261,16 @@ export default async function OrderedItemsListPage({ params }: Props) {
             typeof order.stripe_payment_intent_id === "string" ? order.stripe_payment_intent_id : null
           }
           refundedAt={typeof order.refunded_at === "string" ? order.refunded_at : null}
+          defaultOpen
+        />
+        <StoreOrderCreditPanel
+          orderId={id}
+          orderNumber={String(order.order_number ?? "")}
+          customerEmail={String(order.customer_email ?? "")}
+          totalCents={Number(order.total_cents ?? 0)}
+          refundedCents={Number(order.refunded_cents ?? 0)}
+          currency={String(order.currency ?? "AUD")}
+          defaultOpen
         />
       </div>
     </>

@@ -157,7 +157,7 @@ export default async function AdminAccountingPage({ searchParams }: { searchPara
           href="/admin/accounting/refunds"
           className="mt-4 inline-flex rounded-xl border border-brand-orange/40 bg-brand-orange/5 px-4 py-2.5 text-sm font-semibold text-brand-navy transition hover:bg-brand-orange/10"
         >
-          Stripe refunds report →
+          Stripe refunds &amp; store credit report →
         </Link>
       </header>
 

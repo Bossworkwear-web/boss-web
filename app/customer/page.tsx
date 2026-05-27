@@ -11,6 +11,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase";
 import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 import { MY_ACCOUNT_ORDERED_RECORDS_LIMIT } from "@/lib/customer-ordered-records";
+import { getCustomerStoreCreditBalanceCents } from "@/lib/customer-store-credit";
 
 import { CustomerDetailPasswordPopovers } from "./customer-detail-password-popovers";
 import { ReorderOrderButton } from "./reorder-order-button";
@@ -84,6 +85,7 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
   let masterLogoUrl: string | null = null;
   /** When the store_orders list query included `invoice_reference`, gate My account Invoice → Download on that value. */
   let orderQueryIncludesInvoiceReference = false;
+  let storeCreditBalanceCents = 0;
 
   try {
     const supabase = createSupabaseAdminClient();
@@ -95,6 +97,8 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
       .eq("email_address", emailNorm)
       .maybeSingle();
     profile = p;
+
+    storeCreditBalanceCents = await getCustomerStoreCreditBalanceCents(supabase, emailNorm);
 
     const { data: master } = await supabase
       .from("customer_master_company_logo")
@@ -178,6 +182,7 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
     orders = [];
     orderLineGroups = {};
     orderQueryIncludesInvoiceReference = false;
+    storeCreditBalanceCents = 0;
   }
 
   const canChangePassword =
@@ -209,6 +214,23 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
             passwordStatus={passwordStatus}
             canChangePassword={canChangePassword}
           />
+
+          <section
+            className="rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-6 shadow-sm"
+            aria-labelledby="store-credit-heading"
+          >
+            <h2 id="store-credit-heading" className="text-[1.35rem] font-semibold text-brand-navy">
+              Store credit
+            </h2>
+            <p className="mt-3 text-[2rem] font-medium tabular-nums text-brand-navy">
+              {formatMoneyFromCents(storeCreditBalanceCents, "AUD")}
+            </p>
+            <p className="mt-2 text-[1.05rem] leading-relaxed text-brand-navy/70">
+              {storeCreditBalanceCents > 0
+                ? "This balance is applied automatically when you pay for your next order (up to the order total)."
+                : "You have no store credit on file. Credit issued after a return or adjustment will appear here."}
+            </p>
+          </section>
 
           <section id="ordered-records" className="scroll-mt-[calc(var(--site-header-height)+1rem)] space-y-4">
             {masterLogoUrl ? (

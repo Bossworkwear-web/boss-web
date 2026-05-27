@@ -131,8 +131,8 @@ export function EmbroideryPriceCalculator({ className = "", embed = false }: Emb
               className={`mt-1 leading-relaxed text-slate-600 ${embed ? "text-[0.975rem] sm:text-[1.125rem]" : "max-w-xl text-sm"}`}
             >
               Choose an item from the dropdown, set quantity, then add lines to build your
-              estimate. Volume discounts per line: 10+ units 5% off, 25+ units 7.5% off, 50+ units 10% off, 100+ units
-              15% off. Confirm final pricing in store.
+              estimate. Volume discounts per line: 10+ units 5% off, 25+ units 10% off, 50+ units 15% off, 100+ units
+              20% off. Confirm final pricing in store.
             </p>
           </div>
         </div>

@@ -1,3 +1,4 @@
+import { resendFromAccount } from "@/lib/resend-from";
 import { formatMoneyFromCents, siteBaseUrl } from "@/lib/store-order-utils";
 import { buildStoreTaxInvoicePdfForOrderId } from "@/lib/store-tax-invoice-for-order";
 import { createSupabaseAdminClient } from "@/lib/supabase";
@@ -75,7 +76,7 @@ async function resendStoreOrderTaxInvoiceEmailInner(
   }
 
   const apiKey = process.env.RESEND_API_KEY?.trim();
-  const from = process.env.RESEND_FROM_EMAIL ?? "Boss Web <onboarding@resend.dev>";
+  const from = resendFromAccount();
   if (!apiKey) {
     return { ok: false, error: "RESEND_API_KEY is not set on the server." };
   }

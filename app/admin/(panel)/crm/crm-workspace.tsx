@@ -527,7 +527,7 @@ export function CrmWorkspace({
                           }`}
                           title={
                             n.status === "skipped"
-                              ? "Email/SMS was not sent. Add RESEND_API_KEY and RESEND_FROM_EMAIL to send customer mail; CRM_INTERNAL_NOTIFY_EMAIL for internal new-lead alerts. Twilio vars for SMS."
+                              ? "Email/SMS was not sent. Add RESEND_API_KEY and RESEND_FROM_SALES_EMAIL (quotes) / RESEND_FROM_ACCOUNT_EMAIL (orders) to send customer mail; CRM_INTERNAL_NOTIFY_EMAIL for internal new-lead alerts. Twilio vars for SMS."
                               : undefined
                           }
                         >

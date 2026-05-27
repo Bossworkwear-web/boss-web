@@ -1,5 +1,9 @@
 import type { QuoteEmailProductLine } from "@/app/admin/(panel)/crm/quote-email-products";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
+import {
+  STOREFRONT_PHONE_DISPLAY,
+  STOREFRONT_QUOTE_EMAIL_RECIPIENT,
+} from "@/lib/storefront-quote-mailto";
 
 export const DEFAULT_QUOTE_EMAIL_LEAD_TIME = "3~5 days dispatch";
 const CURRENCY = "AUD";
@@ -125,6 +129,7 @@ export function buildQuoteCustomerEmailBody(params: {
     "If you have any questions or would like to proceed, please reply to this email.",
     "",
     "Kind regards,",
-    "Boss's Workwear",
+    "Boss Workwear",
+    `${STOREFRONT_QUOTE_EMAIL_RECIPIENT} | ${STOREFRONT_PHONE_DISPLAY}`,
   ].join("\n");
 }

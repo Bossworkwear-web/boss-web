@@ -80,6 +80,7 @@ export default function PaymentPage() {
   const [promoError, setPromoError] = useState<string | null>(null);
   const [promoPending, setPromoPending] = useState(false);
   const [pickUp, setPickUp] = useState(false);
+  const [storeCreditBalanceCents, setStoreCreditBalanceCents] = useState(0);
 
   useEffect(() => {
     const sync = () => setItems(getCartItems());
@@ -98,6 +99,31 @@ export default function PaymentPage() {
       setPromoInput(parsed.code);
     }
     return subscribeCartUpdates(sync);
+  }, []);
+
+  useEffect(() => {
+    const email = getCookieValue("customer_email").trim();
+    if (!email) {
+      setStoreCreditBalanceCents(0);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/customer/store-credit", { credentials: "include" });
+        if (!res.ok) {
+          if (!cancelled) setStoreCreditBalanceCents(0);
+          return;
+        }
+        const data = await readResponseJson<{ ok?: boolean; balanceCents?: number }>(res);
+        if (!cancelled) setStoreCreditBalanceCents(Math.max(0, data?.balanceCents ?? 0));
+      } catch {
+        if (!cancelled) setStoreCreditBalanceCents(0);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -145,7 +171,10 @@ export default function PaymentPage() {
   );
   const { deliveryFeeAud: deliveryFee, logoSetupFeeAud: logoSetupFee, totalAud: checkoutTotal } = checkoutFees;
   const promoDiscount = appliedPromo?.discountAud ?? 0;
-  const payableTotal = Math.max(0, checkoutTotal - promoDiscount);
+  const payableBeforeCredit = Math.max(0, checkoutTotal - promoDiscount);
+  const storeCreditAppliedAud = Math.min(storeCreditBalanceCents / 100, payableBeforeCredit);
+  const payableTotal = Math.max(0, payableBeforeCredit - storeCreditAppliedAud);
+  const creditCoversAll = payableTotal <= 0 && storeCreditAppliedAud > 0;
 
   useEffect(() => {
     if (!appliedPromo || items.length === 0) return;
@@ -309,16 +338,62 @@ export default function PaymentPage() {
           body: JSON.stringify({
             items: cartItemsToStoreOrderLines(items),
             deliveryAddress,
+            applyStoreCredit: true,
             ...(appliedPromo ? { promotionCodeId: appliedPromo.promotionCodeId } : {}),
             ...(pickUp ? { pickUp: true } : {}),
             ...(getReorderSourceStoreOrderId()
-              ? { reorderedFromStoreOrderId: getReorderSourceStoreOrderId() }
+              ? { reorderedFromStoreOrderId: getReorderSourceStoreOrderId()! }
               : {}),
           }),
         });
-        const json = (await res.json().catch(() => ({}))) as { ok?: boolean; url?: string; error?: string; hint?: string };
-        if (!res.ok || !json.ok || !json.url) {
-          setPayError(json.hint ? `${json.error || "Could not start checkout."} ${json.hint}` : json.error || "Could not start checkout.");
+        const json = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          url?: string;
+          error?: string;
+          hint?: string;
+          creditOnly?: boolean;
+          storeCreditAppliedCents?: number;
+        };
+        if (!res.ok || !json.ok) {
+          setPayError(
+            json.hint
+              ? `${json.error || "Could not start checkout."} ${json.hint}`
+              : json.error || "Could not start checkout.",
+          );
+          return;
+        }
+        if (json.creditOnly && json.storeCreditAppliedCents) {
+          const orderRes = await placeStoreOrder(cartItemsToStoreOrderLines(items), {
+            ...(appliedPromo ? { promotionCodeId: appliedPromo.promotionCodeId } : {}),
+            ...(pickUp ? { pickUp: true } : {}),
+            ...(getReorderSourceStoreOrderId()
+              ? { reorderedFromStoreOrderId: getReorderSourceStoreOrderId()! }
+              : {}),
+            applyStoreCredit: true,
+            storeCreditAppliedCents: json.storeCreditAppliedCents,
+          });
+          if (!orderRes.ok) {
+            setPayError(orderRes.error);
+            return;
+          }
+          clearCartItems();
+          try {
+            sessionStorage.removeItem(CHECKOUT_PROMO_SESSION_KEY);
+            sessionStorage.removeItem(CHECKOUT_PICK_UP_SESSION_KEY);
+            sessionStorage.removeItem(CHECKOUT_REORDER_SOURCE_SESSION_KEY);
+          } catch {
+            // ignore
+          }
+          setPlaced({
+            orderNumber: orderRes.orderNumber,
+            trackUrl: orderRes.trackUrl,
+            valueAud: payableBeforeCredit,
+            itemCount: items.reduce((s, i) => s + i.quantity, 0),
+          });
+          return;
+        }
+        if (!json.url) {
+          setPayError("Could not start checkout.");
           return;
         }
         window.location.href = json.url;
@@ -513,6 +588,17 @@ export default function PaymentPage() {
                 <span className="font-semibold">−{toCurrency(promoDiscount)}</span>
               </p>
             ) : null}
+            {storeCreditAppliedAud > 0 ? (
+              <p className="flex justify-between text-emerald-800">
+                <span>
+                  Store credit
+                  <span className="block text-xs font-normal text-emerald-700/80">
+                    Applied automatically (balance {toCurrency(storeCreditBalanceCents / 100)})
+                  </span>
+                </span>
+                <span className="font-semibold">−{toCurrency(storeCreditAppliedAud)}</span>
+              </p>
+            ) : null}
             <p className="text-xs leading-snug text-brand-navy/55">
               Chargeable weight estimate: max (packed weight, cubic weight) per line, by product type.
             </p>
@@ -563,7 +649,9 @@ export default function PaymentPage() {
 
         <div className="grid gap-4 rounded-2xl border border-brand-navy/15 p-5">
           <p className="text-sm text-brand-navy/70">
-            Card details are collected securely by our payment provider (Stripe). You will be redirected to complete payment.
+            {creditCoversAll
+              ? "Your store credit covers this order — no card payment needed."
+              : "Card details are collected securely by our payment provider (Stripe). You will be redirected to complete payment."}
           </p>
           {returningFromStripe ? (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -579,7 +667,15 @@ export default function PaymentPage() {
             onClick={() => void startStripeCheckout()}
             className="mt-2 inline-flex w-full items-center justify-center rounded-xl bg-brand-orange px-4 py-2.5 text-base font-medium text-brand-navy transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {payPending ? "Redirecting…" : payBlockedPendingEmbroideryHistory ? "Loading pricing…" : "Pay with card"}
+            {payPending
+              ? creditCoversAll
+                ? "Placing order…"
+                : "Redirecting…"
+              : payBlockedPendingEmbroideryHistory
+                ? "Loading pricing…"
+                : creditCoversAll
+                  ? "Place order with store credit"
+                  : "Pay with card"}
           </button>
           {items.length === 0 ? (
             <Link href="/cart" className="text-sm font-semibold text-brand-orange hover:underline">

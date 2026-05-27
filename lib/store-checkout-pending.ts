@@ -12,6 +12,7 @@ export type StoreCheckoutPendingRow = {
   promotion_code_id: string | null;
   pick_up: boolean;
   reordered_from_store_order_id: string | null;
+  store_credit_applied_cents: number;
   status: "pending" | "fulfilled";
   store_order_id: string | null;
 };
@@ -25,6 +26,7 @@ export type SaveStoreCheckoutPendingInput = {
   promotionCodeId?: string | null;
   pickUp?: boolean;
   reorderedFromStoreOrderId?: string | null;
+  storeCreditAppliedCents?: number;
 };
 
 export async function saveStoreCheckoutPending(
@@ -46,6 +48,7 @@ export async function saveStoreCheckoutPending(
       promotion_code_id: input.promotionCodeId?.trim() || null,
       pick_up: input.pickUp === true,
       reordered_from_store_order_id: input.reorderedFromStoreOrderId?.trim() || null,
+      store_credit_applied_cents: Math.max(0, Math.round(input.storeCreditAppliedCents ?? 0)),
       status: "pending",
       store_order_id: null,
       updated_at: new Date().toISOString(),
@@ -71,7 +74,7 @@ export async function getStoreCheckoutPendingBySessionId(
   const { data, error } = await supabase
     .from("store_checkout_pending")
     .select(
-      "id, stripe_checkout_session_id, customer_email, customer_name, delivery_address, cart_payload, promotion_code_id, pick_up, reordered_from_store_order_id, status, store_order_id",
+      "id, stripe_checkout_session_id, customer_email, customer_name, delivery_address, cart_payload, promotion_code_id, pick_up, reordered_from_store_order_id, store_credit_applied_cents, status, store_order_id",
     )
     .eq("stripe_checkout_session_id", sessionId)
     .maybeSingle();

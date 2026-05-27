@@ -8,6 +8,7 @@ import {
   loadStoreOrderRefundsReport,
   parseRefundsReportListQuery,
 } from "@/lib/admin-store-order-refunds-report";
+import { loadStoreCreditAdminSummary } from "@/lib/admin-store-credit-report";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
 
 export const dynamic = "force-dynamic";
@@ -106,6 +107,7 @@ export default async function AdminAccountingRefundsPage({ searchParams }: PageP
   const sp = await searchParams;
   const listQuery = parseRefundsReportListQuery(sp);
   const report = await loadStoreOrderRefundsReport(listQuery);
+  const creditSummary = await loadStoreCreditAdminSummary();
 
   const defaultFrom = defaultRefundsListFromYmd(report.labels.asOfPerthYmd);
   const listFrom = listQuery.from || defaultFrom;
@@ -123,11 +125,13 @@ export default async function AdminAccountingRefundsPage({ searchParams }: PageP
           <Link href="/admin/accounting" className="text-brand-orange hover:underline">
             Accounting
           </Link>{" "}
-          / Refunds
+          / Refunds &amp; Credit
         </p>
-        <h1 className="mt-1 text-3xl font-medium text-brand-navy">Refunds</h1>
+        <h1 className="mt-1 text-3xl font-medium text-brand-navy">Refunds &amp; Credit</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
-          Card refunds processed via Stripe from <strong>Store orders</strong>. Totals use{" "}
+          <strong>Card refunds</strong> processed via Stripe from online orders.{" "}
+          <strong>Store credit</strong> is issued from each order&apos;s credit panel (Online orders) when a customer
+          prefers credit over a card refund — credit applies automatically at their next checkout. Totals use{" "}
           <strong>refunded_at</strong> and cumulative <strong>refunded_cents</strong> (Australia/Perth). For manual
           refund logs entered for Xero, see{" "}
           <Link href="/admin/accounting" className="font-semibold text-brand-orange hover:underline">
@@ -136,6 +140,52 @@ export default async function AdminAccountingRefundsPage({ searchParams }: PageP
           .
         </p>
       </header>
+
+      {creditSummary.loadError ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          Store credit: {creditSummary.loadError}
+        </div>
+      ) : (
+        <section className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-5 shadow-sm">
+          <h2 className="text-lg font-medium text-brand-navy">Store credit outstanding</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Total customer balances not yet redeemed at checkout.
+          </p>
+          <p className="mt-3 text-2xl font-medium tabular-nums text-brand-navy">
+            {formatMoneyFromCents(creditSummary.totalOutstandingCents, "AUD")}
+          </p>
+          {creditSummary.recentIssues.length > 0 ? (
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-[32rem] w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-emerald-200/80 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <th className="py-2 pr-4">Issued</th>
+                    <th className="py-2 pr-4">Customer</th>
+                    <th className="py-2 pr-4 text-right">Amount</th>
+                    <th className="py-2">Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {creditSummary.recentIssues.map((row) => (
+                    <tr key={row.id} className="border-b border-emerald-100/80 last:border-0">
+                      <td className="py-2 pr-4 text-xs text-slate-600">
+                        {formatRefundDateTime(row.created_at)}
+                      </td>
+                      <td className="py-2 pr-4 font-mono text-xs">{row.customer_email}</td>
+                      <td className="py-2 pr-4 text-right tabular-nums font-medium">
+                        {formatMoneyFromCents(row.amount_cents, "AUD")}
+                      </td>
+                      <td className="py-2 text-xs text-slate-600">{(row.note ?? "").trim() || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-slate-500">No store credit issued yet.</p>
+          )}
+        </section>
+      )}
 
       {report.loadError ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">

@@ -73,6 +73,8 @@ export async function fulfillStoreOrderFromStripeCheckoutSession(
       promotionCodeId: pending.promotion_code_id ?? undefined,
       pickUp: pending.pick_up,
       reorderedFromStoreOrderId: pending.reordered_from_store_order_id ?? undefined,
+      storeCreditAppliedCents: pending.store_credit_applied_cents ?? 0,
+      applyStoreCredit: (pending.store_credit_applied_cents ?? 0) > 0,
     },
   });
 }

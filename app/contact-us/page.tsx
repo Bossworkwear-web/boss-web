@@ -3,7 +3,11 @@ import { Boldonse } from "next/font/google";
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
 import { TopNav } from "@/app/components/top-nav";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
-import { STOREFRONT_QUOTE_EMAIL_RECIPIENT } from "@/lib/storefront-quote-mailto";
+import {
+  STOREFRONT_PHONE_DISPLAY,
+  STOREFRONT_QUOTE_EMAIL_RECIPIENT,
+  storefrontPhoneTelHref,
+} from "@/lib/storefront-quote-mailto";
 import { storeGoogleMapsSearchHref } from "@/lib/store-google-maps-url";
 
 export const dynamic = "force-dynamic";
@@ -92,8 +96,13 @@ export default function ContactUsPage() {
               <li>
                 <article className={contactCardClass}>
                   <h3 className="text-[1.35rem] font-semibold text-brand-navy">Phone</h3>
-                  <p className="mt-3 text-[1.2rem] leading-relaxed text-brand-navy/80">
-                    For phone enquiries, please email us and we will respond as soon as possible.
+                  <p className="mt-3 text-[1.2rem] leading-relaxed">
+                    <a
+                      href={storefrontPhoneTelHref()}
+                      className="font-semibold text-brand-orange underline-offset-2 hover:underline"
+                    >
+                      {STOREFRONT_PHONE_DISPLAY}
+                    </a>
                   </p>
                 </article>
               </li>

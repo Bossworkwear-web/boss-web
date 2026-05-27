@@ -19,6 +19,11 @@ import {
 import { validateSpecialDealPackageCartLines } from "@/lib/storefront-special-deal-package-cart";
 import { retrievePaidCheckoutSession } from "@/lib/store-order-stripe";
 import { markStoreCheckoutPendingFulfilled } from "@/lib/store-checkout-pending";
+import {
+  computeStoreCreditToApplyCents,
+  getCustomerStoreCreditBalanceCents,
+  redeemCustomerStoreCredit,
+} from "@/lib/customer-store-credit";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 function dollarsToCents(d: number): number {
@@ -73,6 +78,10 @@ export type PlaceStoreOrderOptions = {
   stripeCheckoutSessionId?: string;
   /** When true, an existing paid order for the session returns ok instead of an error. */
   allowExistingStripeSession?: boolean;
+  /** Apply available store credit (server validates balance). Default true when omitted. */
+  applyStoreCredit?: boolean;
+  /** Locked credit amount from checkout pending / Stripe session (do not recalculate). */
+  storeCreditAppliedCents?: number;
 };
 
 export type PlaceStoreOrderCoreInput = {
@@ -250,8 +259,25 @@ export async function placeStoreOrderCore(
   const promotionDiscountCents = dollarsToCents(promotionDiscountDollars);
   const totalCents = dollarsToCents(totalDollars);
 
+  const applyStoreCredit = options?.applyStoreCredit !== false;
+  let storeCreditAppliedCents = 0;
+  if (applyStoreCredit) {
+    const locked = options?.storeCreditAppliedCents;
+    if (locked != null && Number.isFinite(locked) && locked >= 0) {
+      storeCreditAppliedCents = Math.min(Math.round(locked), totalCents);
+    } else {
+      const balanceCents = await getCustomerStoreCreditBalanceCents(supabase, customerEmail);
+      storeCreditAppliedCents = computeStoreCreditToApplyCents(balanceCents, totalCents);
+    }
+  }
+
+  if (storeCreditAppliedCents > totalCents) {
+    return { ok: false, error: "Store credit exceeds order total." };
+  }
+
   const stripeSessionId = (options?.stripeCheckoutSessionId ?? "").trim();
   let stripePaymentIntentId: string | null = null;
+  const cardPayCents = totalCents - storeCreditAppliedCents;
   if (stripeSessionId) {
     const existing = await findStoreOrderByStripeCheckoutSession(stripeSessionId);
     if (existing) {
@@ -275,10 +301,17 @@ export async function placeStoreOrderCore(
     if (!sessionRes.ok) {
       return { ok: false, error: sessionRes.error };
     }
-    if (sessionRes.info.amountTotalCents > 0 && sessionRes.info.amountTotalCents !== totalCents) {
+    if (cardPayCents > 0 && sessionRes.info.amountTotalCents !== cardPayCents) {
+      return { ok: false, error: "Payment amount does not match order total. Please contact support." };
+    }
+    if (cardPayCents === 0 && sessionRes.info.amountTotalCents > 0) {
       return { ok: false, error: "Payment amount does not match order total. Please contact support." };
     }
     stripePaymentIntentId = sessionRes.info.paymentIntentId;
+  } else if (cardPayCents > 0) {
+    return { ok: false, error: "Card payment is required for the remaining balance." };
+  } else if (storeCreditAppliedCents < 1) {
+    return { ok: false, error: "Could not place order — no payment method." };
   }
 
   const insertPayload = {
@@ -288,6 +321,7 @@ export async function placeStoreOrderCore(
     delivery_fee_cents: deliveryFeeCents,
     subtotal_cents: subtotalCents,
     total_cents: totalCents,
+    store_credit_applied_cents: storeCreditAppliedCents,
     promotion_discount_cents: promotionDiscountCents,
     ...(promotionCodeId ? { promotion_code_id: promotionCodeId } : {}),
     currency: "AUD",
@@ -418,6 +452,19 @@ export async function placeStoreOrderCore(
       await supabase.from("store_order_items").delete().eq("order_id", orderId);
       await supabase.from("store_orders").delete().eq("id", orderId);
       return { ok: false, error: redemption.error };
+    }
+  }
+
+  if (storeCreditAppliedCents > 0) {
+    const redeemed = await redeemCustomerStoreCredit(supabase, {
+      customerEmail,
+      amountCents: storeCreditAppliedCents,
+      storeOrderId: orderId,
+    });
+    if (!redeemed.ok) {
+      await supabase.from("store_order_items").delete().eq("order_id", orderId);
+      await supabase.from("store_orders").delete().eq("id", orderId);
+      return { ok: false, error: redeemed.error };
     }
   }
 

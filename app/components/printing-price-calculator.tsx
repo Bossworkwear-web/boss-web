@@ -138,8 +138,8 @@ export function PrintingPriceCalculator({ className = "", embed = false }: Print
               className={`mt-1 leading-relaxed text-brand-navy/70 ${embed ? "text-[0.975rem] sm:text-[1.125rem]" : "max-w-xl text-sm"}`}
             >
               Choose an item from the dropdown, set quantity, then add lines to build your
-              estimate. Volume discounts per line: 10+ units 10% off, 20+ units 15% off, 50+ units 20% off, 100+
-              units 30% off.
+              estimate. Volume discounts per line: 5+ units 10% off, 10+ units 15% off, 20+ units 20% off, 50+
+              units 35% off, 100+ units 40% off.
               Confirm final pricing in store.
             </p>
           </div>

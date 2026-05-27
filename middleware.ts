@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 
 import { ADMIN_PATHNAME_HEADER } from "./lib/admin-constants";
 import { homeLegacyQueryRedirectUrl } from "./lib/home-legacy-query-redirect";
+import { isInstoreOrderLocalDevAccess } from "./lib/instore-order-access";
 import { updateSupabaseAuthSession } from "./lib/supabase/middleware";
 
 /** Must stay in sync with `lib/admin-constants.ts` — middleware imports via relative path (no `@/`). */
@@ -60,7 +61,11 @@ export async function middleware(request: NextRequest) {
     return sessionResponse;
   }
 
-  if (!pathname.startsWith("/admin")) {
+  const isInstoreStaffPage =
+    pathname === "/instore_order" || pathname.startsWith("/instore_order/");
+  const isAdminPage = pathname.startsWith("/admin");
+
+  if (!isAdminPage && !isInstoreStaffPage) {
     return sessionResponse;
   }
 
@@ -68,8 +73,27 @@ export async function middleware(request: NextRequest) {
     return sessionResponse;
   }
 
+  if (isInstoreStaffPage && isInstoreOrderLocalDevAccess(request)) {
+    return sessionResponse;
+  }
+
   const session = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
-  if (session === "1") {
+  if (session !== "1") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin/login";
+    url.searchParams.set("from", pathname);
+    const redirectRes = NextResponse.redirect(url);
+    sessionResponse.cookies.getAll().forEach((c) => {
+      redirectRes.cookies.set(c.name, c.value);
+    });
+    return redirectRes;
+  }
+
+  if (isInstoreStaffPage) {
+    return sessionResponse;
+  }
+
+  if (isAdminPage) {
     const res = nextWithAdminPathname(request, pathname, sessionResponse);
     if (pathname === "/admin/supplier-orders") {
       const wm = request.nextUrl.searchParams.get("warehouse_manager");
@@ -95,14 +119,7 @@ export async function middleware(request: NextRequest) {
     return res;
   }
 
-  const url = request.nextUrl.clone();
-  url.pathname = "/admin/login";
-  url.searchParams.set("from", pathname);
-  const redirectRes = NextResponse.redirect(url);
-  sessionResponse.cookies.getAll().forEach((c) => {
-    redirectRes.cookies.set(c.name, c.value);
-  });
-  return redirectRes;
+  return sessionResponse;
 }
 
 export const config = {

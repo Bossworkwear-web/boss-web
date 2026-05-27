@@ -55,7 +55,7 @@ Sessions use an httpOnly cookie. Use HTTPS in production.
 
 1. Run `supabase/migrations/20260320_crm_pipeline.sql` (adds pipeline columns on `quote_requests`, plus `crm_activities` and `crm_notification_log`).
 2. **Admin → CRM & pipeline**: manage stages (enquiry → quote → approval → completion), follow-up dates, internal notes, link to `customer_profiles`, and view notification logs.
-3. **Automated emails (optional)** — [Resend](https://resend.com): set `RESEND_API_KEY` and `RESEND_FROM_EMAIL`. Customer confirmation + internal new-lead email fire after `/quote` submits when keys are set.
+3. **Automated emails (optional)** — [Resend](https://resend.com): set `RESEND_API_KEY`, `RESEND_FROM_SALES_EMAIL` (quotes/CRM), and `RESEND_FROM_ACCOUNT_EMAIL` (orders, invoices, login). Legacy `RESEND_FROM_EMAIL` is used as fallback if the specific vars are unset. Customer confirmation + internal new-lead email fire after `/quote` submits when keys are set.
 4. **Internal alerts**: set `CRM_INTERNAL_NOTIFY_EMAIL` to receive new lead emails.
 5. **SMS (optional)** — Twilio: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`. SMS only sends if the phone field looks like E.164 (starts with `+`).
 6. **Cron / automation**: set `CRON_SECRET` in production and send `Authorization: Bearer $CRON_SECRET`.

@@ -25,42 +25,22 @@ export function printingMinQtyForId(id: PrintingCalculatorRowId): number {
 
 /**
  * Line-level quantity discount (highest tier only).
- * Company Logo: 10+ 10%, 20+ 15%, 50+ 20%, 100+ 30%.
- * A6 / A5 / A4 / A3: 2+ 10%, 5+ 25%, 10+ 30%, 20+ 35%, 50+ 40%, 100+ 50%.
+ * All items: 5+ 10%, 10+ 15%, 20+ 20%, 50+ 35%, 100+ 40%.
  */
-export function printingQtyDiscountRate(id: PrintingCalculatorRowId, qty: number): number {
-  if (id === "company_logo") {
-    if (qty >= 100) {
-      return 0.3;
-    }
-    if (qty >= 50) {
-      return 0.2;
-    }
-    if (qty >= 20) {
-      return 0.15;
-    }
-    if (qty >= 10) {
-      return 0.1;
-    }
-    return 0;
-  }
-
+export function printingQtyDiscountRate(_id: PrintingCalculatorRowId, qty: number): number {
   if (qty >= 100) {
-    return 0.5;
-  }
-  if (qty >= 50) {
     return 0.4;
   }
-  if (qty >= 20) {
+  if (qty >= 50) {
     return 0.35;
   }
+  if (qty >= 20) {
+    return 0.2;
+  }
   if (qty >= 10) {
-    return 0.3;
+    return 0.15;
   }
   if (qty >= 5) {
-    return 0.25;
-  }
-  if (qty >= 2) {
     return 0.1;
   }
   return 0;

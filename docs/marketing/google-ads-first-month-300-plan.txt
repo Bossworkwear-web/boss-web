@@ -1,0 +1,204 @@
+Boss Workwear — Google Ads first month plan (~AUD $300)
+=========================================================
+Import keywords: docs/marketing/google-ads-keywords-perth.csv
+Site: https://www.bossworkwear.au
+GA4: G-RW9CQ0Z8JW — mark quote_request and purchase as Key events before launch.
+
+---
+1. CAMPAIGN STRUCTURE (3 campaigns, $300/month total)
+---
+
+Campaign A — BW | Search | Perth Bulk Quote 50+
+  Daily budget:  $6.00/day  (~$180/month, 60%)
+  Goal:          Quote form submissions (quote_request)
+  Final URL:     https://www.bossworkwear.au/quote
+  Location:      Perth metro + 50 km (expand to all WA after week 2 if CPA is OK)
+  Ad groups (start with these 4 only — do not enable all 6 at once):
+    • Perth bulk quote   (highest priority)
+    • 50 plus units
+    • Branding bulk
+    • WA B2B
+  Pause after launch: Industries (enable week 3 if budget left)
+
+Campaign B — BW | Search | Perth Retail
+  Daily budget:  $3.00/day  (~$90/month, 30%)
+  Goal:          Online purchase (purchase) — secondary: add to cart
+  Final URL:     https://www.bossworkwear.au/categories/workwear
+  Location:      Australia (Perth bid +15% adjustment)
+  Ad groups (start with these 3):
+    • Brand
+    • Perth workwear
+    • Polos embroidery perth
+  Pause at launch: Hi-vis perth, WA online (enable if Campaign A is stable)
+
+Campaign C — BW | Search | Brand Protection
+  Daily budget:  $1.00/day  (~$30/month, 10%)
+  Goal:          Clicks to homepage (cheap defence of brand name)
+  Final URL:     https://www.bossworkwear.au/
+  Location:      Australia
+  Ad groups:
+    • Brand only (boss workwear Exact + boss workwear perth Phrase)
+
+---
+2. AD COPY TEMPLATES (Responsive Search Ads — 3 ads per ad group)
+---
+
+Bulk Quote ad group — headlines (pick 8–12):
+  Free Quote — 50+ Units
+  Boss Workwear Perth
+  Bulk Uniforms & Polos
+  Embroidery & Printing
+  Fast Quote — 1 Business Day
+  Corporate & Trade Teams
+  Perth Showroom Available
+  Team Workwear Specialists
+
+Bulk Quote — descriptions:
+  Request a bulk quote for 50+ units. Embroidery, printing, polos, hi-vis & uniforms. Perth showroom — reply within 1 business day.
+  Custom branding for construction, trade, hospitality & corporate teams. Upload your logo — we quote sizes, colours & lead time.
+
+Perth Retail ad group — headlines:
+  Workwear Online — Perth
+  Embroidery & Hi-Vis
+  Boss Workwear Shop
+  Polos, Shirts & Uniforms
+  GST-Inclusive Prices
+  Order Online — Fast Dispatch
+
+Perth Retail — descriptions:
+  Shop work polos, hi-vis, embroidery & uniforms online. Perth-based supplier with showroom at Coventry Village.
+  Browse categories, choose sizes & colours. Delivery Australia-wide. Prices include GST.
+
+Brand ad group — headlines:
+  Boss Workwear — Official Site
+  Workwear & Uniforms Perth
+  Shop Online or Visit Us
+
+---
+3. CONVERSION TRACKING (required before spending)
+---
+
+In GA4 Admin → Events:
+  • quote_request  → Mark as key event
+  • purchase       → Mark as key event
+  • generate_lead  → Mark as key event (if used)
+
+In Google Ads → Goals → Conversions:
+  • Import quote_request from GA4 (primary for Campaign A)
+  • Import purchase from GA4 (primary for Campaign B)
+  • Bidding: Start with Maximize conversions (no target CPA for month 1)
+  • After 15+ quote conversions: switch Campaign A to Target CPA (~$25–40 AUD per quote — adjust from data)
+
+---
+4. NEGATIVE KEYWORDS (add at account level)
+---
+
+free
+jobs
+job
+career
+careers
+salary
+resume
+intern
+internship
+volunteer
+course
+training course
+tafe
+pattern
+sewing pattern
+diy
+pdf
+template
+second hand
+used
+vintage
+rent
+hire
+repair
+fix
+complaint
+review site
+wholesale catalog
+china
+aliexpress
+shein
+temu
+kmart
+big w
+target
+cotton on
+
+Optional geo negatives if ONLY targeting Perth/WA:
+  brisbane
+  sydney
+  melbourne
+  adelaide
+  (Add only if search terms report shows wasted spend outside WA)
+
+---
+5. LOCATION & SCHEDULE
+---
+
+Location targeting:
+  Campaign A: Perth (+50 km) — Location options: Presence or interest → change to PRESENCE only
+  Campaign B: Australia — Bid adjustment +15% for Perth, +5% for WA
+  Campaign C: Australia
+
+Ad schedule (optional, Perth time):
+  Mon–Fri  7:00 – 20:00  100% bid
+  Sat      8:00 – 17:00  100% bid
+  Sun      pause or 50% bid
+  (Matches showroom hours loosely; adjust from GA4 hour-of-day report after 2 weeks)
+
+---
+6. WEEK-BY-WEEK CHECKLIST
+---
+
+Week 1 — Launch
+  [ ] Import google-ads-keywords-perth.csv (Google Ads → Tools → Bulk upload)
+  [ ] Create 3 campaigns with budgets above
+  [ ] Enable only 4 ad groups on Campaign A, 3 on Campaign B, 1 on Campaign C
+  [ ] Add negative keyword list
+  [ ] Link GA4 ↔ Google Ads
+  [ ] Verify quote_request fires when you submit a test quote on /quote
+
+Week 2 — Optimise
+  [ ] Search terms report: add negatives for irrelevant queries
+  [ ] Pause keywords with $30+ spend and zero conversions
+  [ ] Enable 1 paused ad group if CPA is acceptable
+
+Week 3 — Scale or cut
+  [ ] If quote CPA < $35: move $1/day from Brand → Bulk Quote
+  [ ] If quote CPA > $60: narrow to Brand + Perth bulk quote ad groups only
+  [ ] Enable Industries ad group if bulk is performing
+
+Week 4 — Review
+  [ ] Total spend ≈ $300?
+  [ ] Quotes received: target 5–12 (varies by season)
+  [ ] Orders: even 2–5 online orders = acceptable for month 1
+  [ ] Decision: keep $300, increase to $500, or pause Retail and focus Bulk only
+
+---
+7. CRM HANDOFF (same week as ads launch)
+---
+
+Every quote_request → Admin → CRM within 24 hours:
+  • Template 3 (day 0) from quote-crm-email-templates.txt
+  • From: sales@bossworkwear.au
+  • Follow-up day 3 and day 7 if no reply
+
+Ads bring traffic; CRM closes deals. Do not skip follow-up.
+
+---
+8. EXPECTED MONTH 1 RESULTS (realistic)
+---
+
+Spend:           ~$300 AUD
+Clicks:          80–150 (Perth workwear CPC ~$2–4)
+Quote requests:  5–12
+Online orders:   2–8
+Cost per quote:  $25–60 (improves after negatives + pauses)
+
+If after 4 weeks quotes < 3 and spend > $250: pause Retail campaign, concentrate on Bulk + Brand only.

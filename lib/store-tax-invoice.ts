@@ -1,4 +1,5 @@
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
+import { STOREFRONT_PHONE_DISPLAY, STOREFRONT_QUOTE_EMAIL_RECIPIENT } from "@/lib/storefront-quote-mailto";
 import { taxInvoiceLogoHtmlSrc } from "@/lib/tax-invoice-logo";
 
 export type TaxInvoiceSeller = {
@@ -305,8 +306,8 @@ export function loadTaxInvoiceSellerFromEnv(): TaxInvoiceSeller {
     process.env.STORE_TAX_INVOICE_ADDRESS?.trim() ||
     process.env.STORE_SHIP_FROM_ADDRESS?.trim() ||
     "";
-  const phone = process.env.STORE_TAX_INVOICE_PHONE?.trim() || "";
-  const email = process.env.STORE_TAX_INVOICE_EMAIL?.trim() || "";
+  const phone = process.env.STORE_TAX_INVOICE_PHONE?.trim() || STOREFRONT_PHONE_DISPLAY;
+  const email = process.env.STORE_TAX_INVOICE_EMAIL?.trim() || STOREFRONT_QUOTE_EMAIL_RECIPIENT;
   const website = process.env.STORE_TAX_INVOICE_WEBSITE?.trim() || "";
   const bsb = process.env.STORE_TAX_INVOICE_BSB?.trim() || "016-363";
   const accountNo = process.env.STORE_TAX_INVOICE_ACCOUNT_NO?.trim() || "643762076";

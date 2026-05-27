@@ -257,7 +257,7 @@ export default async function AdminDashboardPage() {
           </li>
           <li>
             <Link href="/admin/accounting/refunds" className="hover:underline">
-              Refunds (Stripe report) →
+              Refunds &amp; Credit (Stripe report) →
             </Link>
           </li>
           <li>

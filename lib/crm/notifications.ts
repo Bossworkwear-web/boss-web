@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/database.types";
+import { resendFromSales } from "@/lib/resend-from";
+import {
+  STOREFRONT_PHONE_DISPLAY,
+  STOREFRONT_QUOTE_EMAIL_RECIPIENT,
+} from "@/lib/storefront-quote-mailto";
 
 type AdminClient = SupabaseClient<Database>;
 
@@ -37,7 +42,7 @@ export async function sendQuoteReceivedEmail(
   args: { quoteId: string; to: string; contactName: string; companyName: string },
 ) {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL ?? "Boss Web <onboarding@resend.dev>";
+  const from = resendFromSales();
 
   if (!apiKey) {
     await logNotification(supabase, {
@@ -54,7 +59,8 @@ export async function sendQuoteReceivedEmail(
   const html = `
     <p>Hi ${escapeHtml(args.contactName)},</p>
     <p>Thanks for your enquiry from <strong>${escapeHtml(args.companyName)}</strong>. We have received your quote request and will be in touch shortly.</p>
-    <p>If anything changes, reply to this email or call us with your reference: <code>${escapeHtml(args.quoteId.slice(0, 8))}</code></p>
+    <p>If anything changes, reply to this email or call us on ${escapeHtml(STOREFRONT_PHONE_DISPLAY)} with your reference: <code>${escapeHtml(args.quoteId.slice(0, 8))}</code></p>
+    <p style="font-size:13px;color:#64748b">${escapeHtml(STOREFRONT_QUOTE_EMAIL_RECIPIENT)} · ${escapeHtml(STOREFRONT_PHONE_DISPLAY)}</p>
   `
     .replace(/\n\s+/g, " ")
     .trim();
@@ -120,7 +126,7 @@ export async function sendCustomerQuoteSentEmail(
   },
 ): Promise<{ ok: true } | { ok: false; error: string; skipped?: boolean }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL ?? "Boss Web <onboarding@resend.dev>";
+  const from = resendFromSales();
 
   if (!apiKey) {
     await logNotification(supabase, {
@@ -208,7 +214,7 @@ export async function sendInternalNewLeadEmail(
   },
 ) {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL ?? "Boss Web <onboarding@resend.dev>";
+  const from = resendFromSales();
   const internalTo = process.env.CRM_INTERNAL_NOTIFY_EMAIL?.trim();
 
   if (!apiKey || !internalTo) {

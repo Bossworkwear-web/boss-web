@@ -1,5 +1,6 @@
 import type { StorefrontChatCustomerContext } from "@/lib/storefront-chat-order-context";
 import { getSiteUrl } from "@/lib/site-url";
+import { STOREFRONT_PHONE_DISPLAY, STOREFRONT_QUOTE_EMAIL_RECIPIENT } from "@/lib/storefront-quote-mailto";
 
 type FaqMatcher = {
   id: string;
@@ -118,9 +119,13 @@ function buildMatchers(site: string): FaqMatcher[] {
         hasAny(t, [/\bcontact\b/i, /\bphone\b/i, /\bcall\b/i, /\bemail\b/i, /\bhours\b/i, /\bhuman\b/i, /\bstaff\b/i]),
       reply: () =>
         [
-          "You can reach Boss Workwear via Contact us on the site. Messages in this chat are also seen by our team — a person will follow up when needed.",
+          "You can reach Boss Workwear via Contact us on the site, or call / email us directly:",
           "",
+          STOREFRONT_PHONE_DISPLAY,
+          STOREFRONT_QUOTE_EMAIL_RECIPIENT,
           contact,
+          "",
+          "Messages in this chat are also seen by our team — a person will follow up when needed.",
         ].join("\n"),
     },
   ];

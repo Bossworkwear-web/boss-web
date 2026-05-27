@@ -33,7 +33,11 @@ function LoginFields({ devHint }: LoginFormProps) {
         setError(data.error ?? "Login failed");
         return;
       }
-      router.push(from.startsWith("/admin") ? from : "/admin");
+      const redirectTo =
+        from.startsWith("/admin") || from === "/instore_order" || from.startsWith("/instore_order/")
+          ? from
+          : "/admin";
+      router.push(redirectTo);
       router.refresh();
     } catch {
       setError("Network error");

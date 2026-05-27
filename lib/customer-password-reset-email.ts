@@ -1,3 +1,5 @@
+import { resendFromAccount } from "@/lib/resend-from";
+
 function escapeHtml(s: string) {
   return s
     .replace(/&/g, "&amp;")
@@ -12,7 +14,7 @@ export async function sendCustomerTemporaryPasswordEmail(args: {
   tempPassword: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL ?? "Boss Workwear <account@bossworkwear.au>";
+  const from = resendFromAccount();
   if (!apiKey) {
     return { ok: false, error: "RESEND_API_KEY not set" };
   }
@@ -63,7 +65,7 @@ export async function sendCustomerPasswordResetEmail(args: {
   resetUrl: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL ?? "Boss Workwear <account@bossworkwear.au>";
+  const from = resendFromAccount();
   if (!apiKey) {
     return { ok: false, error: "RESEND_API_KEY not set" };
   }

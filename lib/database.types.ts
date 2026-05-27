@@ -156,6 +156,63 @@ export type Database = {
         };
         Relationships: [];
       };
+      customer_store_credit_balances: {
+        Row: {
+          customer_email: string;
+          balance_cents: number;
+          updated_at: string;
+        };
+        Insert: {
+          customer_email: string;
+          balance_cents?: number;
+          updated_at?: string;
+        };
+        Update: {
+          customer_email?: string;
+          balance_cents?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      customer_store_credit_ledger: {
+        Row: {
+          id: string;
+          customer_email: string;
+          amount_cents: number;
+          balance_after_cents: number;
+          kind: string;
+          source_store_order_id: string | null;
+          store_order_id: string | null;
+          note: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          customer_email: string;
+          amount_cents: number;
+          balance_after_cents: number;
+          kind: string;
+          source_store_order_id?: string | null;
+          store_order_id?: string | null;
+          note?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          customer_email?: string;
+          amount_cents?: number;
+          balance_after_cents?: number;
+          kind?: string;
+          source_store_order_id?: string | null;
+          store_order_id?: string | null;
+          note?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       customer_profiles: {
         Row: {
           id: string;
@@ -881,6 +938,7 @@ export type Database = {
           reordered_from_store_order_id: string | null;
           promotion_code_id: string | null;
           promotion_discount_cents: number;
+          store_credit_applied_cents: number;
           stripe_checkout_session_id: string | null;
           stripe_payment_intent_id: string | null;
           stripe_refund_id: string | null;
@@ -920,6 +978,7 @@ export type Database = {
           reordered_from_store_order_id?: string | null;
           promotion_code_id?: string | null;
           promotion_discount_cents?: number;
+          store_credit_applied_cents?: number;
           stripe_checkout_session_id?: string | null;
           stripe_payment_intent_id?: string | null;
           stripe_refund_id?: string | null;
@@ -959,6 +1018,7 @@ export type Database = {
           reordered_from_store_order_id?: string | null;
           promotion_code_id?: string | null;
           promotion_discount_cents?: number;
+          store_credit_applied_cents?: number;
           stripe_checkout_session_id?: string | null;
           stripe_payment_intent_id?: string | null;
           stripe_refund_id?: string | null;
@@ -1228,6 +1288,7 @@ export type Database = {
           promotion_code_id: string | null;
           pick_up: boolean;
           reordered_from_store_order_id: string | null;
+          store_credit_applied_cents: number;
           status: string;
           store_order_id: string | null;
           created_at: string;
@@ -1243,6 +1304,7 @@ export type Database = {
           promotion_code_id?: string | null;
           pick_up?: boolean;
           reordered_from_store_order_id?: string | null;
+          store_credit_applied_cents?: number;
           status?: string;
           store_order_id?: string | null;
           created_at?: string;
@@ -1258,6 +1320,7 @@ export type Database = {
           promotion_code_id?: string | null;
           pick_up?: boolean;
           reordered_from_store_order_id?: string | null;
+          store_credit_applied_cents?: number;
           status?: string;
           store_order_id?: string | null;
           created_at?: string;
@@ -1302,6 +1365,24 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      issue_customer_store_credit: {
+        Args: {
+          p_email: string;
+          p_amount_cents: number;
+          p_source_store_order_id?: string;
+          p_note?: string;
+          p_created_by?: string;
+        };
+        Returns: number;
+      };
+      redeem_customer_store_credit: {
+        Args: {
+          p_email: string;
+          p_amount_cents: number;
+          p_store_order_id: string;
+        };
+        Returns: number;
+      };
       move_store_order_from_delivery_to_complete: {
         Args: { p_delivery_queue_id: string };
         Returns: undefined;

@@ -1,6 +1,10 @@
 import { cookies } from "next/headers";
 
 import { extractAustralianPostcodeFromAddress } from "@/lib/customer-delivery-estimate";
+import {
+  computeStoreCreditToApplyCents,
+  getCustomerStoreCreditBalanceCents,
+} from "@/lib/customer-store-credit";
 import { getStripeServer } from "@/lib/stripe-server";
 import { totalEstimatedShippingWeightKg } from "@/lib/delivery-shipping-weight";
 import { computeStorefrontCheckoutFees } from "@/lib/storefront-cart-checkout-fees";
@@ -47,6 +51,7 @@ export async function POST(req: Request) {
     promotionCodeId?: string | null;
     pickUp?: boolean;
     reorderedFromStoreOrderId?: string | null;
+    applyStoreCredit?: boolean;
   } = {};
   try {
     body = (await req.json()) as typeof body;
@@ -151,9 +156,26 @@ export async function POST(req: Request) {
   const logoSetupFee = fees.logoSetupFeeAud;
   const totalBeforePromo = fees.totalAud;
   const total = Math.max(0, totalBeforePromo - promoDiscountCents / 100);
+  const totalCents = dollarsToCents(total);
+
+  const applyStoreCredit = body.applyStoreCredit !== false;
+  let storeCreditAppliedCents = 0;
+  if (applyStoreCredit) {
+    const balanceCents = await getCustomerStoreCreditBalanceCents(supabase, customerEmail);
+    storeCreditAppliedCents = computeStoreCreditToApplyCents(balanceCents, totalCents);
+  }
+  const cardPayCents = totalCents - storeCreditAppliedCents;
+
+  if (cardPayCents === 0 && storeCreditAppliedCents > 0) {
+    return Response.json({
+      ok: true,
+      creditOnly: true,
+      storeCreditAppliedCents,
+    });
+  }
 
   try {
-    let discounts: { coupon: string }[] | undefined;
+    const discounts: { coupon: string }[] = [];
     if (promoDiscountCents > 0 && validatedPromoId) {
       const coupon = await stripe.coupons.create({
         amount_off: promoDiscountCents,
@@ -161,7 +183,16 @@ export async function POST(req: Request) {
         duration: "once",
         name: `Discount ${promoCodeLabel}`.slice(0, 40),
       });
-      discounts = [{ coupon: coupon.id }];
+      discounts.push({ coupon: coupon.id });
+    }
+    if (storeCreditAppliedCents > 0) {
+      const creditCoupon = await stripe.coupons.create({
+        amount_off: storeCreditAppliedCents,
+        currency: "aud",
+        duration: "once",
+        name: "Store credit",
+      });
+      discounts.push({ coupon: creditCoupon.id });
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -176,7 +207,7 @@ export async function POST(req: Request) {
           },
         },
       },
-      ...(discounts ? { discounts } : {}),
+      ...(discounts.length > 0 ? { discounts } : {}),
       line_items: [
         ...items.map((it, idx) => ({
           quantity: it.quantity,
@@ -212,7 +243,10 @@ export async function POST(req: Request) {
           : []),
       ],
       metadata: {
-        boss_web_total_cents: String(dollarsToCents(total)),
+        boss_web_total_cents: String(totalCents),
+        ...(storeCreditAppliedCents > 0
+          ? { store_credit_applied_cents: String(storeCreditAppliedCents) }
+          : {}),
         ...(validatedPromoId
           ? {
               promotion_code_id: validatedPromoId,
@@ -236,6 +270,7 @@ export async function POST(req: Request) {
       promotionCodeId: validatedPromoId,
       pickUp,
       reorderedFromStoreOrderId: reorderedFromStoreOrderId || null,
+      storeCreditAppliedCents,
     });
     if (!pendingSave.ok) {
       console.error("[stripe/checkout] pending snapshot:", pendingSave.error);
