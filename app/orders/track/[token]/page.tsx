@@ -8,6 +8,7 @@ import {
 } from "@/lib/click-up-sheet-mockup-methods";
 import { serviceTypeColoredContent } from "@/lib/service-type-colored";
 import { queryClickUpMockupImagesByCustomerOrderIdIncludingReorder } from "@/lib/fetch-click-up-mockups";
+import { formatPerthDateTime } from "@/lib/perth-calendar";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { STORE_MAIN_SHELL_CLASS } from "@/lib/store-main-shell";
@@ -96,7 +97,7 @@ export default async function OrderTrackPage({ params }: Props) {
                 {orderNumberTrim || "—"}
               </h1>
               <p className="text-[1.3125rem] text-brand-navy/70">
-                Placed {new Date(order.created_at).toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" })}
+                Placed {formatPerthDateTime(order.created_at)}
               </p>
             </header>
 

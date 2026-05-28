@@ -4,6 +4,7 @@ import Link from "next/link";
 import { DocketPrintBar } from "@/app/admin/(panel)/store-orders/[id]/docket/docket-print-bar";
 import { StoreOrderRefundPanel } from "@/app/admin/(panel)/store-orders/store-order-refund-panel";
 import { StoreOrderCreditPanel } from "@/app/admin/(panel)/store-orders/store-order-credit-panel";
+import { formatPerthDate } from "@/lib/perth-calendar";
 import { serviceTypeColoredContent } from "@/lib/service-type-colored";
 import { resolveStorefrontImageUrlList } from "@/lib/storefront-image-url";
 import { storeOrderDetailBackHref } from "@/lib/store-order-channel";
@@ -169,7 +170,7 @@ export default async function OrderedItemsListPage({ params }: Props) {
             <span className="text-slate-600"> · {order.customer_email}</span>
           </p>
           <p className="mt-1 text-xs text-slate-600">
-            Order date: {new Date(order.created_at).toLocaleString("en-AU", { dateStyle: "medium" })}
+            Order date: {formatPerthDate(order.created_at)}
           </p>
           <p className="mt-1 text-xs text-slate-600">
             Amount:{" "}

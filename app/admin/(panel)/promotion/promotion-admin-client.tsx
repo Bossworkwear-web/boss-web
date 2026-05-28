@@ -1,5 +1,6 @@
 "use client";
 
+import { formatPerthDateTime } from "@/lib/perth-calendar";
 import {
   createPromotionCode,
   markPromotionCodeSent,
@@ -194,16 +195,16 @@ export function PromotionAdminClient({ rows }: Props) {
                 <div>
                   <dt className="font-semibold text-slate-500">Valid</dt>
                   <dd>
-                    {row.starts_at ? new Date(row.starts_at).toLocaleString() : "Any time"}
+                    {row.starts_at ? formatPerthDateTime(row.starts_at) : "Any time"}
                     {" → "}
-                    {row.ends_at ? new Date(row.ends_at).toLocaleString() : "No end"}
+                    {row.ends_at ? formatPerthDateTime(row.ends_at) : "No end"}
                   </dd>
                 </div>
                 <div>
                   <dt className="font-semibold text-slate-500">Sent</dt>
                   <dd>
                     {row.sent_at
-                      ? `${row.sent_to_email ?? "—"} · ${new Date(row.sent_at).toLocaleString()}`
+                      ? `${row.sent_to_email ?? "—"} · ${formatPerthDateTime(row.sent_at)}`
                       : "Not recorded"}
                   </dd>
                 </div>

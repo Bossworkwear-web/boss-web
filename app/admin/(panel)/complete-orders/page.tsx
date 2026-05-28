@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { StoreOrderBarcode } from "@/app/components/store-order-barcode";
+import { formatPerthDateTimeShort } from "@/lib/perth-calendar";
 import { completeOrderDocumentsHref } from "@/lib/complete-order-documents-href";
 import { storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
 
@@ -96,7 +97,7 @@ export default async function AdminCompleteOrdersPage() {
                   </td>
                   <td className="px-4 py-3 font-mono text-slate-800">{r.listDate || "—"}</td>
                   <td className="px-4 py-3 text-xs text-slate-500">
-                    {new Date(r.completedAt).toLocaleString("en-AU", { dateStyle: "short", timeStyle: "short" })}
+                    {formatPerthDateTimeShort(r.completedAt)}
                   </td>
                   <td className="px-4 py-3">
                     <p className="font-medium">{r.customerName}</p>

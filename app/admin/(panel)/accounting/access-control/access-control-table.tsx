@@ -1,5 +1,6 @@
 "use client";
 
+import { formatPerthDateTimeShort } from "@/lib/perth-calendar";
 import {
   clearAdminAccessUserPassword,
   createAdminAccessUser,
@@ -140,7 +141,7 @@ export function AccessControlTable({ rows }: { rows: AdminAccessUserRow[] }) {
                         ID <span className="font-mono">{r.id}</span>
                         <span className="mx-2">·</span>
                         Created{" "}
-                        {new Date(r.created_at).toLocaleString("en-AU", { dateStyle: "short", timeStyle: "short" })}
+                        {formatPerthDateTimeShort(r.created_at)}
                       </p>
                       {r.has_individual_password ? (
                         <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">

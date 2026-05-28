@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { DocketAutoprint } from "@/app/admin/(panel)/store-orders/[id]/docket/docket-autoprint";
 import { DocketPrintBar } from "@/app/admin/(panel)/store-orders/[id]/docket/docket-print-bar";
 import { resolveDocketShipFromAddress, resolveDocketShipFromName } from "@/lib/docket-ship-from";
+import { formatPerthDate } from "@/lib/perth-calendar";
 import { storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
 import { siteBaseUrl } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
@@ -161,7 +162,7 @@ export default async function DeliveryDocketPage({ params, searchParams }: Props
             <p className="docket-label">Order reference</p>
             <p className="docket-h1 font-mono">{order.order_number}</p>
             <p className="mt-2 text-xs text-slate-600">
-              Order date: {new Date(order.created_at).toLocaleString("en-AU", { dateStyle: "medium" })}
+              Order date: {formatPerthDate(order.created_at)}
             </p>
             {order.tracking_number ? (
               <p className="mt-2 text-sm">

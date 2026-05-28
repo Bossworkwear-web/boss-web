@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ensureCustomerQuoteNumber } from "@/lib/customer-quote-number";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 import {
@@ -7,11 +8,21 @@ import {
   getTemplateByOrderNumber,
   getTemplateFromQuoteRequest,
   loadInternalOrderTemplate,
+  type InternalOrderTemplate,
 } from "@/app/admin/(panel)/store-orders/internal-order/actions";
 import { EMPTY_INTERNAL_ORDER_TEMPLATE } from "@/app/admin/(panel)/store-orders/internal-order/empty-template";
 import { InternalOrderForm } from "@/app/admin/(panel)/store-orders/internal-order/internal-order-form";
 
 export const dynamic = "force-dynamic";
+
+function withAutoQuoteNumber(template: InternalOrderTemplate, quoteRequestId: string): InternalOrderTemplate {
+  return {
+    ...template,
+    baseOrderNumber: ensureCustomerQuoteNumber(template.baseOrderNumber, {
+      quoteRequestId: quoteRequestId || null,
+    }),
+  };
+}
 
 type Search = {
   from?: string;
@@ -176,7 +187,7 @@ export default async function AdminInstoreInternalOrderPage({ searchParams }: { 
       ) : null}
 
       <InternalOrderForm
-        template={template ?? EMPTY_INTERNAL_ORDER_TEMPLATE}
+        template={withAutoQuoteNumber(template ?? EMPTY_INTERNAL_ORDER_TEMPLATE, quoteId)}
         isBlankStarter={template === null || template.baseOrderNumber.trim() === ""}
         variant="customer-quote"
         quoteSubmitContext="internal-order"

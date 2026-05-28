@@ -1,4 +1,8 @@
+"use client";
+
 import Link from "next/link";
+
+import { formatPerthDateTime } from "@/lib/perth-calendar";
 
 import { DeleteQuoteListButton } from "./delete-quote-list-button";
 
@@ -18,7 +22,8 @@ export function CustomerQuoteList({ quotes }: { quotes: CustomerQuoteListRow[] }
         <div>
           <h2 className="text-lg font-semibold text-brand-navy">Quote list</h2>
           <p className="mt-1 max-w-2xl text-sm text-slate-600">
-            CRM <span className="font-mono">quote_requests</span> 최신 순입니다. 행을 열면 Customer Quote 폼에서 수정·저장할 수 있습니다.
+            CRM <span className="font-mono">quote_requests</span> 최신 순입니다.{" "}
+            <strong>Preview</strong>로 고객이 보낸 원본을 보고, <strong>Open</strong>으로 견적 가격표를 수정·저장하세요.
           </p>
         </div>
         <Link
@@ -56,15 +61,18 @@ export function CustomerQuoteList({ quotes }: { quotes: CustomerQuoteListRow[] }
                   </td>
                   <td className="px-4 py-3 capitalize text-slate-700">{row.pipeline_stage?.trim() || "—"}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-600 tabular-nums">
-                    {row.created_at
-                      ? new Date(row.created_at).toLocaleString("en-AU", {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })
-                      : "—"}
+                    {row.created_at ? formatPerthDateTime(row.created_at) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Link
+                        href={`/admin/online-quote/${encodeURIComponent(row.id)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex rounded-lg border border-brand-navy/20 px-3 py-1.5 text-xs font-semibold text-brand-navy hover:bg-slate-50"
+                      >
+                        Preview
+                      </Link>
                       <Link
                         href={`/admin/customer-quote?quote_id=${encodeURIComponent(row.id)}`}
                         className="inline-flex rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-brand-navy hover:bg-slate-200"

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { formatPerthDateTimeShort } from "@/lib/perth-calendar";
 import {
   createClearanceStockItem,
   deleteClearanceStockItem,
@@ -129,7 +130,7 @@ export function ClearanceStockTable({ rows }: Props) {
                     <p className="text-xs text-slate-500">
                       ID <span className="font-mono">{r.id}</span>
                       <span className="mx-2">·</span>
-                      Updated {new Date(r.updated_at).toLocaleString("en-AU", { dateStyle: "short", timeStyle: "short" })}
+                      Updated {formatPerthDateTimeShort(r.updated_at)}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <button

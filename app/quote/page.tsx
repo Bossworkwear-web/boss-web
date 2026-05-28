@@ -3,8 +3,6 @@ import { redirect } from "next/navigation";
 import {
   AlertTriangleIcon,
   BuildingIcon,
-  CheckCircleIcon,
-  ClipboardIcon,
   NotesIcon,
   ProductIcon,
   XCircleIcon,
@@ -14,8 +12,25 @@ import { TopNav } from "@/app/components/top-nav";
 import { QuoteAnalyticsTracker } from "@/app/components/quote-analytics-tracker";
 import { QuoteBackNav } from "@/app/components/quote-back-nav";
 import { QuoteLogoDropzone } from "@/app/components/quote-logo-dropzone";
+import {
+  QuoteProductOptionsFields,
+  type QuoteProductLine,
+} from "@/app/components/quote-product-options-fields";
+import { QUOTE_MIN_TOTAL_QUANTITY, QuoteQuantityProvider } from "@/app/components/quote-quantity-context";
+import { QuoteSubmitSuccessPopup } from "@/app/components/quote-submit-success-popup";
+import { QuoteSubmitButton } from "@/app/components/quote-submit-button";
+import { QuoteServicePlacementFields } from "@/app/components/quote-service-placement-fields";
+import { ImeFriendlyNameInput } from "@/app/components/ime-friendly-name-input";
 import { runAfterQuoteSubmit } from "@/lib/crm/after-quote-submit";
-import { isBizCorporatesCatalogProduct } from "@/lib/product-visibility";
+import {
+  buildWebsiteQuoteCustomerSheet,
+  type WebsiteQuoteProductRow,
+} from "@/lib/crm/website-quote-customer-sheet";
+import { insertWebsiteQuoteRequest } from "@/lib/crm/insert-website-quote-request";
+import { buildWebsiteQuoteSubmissionSnapshot, type WebsiteQuoteProductLineV1 } from "@/lib/crm/online-quote-submission";
+import { getQuoteCatalogProducts, normalizeQuoteStyleCodeQuery, type QuoteCatalogProduct } from "@/lib/quote-catalog-products";
+import { productCardDisplayLines } from "@/lib/product-card-copy";
+import { isNextNavigationError } from "@/lib/safe-json-parse";
 import { createSupabaseAdminClient, createSupabaseClient } from "@/lib/supabase";
 import { SITE_PAGE_INNER_SHELL_CLASS } from "@/lib/site-layout";
 
@@ -47,13 +62,6 @@ function toSafeFileBaseName(filename: string) {
 }
 
 function getStatusMessage(status?: string, code?: string) {
-  if (status === "success") {
-    return {
-      tone: "success" as const,
-      text: "Quote request submitted successfully.",
-    };
-  }
-
   if (status === "invalid") {
     if (code === "required_fields") {
       return {
@@ -71,6 +79,18 @@ function getStatusMessage(status?: string, code?: string) {
       return {
         tone: "invalid" as const,
         text: "Logo file is too large. Maximum file size is 10MB.",
+      };
+    }
+    if (code === "min_quantity") {
+      return {
+        tone: "invalid" as const,
+        text: `Bulk quotes require at least ${QUOTE_MIN_TOTAL_QUANTITY} units total. Add products and quantities, then try again.`,
+      };
+    }
+    if (code === "product_required") {
+      return {
+        tone: "invalid" as const,
+        text: "Enter at least one product name or ID.",
       };
     }
     return {
@@ -131,6 +151,41 @@ async function resolveQuoteProductSpec(
     };
   }
 
+  const compactStyleCode = normalizeQuoteStyleCodeQuery(spec);
+  if (/^[A-Z0-9][A-Z0-9-]{1,11}$/.test(compactStyleCode)) {
+    const esc = escapeIlikePattern(compactStyleCode);
+    const escLower = escapeIlikePattern(compactStyleCode.toLowerCase());
+    const { data: styleCandidates } = await supabase
+      .from("products")
+      .select("id, name, slug, supplier_name, description, available_colors")
+      .or(
+        `name.ilike.%${esc}%,slug.ilike.%${escLower}%,name.ilike.Biz Collection ${esc}%,name.ilike.Biz Care ${esc}%,name.ilike.Syzmik ${esc}%`,
+      )
+      .limit(24);
+
+    const styleMatches = (styleCandidates ?? []).filter((row) => {
+      const card = productCardDisplayLines(
+        row.name,
+        row.description,
+        row.slug,
+        row.supplier_name,
+        row.available_colors,
+        true,
+      );
+      return card.productCode && normalizeQuoteStyleCodeQuery(card.productCode) === compactStyleCode;
+    });
+
+    if (styleMatches.length === 1 && styleMatches[0].id) {
+      return { productId: styleMatches[0].id, notesLine: null };
+    }
+    if (styleMatches.length > 1) {
+      return {
+        productId: null,
+        notesLine: `Product ID ${spec} matches more than one catalog product. Please clarify in notes.`,
+      };
+    }
+  }
+
   const safeExact = escapeIlikePattern(spec);
   const { data: exactNameRows } = await supabase.from("products").select("id").ilike("name", safeExact).limit(3);
   if (exactNameRows?.length === 1 && exactNameRows[0].id) {
@@ -169,31 +224,6 @@ async function resolveQuoteProductSpec(
   };
 }
 
-function splitProductEntryTokens(raw: string): string[] {
-  return raw
-    .split(/[\n,;]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-async function resolveQuoteProductField(
-  supabase: SupabaseAdmin,
-  raw: string,
-): Promise<{ productIds: string[]; noteLines: string[] }> {
-  const tokens = splitProductEntryTokens(raw);
-  const productIds: string[] = [];
-  const noteLines: string[] = [];
-  for (const token of tokens) {
-    const { productId, notesLine } = await resolveQuoteProductSpec(supabase, token);
-    if (productId && !productIds.includes(productId)) {
-      productIds.push(productId);
-    } else if (notesLine) {
-      noteLines.push(notesLine);
-    }
-  }
-  return { productIds, noteLines };
-}
-
 function formUuidList(formData: FormData, key: string): string[] {
   const raw = formData.getAll(key);
   return [...new Set(raw.map((v) => String(v).trim()).filter((s) => UUID_RE.test(s)))];
@@ -210,6 +240,109 @@ async function appendMultiSelectQuoteNotes(supabase: SupabaseAdmin, productIds: 
   return lines;
 }
 
+type ParsedQuoteProductLine = {
+  productId: string | null;
+  spec: string;
+  color: string;
+  quantity: number;
+};
+
+function parseQuoteProductLines(formData: FormData): ParsedQuoteProductLine[] {
+  const productIds = formData.getAll("product_line_id").map((value) => String(value).trim());
+  const specs = formData.getAll("product_line_spec").map((value) => String(value).trim());
+  const colors = formData.getAll("product_line_color").map((value) => String(value).trim());
+  const quantities = formData.getAll("product_line_quantity").map((value) => {
+    const n = Number(String(value).trim());
+    return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
+  });
+  const count = Math.max(productIds.length, specs.length, colors.length, quantities.length);
+  const lines: ParsedQuoteProductLine[] = [];
+  for (let i = 0; i < count; i++) {
+    const spec = specs[i] ?? "";
+    const quantity = quantities[i] ?? 0;
+    const productIdRaw = productIds[i] ?? "";
+    const productId = UUID_RE.test(productIdRaw)
+      ? productIdRaw
+      : UUID_RE.test(spec)
+        ? spec
+        : null;
+    const color = colors[i] ?? "";
+    if (!spec) continue;
+    lines.push({
+      productId,
+      spec,
+      color,
+      quantity: quantity > 0 ? quantity : 1,
+    });
+  }
+  return lines;
+}
+
+function formatQuoteProductLineLabel(line: ParsedQuoteProductLine): string {
+  const colorSuffix = line.color ? ` (${line.color})` : "";
+  return `${line.spec}${colorSuffix} — ${line.quantity} units`;
+}
+
+function buildProductSpecRaw(lines: ParsedQuoteProductLine[]): string {
+  return lines.map((line) => formatQuoteProductLineLabel(line)).join("\n");
+}
+
+function buildProductQuantityNotes(lines: ParsedQuoteProductLine[]): string | null {
+  if (lines.length <= 1) return null;
+  return `Product quantities:\n${lines.map((line) => `- ${formatQuoteProductLineLabel(line)}`).join("\n")}`;
+}
+
+function buildSubmissionProductLines(lines: ParsedQuoteProductLine[]): WebsiteQuoteProductLineV1[] {
+  return lines.map((line) => ({
+    productId: line.productId,
+    productName: line.spec,
+    color: line.color || null,
+    quantity: line.quantity,
+  }));
+}
+
+function aggregateProductColor(lines: ParsedQuoteProductLine[]): string | null {
+  const colors = [...new Set(lines.map((line) => line.color.trim()).filter(Boolean))];
+  if (colors.length === 0) {
+    return null;
+  }
+  return colors.join(", ");
+}
+
+async function loadWebsiteQuoteEnrichment(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  resolvedProductIds: string[],
+  embroideryPositionIds: string[],
+  printingPositionIds: string[],
+) {
+  const allPositionIds = [...new Set([...embroideryPositionIds, ...printingPositionIds])];
+  const [{ data: productRows }, { data: positionRows }] = await Promise.all([
+    resolvedProductIds.length
+      ? supabase.from("products").select("id, name, slug, supplier_name").in("id", resolvedProductIds)
+      : Promise.resolve({ data: [] as WebsiteQuoteProductRow[] }),
+    allPositionIds.length
+      ? supabase.from("embroidery_positions").select("id, name").in("id", allPositionIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+  ]);
+
+  const productById = new Map((productRows ?? []).map((row) => [row.id, row]));
+  const positionNameById = new Map((positionRows ?? []).map((row) => [row.id, row.name.trim()]));
+
+  return {
+    resolvedProducts: resolvedProductIds
+      .map((id) => productById.get(id))
+      .filter((row): row is WebsiteQuoteProductRow => Boolean(row)),
+    embroideryPlacements: embroideryPositionIds.map((id) => ({
+      id,
+      name: positionNameById.get(id) || id,
+    })),
+    printingPlacements: printingPositionIds.map((id) => ({
+      id,
+      name: positionNameById.get(id) || id,
+    })),
+  };
+}
+
 async function submitQuote(formData: FormData) {
   "use server";
 
@@ -217,27 +350,34 @@ async function submitQuote(formData: FormData) {
   const contactName = String(formData.get("contact_name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
-  const productSpecRaw = String(formData.get("product_spec") ?? "");
+  const productLines = parseQuoteProductLines(formData);
+  const productSpecRaw = buildProductSpecRaw(productLines);
   const embroideryPositionIds = formUuidList(formData, "embroidery_position_id");
   const printingPositionIds = formUuidList(formData, "printing_position_id");
   const serviceType = String(formData.get("service_type") ?? "").trim();
   const placementLabelsRaw = String(formData.get("placement_labels") ?? "").trim();
-  const productColor = String(formData.get("product_color") ?? "").trim();
   const quantityRaw = String(formData.get("quantity") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
   const logoFile = formData.get("logo_file");
 
-  const quantity = quantityRaw ? Number(quantityRaw) : null;
+  const totalQuantity = quantityRaw ? Number(quantityRaw) : NaN;
+
+  if (!companyName || !contactName || !email) {
+    redirect("/quote?status=invalid&code=required_fields");
+  }
+  if (productLines.length === 0) {
+    redirect("/quote?status=invalid&code=product_required");
+  }
+  if (!Number.isFinite(totalQuantity) || totalQuantity < QUOTE_MIN_TOTAL_QUANTITY) {
+    redirect("/quote?status=invalid&code=min_quantity");
+  }
+
   const placementLabels = placementLabelsRaw
     ? placementLabelsRaw
         .split(",")
         .map((item) => item.trim())
         .filter(Boolean)
     : null;
-
-  if (!companyName || !contactName || !email) {
-    redirect("/quote?status=invalid&code=required_fields");
-  }
 
   try {
     const supabase = createSupabaseAdminClient();
@@ -275,36 +415,96 @@ async function submitQuote(formData: FormData) {
       logoFileUrl = data.publicUrl;
     }
 
-    const { productIds: resolvedProductIds, noteLines: productTokenNotes } = await resolveQuoteProductField(
-      supabase,
-      productSpecRaw,
-    );
-    const multiLines = await appendMultiSelectQuoteNotes(supabase, resolvedProductIds);
-    const mergedNotes = [...productTokenNotes, ...multiLines, notes].filter(Boolean).join("\n\n") || null;
+    const resolvedProductIds: string[] = [];
+    const productTokenNotes: string[] = [];
+    for (const line of productLines) {
+      if (line.productId) {
+        const { data } = await supabase.from("products").select("id").eq("id", line.productId).maybeSingle();
+        if (data?.id && !resolvedProductIds.includes(data.id)) {
+          resolvedProductIds.push(data.id);
+          continue;
+        }
+      }
 
-    const { data: inserted, error } = await supabase
-      .from("quote_requests")
-      .insert({
-        company_name: companyName,
-        contact_name: contactName,
-        email,
-        phone: phone || null,
-        product_id: resolvedProductIds[0] ?? null,
-        embroidery_position_id: embroideryPositionIds[0] ?? null,
-        embroidery_position_ids: embroideryPositionIds.length > 0 ? embroideryPositionIds : null,
-        printing_position_id: printingPositionIds[0] ?? null,
-        printing_position_ids: printingPositionIds.length > 0 ? printingPositionIds : null,
-        service_type: serviceType || null,
-        placement_labels: placementLabels,
-        product_color: productColor || null,
-        logo_file_url: logoFileUrl,
-        quantity: Number.isFinite(quantity) ? quantity : null,
-        notes: mergedNotes,
-      })
-      .select("id")
-      .single();
+      const { productId, notesLine } = await resolveQuoteProductSpec(supabase, line.spec);
+      if (productId && !resolvedProductIds.includes(productId)) {
+        resolvedProductIds.push(productId);
+      } else if (notesLine) {
+        const colorNote = line.color ? `, colour ${line.color}` : "";
+        productTokenNotes.push(`${notesLine} (qty ${line.quantity}${colorNote})`);
+      }
+    }
+    const productColor = aggregateProductColor(productLines);
+    const submissionProductLines = buildSubmissionProductLines(productLines);
+    const multiLines = await appendMultiSelectQuoteNotes(supabase, resolvedProductIds);
+    const productQuantityNotes = buildProductQuantityNotes(productLines);
+    const mergedNotes =
+      [...productTokenNotes, ...multiLines, productQuantityNotes, notes].filter(Boolean).join("\n\n") || null;
+
+    const { resolvedProducts, embroideryPlacements, printingPlacements } = await loadWebsiteQuoteEnrichment(
+      supabase,
+      resolvedProductIds,
+      embroideryPositionIds,
+      printingPositionIds,
+    );
+
+    const placementLabelValues = [
+      ...embroideryPlacements.map((placement) => `Embroidery: ${placement.name}`),
+      ...printingPlacements.map((placement) => `Printing: ${placement.name}`),
+    ];
+
+    const adminCustomerQuoteSheet = buildWebsiteQuoteCustomerSheet({
+      companyName,
+      contactName,
+      email,
+      phone: phone || null,
+      productSpecRaw,
+      resolvedProducts,
+      unresolvedProductLines: productTokenNotes,
+      quantity: totalQuantity,
+      serviceType: serviceType || null,
+      productColor: productColor || null,
+      embroideryPlacements,
+      printingPlacements,
+      logoFileUrl,
+      customerNotes: notes || null,
+      productLines: submissionProductLines,
+    });
+
+    const websiteQuoteSubmission = buildWebsiteQuoteSubmissionSnapshot({
+      productSpecRaw,
+      customerNotes: notes || null,
+      serviceType: serviceType || null,
+      productColor,
+      quantity: totalQuantity,
+      productLines: submissionProductLines,
+      embroideryPlacements,
+      printingPlacements,
+      logoFileUrl,
+    });
+
+    const { data: inserted, error } = await insertWebsiteQuoteRequest(supabase, {
+      company_name: companyName,
+      contact_name: contactName,
+      email,
+      phone: phone || null,
+      product_id: resolvedProductIds[0] ?? null,
+      embroidery_position_id: embroideryPositionIds[0] ?? null,
+      embroidery_position_ids: embroideryPositionIds.length > 0 ? embroideryPositionIds : null,
+      printing_position_id: printingPositionIds[0] ?? null,
+      printing_position_ids: printingPositionIds.length > 0 ? printingPositionIds : null,
+      service_type: serviceType || null,
+      placement_labels: placementLabelValues.length > 0 ? placementLabelValues : placementLabels,
+      product_color: productColor,
+      logo_file_url: logoFileUrl,
+      quantity: totalQuantity,
+      notes: mergedNotes,
+      admin_customer_quote_sheet: adminCustomerQuoteSheet,
+      website_quote_submission: websiteQuoteSubmission,
+    });
 
     if (error || !inserted?.id) {
+      console.error("[quote] save_failed", error);
       redirect("/quote?status=error&code=save_failed");
     }
 
@@ -319,7 +519,11 @@ async function submitQuote(formData: FormData) {
     } catch (crmError) {
       console.error("[crm] post-submit automation", crmError);
     }
-  } catch {
+  } catch (error) {
+    if (isNextNavigationError(error)) {
+      throw error;
+    }
+    console.error("[quote] submit failed", error);
     redirect("/quote?status=error");
   }
 
@@ -330,7 +534,7 @@ export default async function QuotePage({ searchParams }: QuotePageProps) {
   const params = await searchParams;
   const status = params.status;
   const code = params.code;
-  const statusMessage = getStatusMessage(status, code);
+  const statusMessage = status === "success" ? null : getStatusMessage(status, code);
   const prefilledProductIds = (params.product_id ?? "")
     .split(",")
     .map((item) => item.trim())
@@ -344,19 +548,19 @@ export default async function QuotePage({ searchParams }: QuotePageProps) {
   const prefilledQuantity =
     params.quantity && Number.isFinite(Number(params.quantity)) ? Number(params.quantity) : undefined;
 
-  let products: { id: string; name: string; slug: string | null }[] = [];
+  let catalog: QuoteCatalogProduct[] = [];
   let positions: { id: string; name: string }[] = [];
 
   try {
     const supabase = createSupabaseClient();
-    const [{ data: productData }, { data: positionData }] = await Promise.all([
-      supabase.from("products").select("id, name, slug").order("name"),
+    const [loadedCatalog, { data: positionData }] = await Promise.all([
+      getQuoteCatalogProducts(),
       supabase.from("embroidery_positions").select("id, name").order("name"),
     ]);
-    products = (productData ?? []).filter((p) => !isBizCorporatesCatalogProduct(p.name));
+    catalog = loadedCatalog;
     positions = positionData ?? [];
   } catch {
-    products = [];
+    catalog = [];
     positions = [];
   }
 
@@ -365,15 +569,21 @@ export default async function QuotePage({ searchParams }: QuotePageProps) {
     .map((item) => item.name);
 
   const prefilledProductNames = prefilledProductIds
-    .map((id) => products.find((p) => p.id === id)?.name)
-    .filter((n): n is string => Boolean(n));
+    .map((id) => catalog.find((product) => product.id === id)?.displayName)
+    .filter((name): name is string => Boolean(name));
 
-  const prefilledProductFieldValue =
-    prefilledProductNames.length > 0
-      ? prefilledProductNames.join(", ")
-      : prefilledProductIds.length > 0
-        ? prefilledProductIds.join(", ")
-        : "";
+  const prefilledProductLines: QuoteProductLine[] =
+    prefilledProductIds.length > 0
+      ? prefilledProductIds.map((id, index) => {
+          const product = catalog.find((item) => item.id === id);
+          return {
+            productId: product?.id ?? (UUID_RE.test(id) ? id : null),
+            spec: product?.displayName ?? product?.name ?? id,
+            color: index === 0 ? prefilledColor : "",
+            quantity: index === 0 && prefilledQuantity ? prefilledQuantity : 1,
+          };
+        })
+      : [{ productId: null, spec: "", color: "", quantity: prefilledQuantity ?? 1 }];
 
   const prefilledNotes = [
     prefilledServiceType ? `Service: ${prefilledServiceType}` : "",
@@ -395,21 +605,12 @@ export default async function QuotePage({ searchParams }: QuotePageProps) {
         <header className="flex flex-col gap-3">
           <QuoteBackNav />
           <QuoteAnalyticsTracker status={status} />
+        <QuoteSubmitSuccessPopup show={status === "success"} />
           <h1 className="text-4xl font-medium">Get a Quote</h1>
           <p className="max-w-2xl text-sm text-brand-navy/75">
-            Shop online for small team orders, or use this form for tailored bulk pricing with logo embroidery
-            or printing.
+            Shop online for small team orders, or use this form for tailored bulk pricing (+50 Units) with logo
+            embroidery or printing.
           </p>
-          <div className="max-w-2xl space-y-2 rounded-xl border border-brand-navy/15 bg-brand-surface/40 px-4 py-3 text-sm text-brand-navy/85">
-            <p>
-              <strong className="text-brand-navy">Small orders (typical 5–20 units):</strong> Browse categories
-              and checkout online — embroidery and printing available on many products.
-            </p>
-            <p>
-              <strong className="text-brand-navy">Team &amp; bulk (20+ units):</strong> Submit this form for
-              better pricing, mock-ups, and company delivery. Larger corporate orders welcome.
-            </p>
-          </div>
         </header>
 
         {(prefilledProductIds.length > 0 ||
@@ -442,11 +643,8 @@ export default async function QuotePage({ searchParams }: QuotePageProps) {
           </p>
         )}
 
+        <QuoteQuantityProvider>
         <form action={submitQuote} className="grid gap-6 rounded-2xl border border-brand-navy/15 p-6">
-          <input type="hidden" name="service_type" value={prefilledServiceType} />
-          <input type="hidden" name="product_color" value={prefilledColor} />
-          <input type="hidden" name="placement_labels" value={prefilledPlacementNames.join(",")} />
-
           <p className="inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.1em] text-brand-navy/75">
             <BuildingIcon className="h-4 w-4" />
             Contact Information
@@ -468,7 +666,7 @@ export default async function QuotePage({ searchParams }: QuotePageProps) {
               <label htmlFor="contact_name" className="text-sm font-semibold">
                 Contact Name *
               </label>
-              <input
+              <ImeFriendlyNameInput
                 id="contact_name"
                 name="contact_name"
                 required
@@ -506,97 +704,13 @@ export default async function QuotePage({ searchParams }: QuotePageProps) {
             Product Options
           </p>
           <div className="grid gap-8">
-            <div className="grid gap-3 rounded-lg border border-brand-navy/15 p-4">
-              <label htmlFor="product_spec" className="text-sm font-semibold text-brand-navy">
-                Product details
-              </label>
-              <p className="text-sm text-brand-navy/60">
-                Enter one or more <strong>catalog product names</strong>, <strong>store slugs</strong> (e.g. work-shirt),
-                or <strong>product UUIDs</strong>. Separate with commas or new lines. The first match is linked on the
-                quote; other matches and anything we cannot resolve are added to <strong>Notes</strong> for staff.
-              </p>
-              <textarea
-                id="product_spec"
-                name="product_spec"
-                rows={4}
-                defaultValue={prefilledProductFieldValue}
-                placeholder={"e.g. Premium Work Polo\nwork-shirt\n(paste product UUID if you have it)"}
-                className="min-h-[6.5rem] rounded-md border border-brand-navy/20 px-3 py-2 font-mono text-sm leading-relaxed text-brand-navy"
-              />
-              <div className="grid max-w-xs gap-2">
-                <label htmlFor="quantity" className="text-sm font-semibold">
-                  Total Quantity
-                </label>
-                <input
-                  id="quantity"
-                  name="quantity"
-                  type="number"
-                  min={1}
-                  defaultValue={prefilledQuantity}
-                  className="rounded-md border border-brand-navy/20 px-3 py-2"
-                />
-              </div>
-            </div>
+            <QuoteProductOptionsFields catalog={catalog} initialLines={prefilledProductLines} />
 
-            <fieldset className="grid gap-3 rounded-lg border border-brand-navy/15 p-4">
-              <legend className="text-sm font-semibold text-brand-navy">Embroidery position — select any that apply</legend>
-              <p className="text-sm text-brand-navy/60">
-                Same rule: the <strong>first checked</strong> position is stored on the quote; extras go to{" "}
-                <strong>Notes</strong>.
-              </p>
-              {positions.length === 0 ? (
-                <p className="text-sm text-brand-navy/55">No positions loaded.</p>
-              ) : (
-                <div className="max-h-48 overflow-y-auto rounded-md border border-brand-navy/10 bg-white p-3 sm:max-h-64">
-                  <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {positions.map((item) => (
-                      <li key={item.id}>
-                        <label className="flex cursor-pointer items-start gap-2.5 rounded-md px-1 py-1.5 hover:bg-brand-navy/5">
-                          <input
-                            type="checkbox"
-                            name="embroidery_position_id"
-                            value={item.id}
-                            defaultChecked={prefilledPlacementIds.includes(item.id)}
-                            className="mt-1 h-4 w-4 shrink-0 rounded border-brand-navy/30 text-brand-orange focus:ring-brand-orange"
-                          />
-                          <span className="text-sm leading-snug text-brand-navy">{item.name}</span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </fieldset>
-
-            <fieldset className="grid gap-3 rounded-lg border border-brand-navy/15 p-4">
-              <legend className="text-sm font-semibold text-brand-navy">Printing position — select any that apply</legend>
-              <p className="text-sm text-brand-navy/60">
-                Choose where printing or heat transfer should go. The <strong>first checked</strong> position is stored
-                on the quote; extras go to <strong>Notes</strong> (same rule as embroidery).
-              </p>
-              {positions.length === 0 ? (
-                <p className="text-sm text-brand-navy/55">No positions loaded.</p>
-              ) : (
-                <div className="max-h-48 overflow-y-auto rounded-md border border-brand-navy/10 bg-white p-3 sm:max-h-64">
-                  <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {positions.map((item) => (
-                      <li key={`print-${item.id}`}>
-                        <label className="flex cursor-pointer items-start gap-2.5 rounded-md px-1 py-1.5 hover:bg-brand-navy/5">
-                          <input
-                            type="checkbox"
-                            name="printing_position_id"
-                            value={item.id}
-                            defaultChecked={false}
-                            className="mt-1 h-4 w-4 shrink-0 rounded border-brand-navy/30 text-brand-orange focus:ring-brand-orange"
-                          />
-                          <span className="text-sm leading-snug text-brand-navy">{item.name}</span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </fieldset>
+            <QuoteServicePlacementFields
+              placements={positions}
+              prefilledServiceType={prefilledServiceType}
+              prefilledPlacementIds={prefilledPlacementIds}
+            />
           </div>
 
           <p className="mt-[2lh] inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.1em] text-brand-navy/75">
@@ -617,22 +731,9 @@ export default async function QuotePage({ searchParams }: QuotePageProps) {
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="submit"
-              className="inline-flex w-fit items-center gap-2 rounded-xl bg-brand-orange px-6 py-3 text-sm font-medium text-brand-navy transition hover:brightness-95"
-            >
-              <ClipboardIcon className="h-4 w-4" />
-              Submit Quote Request
-            </button>
-            {statusMessage?.tone === "success" && (
-              <p className="inline-flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-800">
-                <CheckCircleIcon className="h-4 w-4 shrink-0" />
-                {statusMessage.text}
-              </p>
-            )}
-          </div>
+          <QuoteSubmitButton />
         </form>
+        </QuoteQuantityProvider>
         </div>
       </MainWithSupplierRail>
     </main>

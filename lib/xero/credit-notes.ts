@@ -1,3 +1,4 @@
+import { getPerthYmd, todayPerthYmd } from "@/lib/perth-calendar";
 import { xeroAccountingJson } from "@/lib/xero/api-client";
 import type { XeroConnectionRow } from "@/lib/xero/connection-db";
 
@@ -17,9 +18,9 @@ function getSalesAccountCode(): string {
 function toXeroDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) {
-    return new Date().toISOString().slice(0, 10);
+    return todayPerthYmd();
   }
-  return d.toISOString().slice(0, 10);
+  return getPerthYmd(d).ymd;
 }
 
 /** Create an AUTHORISED ACCRECCREDIT credit note and allocate it to the sales invoice. */

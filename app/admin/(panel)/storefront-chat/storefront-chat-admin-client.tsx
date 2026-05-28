@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { formatPerthDateTimeShort } from "@/lib/perth-calendar";
 import { playStorefrontChatGuestDing } from "@/lib/storefront-chat-admin-sound";
 import {
   STOREFRONT_CHAT_STATUS_CLOSED,
@@ -260,10 +261,7 @@ export function StorefrontChatAdminClient() {
                         ) : null}
                       </span>
                       <span className="text-[0.7rem] text-slate-500">
-                        {new Date(t.updated_at).toLocaleString(undefined, {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
+                        {formatPerthDateTimeShort(t.updated_at)}
                       </span>
                     </button>
                   </li>

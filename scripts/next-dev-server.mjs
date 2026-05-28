@@ -26,7 +26,7 @@ if (useWebpack) {
 const dev = spawn(process.execPath, [nextBin, ...devArgs], {
   cwd: root,
   stdio: "inherit",
-  env: { ...process.env },
+  env: { ...process.env, TZ: process.env.TZ ?? "Australia/Perth" },
 });
 
 dev.on("exit", (code) => process.exit(code ?? 0));

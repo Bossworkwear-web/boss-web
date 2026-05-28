@@ -92,6 +92,12 @@ After a **paid** Stripe order:
 
 Orders without invoice permission stay `xero_sync_status=skipped` until you upgrade and retry.
 
+### Customer Quote → Xero
+
+On **Admin → Customer Quote**, use **Xero Quote** next to **Save Quote** to create a **DRAFT** sales quote in Xero (same `accounting.invoices` scope and `XERO_SALES_ACCOUNT_CODE` as store invoices). The quote number matches the Customer Quote number; Xero metadata is stored on the saved quote sheet when a CRM quote id exists.
+
+Admin API: `POST /api/admin/xero/sync-quote` with JSON `{ "sheet": { …AdminCustomerQuoteSheetV1… }, "quoteRequestId": "<uuid>|null" }`.
+
 ## Phase 3 — Paid in Xero + refund credit notes
 
 After the sales invoice is created:

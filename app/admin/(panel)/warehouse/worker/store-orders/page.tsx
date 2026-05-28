@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { formatPerthDateTimeShort } from "@/lib/perth-calendar";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -97,7 +98,7 @@ export default async function WarehouseWorkerCompletedStoreOrdersPage() {
                   <p className="font-mono font-semibold text-brand-navy">{r.order_number}</p>
                   <p className="text-xs text-slate-500">
                     Ordered{" "}
-                    {new Date(r.created_at).toLocaleString("en-AU", { dateStyle: "short", timeStyle: "short" })}
+                    {formatPerthDateTimeShort(r.created_at)}
                   </p>
                 </td>
                 <td className="px-4 py-3 align-top">
@@ -110,7 +111,7 @@ export default async function WarehouseWorkerCompletedStoreOrdersPage() {
                   {r.shipped_at ? (
                     <p className="mt-1 text-xs text-slate-500">
                       Shipped:{" "}
-                      {new Date(r.shipped_at).toLocaleString("en-AU", { dateStyle: "short", timeStyle: "short" })}
+                      {formatPerthDateTimeShort(r.shipped_at)}
                     </p>
                   ) : null}
                   {r.tracking_number ? (

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CompleteStatementLocalSnapshot } from "@/app/admin/(panel)/complete-statement/complete-statement-local-snapshot";
+import { formatPerthDateTime } from "@/lib/perth-calendar";
 import { australiaPostTrackingUrl, formatMoneyFromCents, siteBaseUrl } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -291,12 +292,7 @@ export default async function CompleteStatementPage({
                   <div>
                     <dt className="text-xs font-semibold uppercase text-slate-500">Shipped at</dt>
                     <dd className="mt-0.5 text-slate-900">
-                      {storeOrder.shipped_at
-                        ? new Date(storeOrder.shipped_at).toLocaleString("en-AU", {
-                            dateStyle: "medium",
-                            timeStyle: "short",
-                          })
-                        : "—"}
+                      {storeOrder.shipped_at ? formatPerthDateTime(storeOrder.shipped_at) : "—"}
                     </dd>
                   </div>
                   <div>

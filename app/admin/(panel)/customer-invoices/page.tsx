@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Fragment } from "react";
 
 import { StoreOrderInvoiceReferenceForm } from "@/app/admin/(panel)/store-orders/store-order-invoice-reference-form";
+import { formatPerthDateTime } from "@/lib/perth-calendar";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { ADMIN_CUSTOMER_INVOICES_LIMIT } from "@/lib/customer-ordered-records";
@@ -9,14 +10,7 @@ import { ADMIN_CUSTOMER_INVOICES_LIMIT } from "@/lib/customer-ordered-records";
 export const dynamic = "force-dynamic";
 
 function formatOrderDate(iso: string) {
-  try {
-    return new Date(iso).toLocaleString("en-AU", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  } catch {
-    return iso;
-  }
+  return formatPerthDateTime(iso);
 }
 
 type OrderRow = {

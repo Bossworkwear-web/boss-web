@@ -428,6 +428,7 @@ export type Database = {
           quote_customer_accept_payload: unknown | null;
           quote_customer_accept_comment: string | null;
           admin_customer_quote_sheet: unknown | null;
+          website_quote_submission: unknown | null;
         };
         Insert: {
           id?: string;
@@ -472,6 +473,7 @@ export type Database = {
           quote_customer_accept_payload?: unknown | null;
           quote_customer_accept_comment?: string | null;
           admin_customer_quote_sheet?: unknown | null;
+          website_quote_submission?: unknown | null;
         };
         Update: {
           id?: string;
@@ -516,6 +518,7 @@ export type Database = {
           quote_customer_accept_payload?: unknown | null;
           quote_customer_accept_comment?: string | null;
           admin_customer_quote_sheet?: unknown | null;
+          website_quote_submission?: unknown | null;
         };
         Relationships: [];
       };

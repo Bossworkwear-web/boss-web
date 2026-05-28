@@ -1,3 +1,5 @@
+import { formatPerthDate, formatPerthDateTime } from "@/lib/perth-calendar";
+
 /** Payload returned by `/api/orders/track-status` and used on the customer track page. */
 export type OrderTrackDeliveryPayload = {
   status: string;
@@ -35,19 +37,11 @@ export function addBusinessDaysLocal(start: Date, businessDays: number): Date {
 }
 
 export function formatAuMediumDate(d: Date): string {
-  try {
-    return d.toLocaleDateString("en-AU", { dateStyle: "medium" });
-  } catch {
-    return d.toISOString().slice(0, 10);
-  }
+  return formatPerthDate(d);
 }
 
 export function formatAuMediumDateTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" });
-  } catch {
-    return iso;
-  }
+  return formatPerthDateTime(iso);
 }
 
 export function buildDeliveryTimeline(payload: OrderTrackDeliveryPayload): DeliveryTimelineStep[] {

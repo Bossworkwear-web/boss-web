@@ -6,6 +6,7 @@ import { Fragment } from "react";
 import { ArrowLeftIcon } from "@/app/components/icons";
 import { TopNav } from "@/app/components/top-nav";
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
+import { formatPerthDateTime } from "@/lib/perth-calendar";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
@@ -24,10 +25,7 @@ type CustomerPageProps = {
 
 function formatOrderDate(iso: string) {
   try {
-    return new Date(iso).toLocaleString("en-AU", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
+    return formatPerthDateTime(iso);
   } catch {
     return iso;
   }

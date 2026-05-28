@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
+import { formatPerthDateTime } from "@/lib/perth-calendar";
 import { PIPELINE_LABELS, PIPELINE_STAGES, type PipelineStage } from "@/lib/crm/pipeline";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
 
@@ -23,11 +24,7 @@ import type { CrmActivityRow, CrmCustomerRow, CrmNotificationRow, CrmQuoteRow } 
 type Tab = "pipeline" | "leads" | "customers" | "notifications";
 
 function formatWhen(iso: string) {
-  return new Date(iso).toLocaleString("en-AU", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Australia/Perth",
-  });
+  return formatPerthDateTime(iso);
 }
 
 function toDatetimeLocalValue(iso: string | null) {

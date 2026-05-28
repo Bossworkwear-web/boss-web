@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { StoreOrderBarcode } from "@/app/components/store-order-barcode";
+import { formatPerthDateTimeShort } from "@/lib/perth-calendar";
 import { storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
 
 import { listClickUpProductionQueue, type ClickUpProductionQueueRowDto } from "./actions";
@@ -88,7 +89,7 @@ export default async function AdminProductionPage() {
                 </td>
                 <td className="px-4 py-3 font-mono text-slate-800">{r.listDate || "—"}</td>
                 <td className="px-4 py-3 text-xs text-slate-500">
-                  {new Date(r.movedAt).toLocaleString("en-AU", { dateStyle: "short", timeStyle: "short" })}
+                  {formatPerthDateTimeShort(r.movedAt)}
                 </td>
                 <td className="px-4 py-3">
                   <p className="font-medium">{r.customerName}</p>

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { DocketAutoprint } from "@/app/admin/(panel)/store-orders/[id]/docket/docket-autoprint";
 import { DocketPrintBar } from "@/app/admin/(panel)/store-orders/[id]/docket/docket-print-bar";
+import { formatPerthDateTime } from "@/lib/perth-calendar";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -52,7 +53,7 @@ export default async function DispatchOrderDetailPrintPage({ params, searchParam
 
   const orderDateLabel =
     order.created_at != null && String(order.created_at).trim() !== ""
-      ? new Date(order.created_at).toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" })
+      ? formatPerthDateTime(order.created_at)
       : "—";
 
   return (

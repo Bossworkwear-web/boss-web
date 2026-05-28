@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 
-import { isNextNavigationError, stringifyJsonField } from "@/lib/safe-json-parse";
+import { isNextNavigationError, readResponseJson, stringifyJsonField } from "@/lib/safe-json-parse";
+import { todayPerthYmd } from "@/lib/perth-calendar";
 
 import { CustomerQuoteImageDropzone } from "@/app/admin/(panel)/customer-quote/customer-quote-image-dropzone";
 
@@ -47,6 +48,9 @@ type Template = {
   };
   quoteBoxImageUrls?: string[];
   quoteBoxNote?: string;
+  xeroQuoteId?: string | null;
+  xeroQuoteNumber?: string | null;
+  xeroQuoteSyncedAt?: string | null;
   items: Array<{
     productId: string;
     productName: string;
@@ -165,7 +169,14 @@ export function InternalOrderForm({
   const isQuote = variant === "customer-quote";
   const isInternalOrderQuote = isQuote && quoteSubmitContext === "internal-order";
   const [saveQuotePending, startSaveQuoteTransition] = useTransition();
+  const [xeroQuotePending, startXeroQuoteTransition] = useTransition();
   const [saveQuoteError, setSaveQuoteError] = useState<string | null>(null);
+  const [xeroQuoteError, setXeroQuoteError] = useState<string | null>(null);
+  const [xeroQuoteId, setXeroQuoteId] = useState<string | null>(() => template.xeroQuoteId ?? null);
+  const [xeroQuoteNumber, setXeroQuoteNumber] = useState<string | null>(() => template.xeroQuoteNumber ?? null);
+  const [xeroQuoteSyncedAt, setXeroQuoteSyncedAt] = useState<string | null>(
+    () => template.xeroQuoteSyncedAt ?? null,
+  );
   const quoteSaveReturnBase =
     quoteSubmitContext === "internal-order" ? "/admin/instore-orders/internal-order" : "/admin/customer-quote";
 
@@ -175,7 +186,7 @@ export function InternalOrderForm({
   const [deliveryAddress, setDeliveryAddress] = useState(template.deliveryAddress);
   const [companyName, setCompanyName] = useState(template.quoteCompanyName ?? "");
   const [clientContact, setClientContact] = useState(template.quoteContactPhone ?? "");
-  const [orderDate, setOrderDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [orderDate, setOrderDate] = useState(() => todayPerthYmd());
   const [dueDate, setDueDate] = useState("");
   const [setupFeeCents, setSetupFeeCents] = useState(0);
   const [quoteDeliveryFeeCents, setQuoteDeliveryFeeCents] = useState(() =>
@@ -191,6 +202,15 @@ export function InternalOrderForm({
   const [items, setItems] = useState<Item[]>(() =>
     template.items.map((t, idx) => toItem(t, idx + 1)),
   );
+  const [activeQuoteGroupId, setActiveQuoteGroupId] = useState<number | null>(() => {
+    const first = template.items[0];
+    if (!first) return null;
+    const gid =
+      typeof first.quoteGroupId === "number" && Number.isFinite(first.quoteGroupId) && first.quoteGroupId > 0
+        ? first.quoteGroupId
+        : 1;
+    return gid;
+  });
   const [quoteBoxImageUrls, setQuoteBoxImageUrls] = useState<string[]>(() => [
     ...(template.quoteBoxImageUrls ?? []),
   ]);
@@ -209,8 +229,11 @@ export function InternalOrderForm({
     setItems(template.items.map((t, idx) => toItem(t, idx + 1)));
     setQuoteBoxImageUrls([...(template.quoteBoxImageUrls ?? [])]);
     setQuoteBoxNote(template.quoteBoxNote ?? "");
+    setXeroQuoteId(template.xeroQuoteId ?? null);
+    setXeroQuoteNumber(template.xeroQuoteNumber ?? null);
+    setXeroQuoteSyncedAt(template.xeroQuoteSyncedAt ?? null);
     if (template.customerQuoteDraft) {
-      setOrderDate(template.customerQuoteDraft.orderDate || new Date().toISOString().slice(0, 10));
+      setOrderDate(template.customerQuoteDraft.orderDate || todayPerthYmd());
       setDueDate(template.customerQuoteDraft.dueDate);
       setSetupFeeCents(template.customerQuoteDraft.setupFeeCents);
       setQuoteDeliveryFeeCents(template.customerQuoteDraft.quoteDeliveryFeeCents);
@@ -218,7 +241,7 @@ export function InternalOrderForm({
       const st = template.customerQuoteDraft.status;
       setStatus(st === "paid" || st === "unpaid" ? st : "unpaid");
     } else if (variant === "customer-quote") {
-      setOrderDate(new Date().toISOString().slice(0, 10));
+      setOrderDate(todayPerthYmd());
       setDueDate("");
       setSetupFeeCents(0);
       setQuoteDeliveryFeeCents(template.deliveryFeeCents ?? 0);
@@ -226,6 +249,19 @@ export function InternalOrderForm({
       setStatus("unpaid");
     }
   }, [template, variant]);
+
+  useEffect(() => {
+    if (items.length === 0) {
+      setActiveQuoteGroupId(null);
+      return;
+    }
+    setActiveQuoteGroupId((current) => {
+      if (current !== null && items.some((row) => row.quoteGroupId === current)) {
+        return current;
+      }
+      return items[items.length - 1]!.quoteGroupId;
+    });
+  }, [items]);
 
   const subtotalCents = useMemo(() => items.reduce((sum, it) => sum + (Number(it.lineTotalCents) || 0), 0), [items]);
   const totalCents = subtotalCents + (Number(deliveryFeeCents) || 0);
@@ -309,6 +345,9 @@ export function InternalOrderForm({
       status,
       quoteBoxImageUrls,
       quoteBoxNote,
+      xeroQuoteId,
+      xeroQuoteNumber,
+      xeroQuoteSyncedAt,
       items: items.map((row, idx) => {
         const g = row.quoteGroupId;
         const start = quoteGroupMeta.get(g)?.start ?? idx;
@@ -355,6 +394,9 @@ export function InternalOrderForm({
     status,
     quoteBoxImageUrls,
     quoteBoxNote,
+    xeroQuoteId,
+    xeroQuoteNumber,
+    xeroQuoteSyncedAt,
     items,
     quoteGroupMeta,
   ]);
@@ -402,16 +444,30 @@ export function InternalOrderForm({
   }
 
   function addQuoteProductGroup() {
-    setItems((cur) => [...cur, emptyItemRow(nextQuoteGroupId(cur))]);
+    const groupId = nextQuoteGroupId(items);
+    setItems((cur) => [...cur, emptyItemRow(groupId)]);
+    setActiveQuoteGroupId(groupId);
   }
 
-  function addQuoteSizeRow() {
+  function insertQuoteSizeRowForGroup(groupId: number) {
     setItems((cur) => {
-      if (cur.length === 0) return [emptyItemRow(1)];
-      const last = cur[cur.length - 1]!;
-      const row = emptyItemRow(last.quoteGroupId);
-      return [...cur, row];
+      if (cur.length === 0) return [emptyItemRow(groupId)];
+      let insertAt = cur.length;
+      for (let i = cur.length - 1; i >= 0; i -= 1) {
+        if (cur[i]!.quoteGroupId === groupId) {
+          insertAt = i + 1;
+          break;
+        }
+      }
+      const next = [...cur];
+      next.splice(insertAt, 0, emptyItemRow(groupId));
+      return next;
     });
+  }
+
+  function selectQuoteGroupForSizeRow(groupId: number) {
+    setActiveQuoteGroupId(groupId);
+    insertQuoteSizeRowForGroup(groupId);
   }
 
   if (!isQuote) {
@@ -701,7 +757,8 @@ export function InternalOrderForm({
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-slate-600 print:hidden">
               견적용 표입니다. 표 왼쪽 <strong>Add Line</strong>으로 새 품목 그룹을 넣을 수 있습니다. Supplier·Item
-              ID·colour·Note는 그룹 첫 행에만 입력하고, 사이즈 행은 <strong>Add size row</strong>로 이어 붙이세요.
+              ID·colour·Note는 그룹 첫 행에만 입력하고, 사이즈 행은 각 제품 앞의 <strong>Add Size</strong> 버튼으로
+              이어 붙이세요.
             </p>
           </div>
           <div className="flex flex-wrap gap-[0.65rem] print:hidden">
@@ -777,36 +834,32 @@ export function InternalOrderForm({
           <table className="customer-quote-items-table min-w-[980px] w-full border-collapse border-t border-slate-900 text-sm">
             <tbody>
               <tr>
-                <td rowSpan={2} className={`${quoteTd} w-[5.5rem] min-w-[5.5rem] align-top bg-slate-50 p-2`}>
+                <td
+                  rowSpan={2}
+                  className={`customer-quote-row-actions ${quoteTd} w-[5.5rem] min-w-[5.5rem] align-top bg-slate-50 p-2 print:hidden`}
+                >
                   <div className="flex flex-col gap-2">
                     <button
                       type="button"
                       onClick={addQuoteProductGroup}
-                      className="flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-brand-navy/40 bg-white px-1.5 py-3 text-center text-[11px] font-bold leading-tight text-brand-navy shadow-sm transition hover:border-brand-orange hover:bg-brand-orange/5"
+                      className="flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-brand-navy/40 bg-white px-1.5 py-3 text-center text-[11px] font-bold leading-tight text-brand-navy shadow-sm transition hover:border-brand-orange hover:bg-brand-orange/5 print:hidden"
                       title="Add a new line (product group) to the table"
                     >
                       <span className="text-lg leading-none text-brand-orange">+</span>
                       <span>Add Line</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={addQuoteSizeRow}
-                      className="flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-brand-navy/40 bg-white px-1.5 py-2.5 text-center text-[10px] font-bold leading-tight text-brand-navy shadow-sm transition hover:border-brand-orange hover:bg-brand-orange/5 print:hidden"
-                      title="Add a size row to the current product group"
-                    >
-                      <span className="text-base leading-none text-brand-orange">+</span>
-                      <span>Add size row</span>
-                    </button>
                   </div>
                 </td>
                 <td colSpan={3} className={quoteTd}>
                   <div className="flex flex-wrap items-center gap-2 px-2 py-2">
-                    <span className="text-xs font-bold uppercase text-slate-900">Order no.</span>
+                    <span className="text-xs font-bold uppercase text-slate-900">Quote no.</span>
                     <input
                       className={`${quoteCellInput} min-w-[12rem] flex-1 font-mono`}
                       value={baseOrderNumber}
                       onChange={(e) => setBaseOrderNumber(e.target.value)}
-                      placeholder="Prefix or leave blank"
+                      readOnly
+                      title="Auto-generated quote number"
+                      aria-label="Quote number"
                     />
                   </div>
                 </td>
@@ -892,15 +945,34 @@ export function InternalOrderForm({
 
                 return (
                   <tr key={idx}>
-                    <td className={`${quoteTd} w-[5.5rem] min-w-[5.5rem] bg-slate-50/50 p-1`}>
-                      <button
-                        type="button"
-                        onClick={() => removeItem(idx)}
-                        className="w-full rounded border border-red-300 bg-red-50 px-1 py-2 text-sm font-semibold leading-none text-red-900 hover:bg-red-100"
-                        title="이 행 삭제"
-                      >
-                        ✕
-                      </button>
+                    <td
+                      className={`customer-quote-row-actions ${quoteTd} w-[5.5rem] min-w-[5.5rem] bg-slate-50/50 p-1 print:hidden`}
+                    >
+                      <div className="flex flex-col gap-1">
+                        {isFirstInGroup ? (
+                          <button
+                            type="button"
+                            onClick={() => selectQuoteGroupForSizeRow(g)}
+                            className={`w-full rounded border px-1 py-2 text-[10px] font-bold leading-tight transition print:hidden ${
+                              activeQuoteGroupId === g
+                                ? "border-brand-orange bg-brand-orange/15 text-brand-navy"
+                                : "border-brand-navy/25 bg-white text-brand-navy hover:border-brand-orange hover:bg-brand-orange/5"
+                            }`}
+                            title="Add a size row to this product"
+                            aria-pressed={activeQuoteGroupId === g}
+                          >
+                            Add Size
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => removeItem(idx)}
+                          className="w-full rounded border border-red-300 bg-red-50 px-1 py-2 text-sm font-semibold leading-none text-red-900 hover:bg-red-100 print:hidden"
+                          title="이 행 삭제"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </td>
                     {showSupplier}
                     {showItemId}
@@ -1154,37 +1226,111 @@ export function InternalOrderForm({
             )}
           </p>
           {!isInternalOrderQuote ? (
-            <button
-              type="button"
-              className="rounded-xl border border-emerald-800 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 disabled:opacity-60"
-              disabled={items.length === 0 || saveQuotePending || !customerQuoteSheetPayload}
-              onClick={() => {
-                if (!customerQuoteSheetPayload) return;
-                setSaveQuoteError(null);
-                startSaveQuoteTransition(async () => {
-                  try {
-                    await saveCustomerQuoteSheet(
-                      customerQuoteSheetPayload,
-                      quoteRequestId,
-                      quoteSaveReturnBase,
-                    );
-                  } catch (e) {
-                    if (isNextNavigationError(e)) {
-                      throw e;
+            <>
+              <button
+                type="button"
+                className="rounded-xl border border-emerald-800 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 disabled:opacity-60"
+                disabled={items.length === 0 || saveQuotePending || xeroQuotePending || !customerQuoteSheetPayload}
+                onClick={() => {
+                  if (!customerQuoteSheetPayload) return;
+                  setSaveQuoteError(null);
+                  startSaveQuoteTransition(async () => {
+                    try {
+                      await saveCustomerQuoteSheet(
+                        customerQuoteSheetPayload,
+                        quoteRequestId,
+                        quoteSaveReturnBase,
+                      );
+                    } catch (e) {
+                      if (isNextNavigationError(e)) {
+                        throw e;
+                      }
+                      setSaveQuoteError(
+                        e instanceof Error ? e.message : "Could not save quote. Refresh and try again.",
+                      );
                     }
-                    setSaveQuoteError(
-                      e instanceof Error ? e.message : "Could not save quote. Refresh and try again.",
-                    );
-                  }
-                });
-              }}
-            >
-              {saveQuotePending ? "Saving…" : "Save Quote"}
-            </button>
+                  });
+                }}
+              >
+                {saveQuotePending ? "Saving…" : "Save Quote"}
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-sky-800 bg-white px-5 py-2.5 text-sm font-semibold text-sky-900 shadow-sm transition hover:bg-sky-50 disabled:opacity-60"
+                disabled={
+                  items.length === 0 ||
+                  saveQuotePending ||
+                  xeroQuotePending ||
+                  !customerQuoteSheetPayload ||
+                  !customerEmail.trim() ||
+                  !customerName.trim()
+                }
+                onClick={() => {
+                  if (!customerQuoteSheetPayload) return;
+                  setXeroQuoteError(null);
+                  startXeroQuoteTransition(async () => {
+                    try {
+                      const res = await fetch("/api/admin/xero/sync-quote", {
+                        method: "POST",
+                        credentials: "same-origin",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          sheet: customerQuoteSheetPayload,
+                          quoteRequestId,
+                        }),
+                      });
+                      const data = await readResponseJson<{
+                        ok?: boolean;
+                        error?: string;
+                        quoteId?: string;
+                        quoteNumber?: string;
+                        openUrl?: string;
+                        alreadySynced?: boolean;
+                      }>(res);
+                      if (!data) {
+                        setXeroQuoteError(
+                          res.ok
+                            ? "Empty response from server."
+                            : `Server error (${res.status}). Refresh and try again.`,
+                        );
+                        return;
+                      }
+                      if (!res.ok || !data.ok || !data.quoteId || !data.openUrl) {
+                        setXeroQuoteError(data.error ?? "Could not create Xero quote.");
+                        return;
+                      }
+                      setXeroQuoteId(data.quoteId);
+                      setXeroQuoteNumber(data.quoteNumber ?? null);
+                      if (!data.alreadySynced) {
+                        setXeroQuoteSyncedAt(new Date().toISOString());
+                      }
+                      window.open(data.openUrl, "_blank", "noopener,noreferrer");
+                    } catch (e) {
+                      setXeroQuoteError(
+                        e instanceof Error ? e.message : "Could not create Xero quote. Refresh and try again.",
+                      );
+                    }
+                  });
+                }}
+              >
+                {xeroQuotePending ? "Sending…" : xeroQuoteId ? "Open Xero Quote" : "Xero Quote"}
+              </button>
+            </>
           ) : null}
           {saveQuoteError ? (
             <p className="w-full basis-full text-sm text-red-700" role="alert">
               {saveQuoteError}
+            </p>
+          ) : null}
+          {xeroQuoteError ? (
+            <p className="w-full basis-full text-sm text-red-700" role="alert">
+              {xeroQuoteError}
+            </p>
+          ) : null}
+          {xeroQuoteId && xeroQuoteNumber ? (
+            <p className="w-full basis-full text-xs text-slate-600">
+              Xero quote <strong>{xeroQuoteNumber}</strong>
+              {xeroQuoteSyncedAt ? ` · synced ${new Date(xeroQuoteSyncedAt).toLocaleString("en-AU")}` : null}
             </p>
           ) : null}
           <button

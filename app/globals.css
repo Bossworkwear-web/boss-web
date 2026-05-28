@@ -225,9 +225,9 @@ pre {
   padding: 3rem 1rem;
 }
 
-/* Get a Quote: inner column 20% narrower than default shell (2614px × 0.8 ≈ 2091px). */
+/* Get a Quote: inner column ~61% narrower than default shell (2614px × 0.512 × 0.8 ≈ 1070px). */
 .site-page-inner-shell.quote-page-inner-narrow {
-  max-width: 2091px;
+  max-width: 1070px;
 }
 
 /*
@@ -842,6 +842,10 @@ img.category-top-ad-wa-mark {
     border-bottom: 1pt solid #0f172a !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  body.customer-quote-print-mode #customer-quote-print-only .customer-quote-row-actions {
+    display: none !important;
   }
 }
 

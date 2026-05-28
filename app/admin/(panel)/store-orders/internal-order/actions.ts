@@ -6,6 +6,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { assertAdminSession } from "@/lib/admin-auth";
+import { ensureCustomerQuoteNumber } from "@/lib/customer-quote-number";
+import {
+  buildWebsiteQuoteCustomerSheetFromRow,
+  getWebsiteQuoteProductLines,
+  type WebsiteQuoteProductRow,
+  websiteQuoteCustomerSheetToInternalTemplate,
+} from "@/lib/crm/website-quote-customer-sheet";
 import { parseJsonOrNull, parsePlacementsJsonValue } from "@/lib/safe-json-parse";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -34,6 +41,9 @@ export type InternalOrderTemplate = {
   quoteBoxImageUrls?: string[];
   /** Note below images in the Quote box. */
   quoteBoxNote?: string;
+  xeroQuoteId?: string | null;
+  xeroQuoteNumber?: string | null;
+  xeroQuoteSyncedAt?: string | null;
   items: Array<{
     productId: string;
     productName: string;
@@ -69,6 +79,9 @@ export type AdminCustomerQuoteSheetV1 = {
   status: "unpaid" | "paid" | "processing" | "shipped" | "cancelled";
   quoteBoxImageUrls?: string[];
   quoteBoxNote?: string;
+  xeroQuoteId?: string | null;
+  xeroQuoteNumber?: string | null;
+  xeroQuoteSyncedAt?: string | null;
   items: Array<{
     productId: string;
     productName: string;
@@ -381,6 +394,9 @@ function parseAdminCustomerQuoteSheetFromUnknown(parsed: unknown): AdminCustomer
     status,
     quoteBoxImageUrls: parseQuoteBoxImageUrls(o.quoteBoxImageUrls),
     quoteBoxNote: normalizeText(o.quoteBoxNote),
+    xeroQuoteId: normalizeNullableText(o.xeroQuoteId),
+    xeroQuoteNumber: normalizeNullableText(o.xeroQuoteNumber),
+    xeroQuoteSyncedAt: normalizeNullableText(o.xeroQuoteSyncedAt),
     items,
   };
 }
@@ -433,6 +449,9 @@ function adminSheetToInternalTemplate(sheet: AdminCustomerQuoteSheetV1): Interna
     },
     quoteBoxImageUrls: sheet.quoteBoxImageUrls ?? [],
     quoteBoxNote: sheet.quoteBoxNote ?? "",
+    xeroQuoteId: sheet.xeroQuoteId ?? null,
+    xeroQuoteNumber: sheet.xeroQuoteNumber ?? null,
+    xeroQuoteSyncedAt: sheet.xeroQuoteSyncedAt ?? null,
     items: sheet.items.map((it) => ({
       productId: it.productId,
       productName: it.productName,
@@ -460,6 +479,13 @@ function resolveQuoteSaveReturnBase(returnBaseInput: string | null | undefined):
   return allowedReturn.has(raw) ? raw : "/admin/customer-quote";
 }
 
+function withCustomerQuoteNumber(template: InternalOrderTemplate, quoteRequestId: string): InternalOrderTemplate {
+  return {
+    ...template,
+    baseOrderNumber: ensureCustomerQuoteNumber(template.baseOrderNumber, { quoteRequestId }),
+  };
+}
+
 /** Save Customer Quote spreadsheet to `quote_requests` (list + reopen). Does not create a store order. */
 export async function saveCustomerQuoteSheet(
   sheet: AdminCustomerQuoteSheetV1,
@@ -474,37 +500,41 @@ export async function saveCustomerQuoteSheet(
 
   const returnBase = resolveQuoteSaveReturnBase(returnBaseInput);
   const normalized = normalizeAdminCustomerQuoteSheet(sheet);
+  const quoteNumber = ensureCustomerQuoteNumber(normalized.baseOrderNumber, {
+    quoteRequestId: normalizeText(quoteRequestId ?? "") || null,
+  });
+  const sheetToSave: AdminCustomerQuoteSheetV1 = { ...normalized, baseOrderNumber: quoteNumber };
 
-  if (!normalized.customerEmail || !normalized.customerName || !normalized.deliveryAddress.trim()) {
+  if (!sheetToSave.customerEmail || !sheetToSave.customerName || !sheetToSave.deliveryAddress.trim()) {
     redirect(`${returnBase}?error=missing_fields`);
   }
-  if (normalized.items.length === 0) {
+  if (sheetToSave.items.length === 0) {
     redirect(`${returnBase}?error=no_items`);
   }
 
   const supabase = createSupabaseAdminClient();
   const existingId = normalizeText(quoteRequestId ?? "");
 
-  const companyName = normalized.companyName.trim() || normalized.customerName.trim() || "Quote draft";
-  const first = normalized.items[0]!;
+  const companyName = sheetToSave.companyName.trim() || sheetToSave.customerName.trim() || "Quote draft";
+  const first = sheetToSave.items[0]!;
   const legacyProductId = isUuid(first.productId) ? first.productId : null;
   const legacyQty =
-    normalized.items.reduce((s, it) => s + Math.max(0, safeInt(it.quantity, 0)), 0) || null;
+    sheetToSave.items.reduce((s, it) => s + Math.max(0, safeInt(it.quantity, 0)), 0) || null;
 
   if (existingId && isUuid(existingId)) {
     const { error: upErr } = await supabase
       .from("quote_requests")
       .update({
         company_name: companyName,
-        contact_name: normalized.customerName,
-        email: normalized.customerEmail,
-        phone: normalized.clientContact.trim() ? normalized.clientContact.trim() : null,
+        contact_name: sheetToSave.customerName,
+        email: sheetToSave.customerEmail,
+        phone: sheetToSave.clientContact.trim() ? sheetToSave.clientContact.trim() : null,
         product_id: legacyProductId,
         quantity: legacyQty,
         service_type: first.serviceType,
         product_color: first.color,
         notes: first.notes,
-        admin_customer_quote_sheet: normalized,
+        admin_customer_quote_sheet: sheetToSave,
       })
       .eq("id", existingId);
     if (upErr) {
@@ -520,16 +550,16 @@ export async function saveCustomerQuoteSheet(
     .from("quote_requests")
     .insert({
       company_name: companyName,
-      contact_name: normalized.customerName,
-      email: normalized.customerEmail,
-      phone: normalized.clientContact.trim() ? normalized.clientContact.trim() : null,
+      contact_name: sheetToSave.customerName,
+      email: sheetToSave.customerEmail,
+      phone: sheetToSave.clientContact.trim() ? sheetToSave.clientContact.trim() : null,
       product_id: legacyProductId,
       quantity: legacyQty,
       service_type: first.serviceType,
       product_color: first.color,
       notes: first.notes,
       lead_source: "admin_customer_quote",
-      admin_customer_quote_sheet: normalized,
+      admin_customer_quote_sheet: sheetToSave,
     })
     .select("id")
     .single();
@@ -683,8 +713,9 @@ type QuoteRequestRowForInternalOrder = {
   service_type: string | null;
   product_color: string | null;
   notes: string | null;
+  logo_file_url: string | null;
   placement_labels: string[] | null;
-  products: { name: string } | null;
+  products: { name: string; slug?: string | null; supplier_name?: string } | null;
   embroidery_position_id: string | null;
   embroidery_position_ids: string[] | null;
   printing_position_id: string | null;
@@ -734,13 +765,15 @@ export async function getTemplateFromQuoteRequest(quoteRequestId: string): Promi
       service_type,
       product_color,
       notes,
+      logo_file_url,
       placement_labels,
       embroidery_position_id,
       embroidery_position_ids,
       printing_position_id,
       printing_position_ids,
       admin_customer_quote_sheet,
-      products ( name ),
+      website_quote_submission,
+      products ( name, slug, supplier_name ),
       customer_profiles ( delivery_address, billing_address )
     `,
     )
@@ -756,18 +789,27 @@ export async function getTemplateFromQuoteRequest(quoteRequestId: string): Promi
 
   const row = qr as unknown as QuoteRequestRowForInternalOrder & {
     admin_customer_quote_sheet?: unknown;
+    website_quote_submission?: unknown;
   };
+
+  const submissionProductLines = getWebsiteQuoteProductLines(row.website_quote_submission ?? null);
+  const submissionProductLineCount = submissionProductLines.length;
 
   const sheetRaw = row.admin_customer_quote_sheet;
   if (sheetRaw && typeof sheetRaw === "object") {
     const cand = sheetRaw as Record<string, unknown>;
-    if (cand.v === 1 && Array.isArray(cand.items) && cand.items.length > 0) {
+    const savedItemCount = Array.isArray(cand.items) ? cand.items.length : 0;
+    const shouldUseSavedSheet =
+      cand.v === 1 &&
+      savedItemCount > 0 &&
+      (submissionProductLineCount <= 1 || savedItemCount >= submissionProductLineCount);
+    if (shouldUseSavedSheet) {
       try {
         const fd = new FormData();
         fd.set("customer_quote_sheet_json", JSON.stringify(sheetRaw));
         const sheet = parseAdminCustomerQuoteSheetFromForm(fd);
         if (sheet.customerEmail.trim() && sheet.items.length > 0) {
-          return adminSheetToInternalTemplate(sheet);
+          return withCustomerQuoteNumber(adminSheetToInternalTemplate(sheet), id);
         }
       } catch {
         // Fall through to CRM-derived template.
@@ -791,60 +833,36 @@ export async function getTemplateFromQuoteRequest(quoteRequestId: string): Promi
     posNameById = new Map((posRows ?? []).map((p) => [String(p.id), normalizeText(p.name)]));
   }
 
-  const placementLines: string[] = [];
-  for (const id of embIds) {
-    placementLines.push(`Embroidery: ${posNameById.get(id) || id}`);
+  const productIds = [
+    ...new Set(
+      [
+        rowCrm.product_id,
+        ...(submissionProductLines.map((line) => line.productId).filter(Boolean) ?? []),
+      ]
+        .map((id) => String(id ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
+
+  let resolvedProducts: WebsiteQuoteProductRow[] = [];
+  if (productIds.length > 0) {
+    const { data: productRows } = await supabase
+      .from("products")
+      .select("id, name, slug, supplier_name")
+      .in("id", productIds);
+    resolvedProducts = (productRows ?? []).map((product) => ({
+      id: String(product.id),
+      name: normalizeText(product.name),
+      slug: product.slug ?? null,
+      supplier_name: normalizeText(product.supplier_name),
+    }));
   }
-  for (const id of prtIds) {
-    placementLines.push(`Printing: ${posNameById.get(id) || id}`);
-  }
-  for (const raw of rowCrm.placement_labels ?? []) {
-    const t = String(raw).trim();
-    if (t) placementLines.push(t);
-  }
 
-  const productName =
-    rowCrm.products?.name?.trim() || "Quoted product — confirm catalog name / SKU";
-  const qty =
-    typeof rowCrm.quantity === "number" && Number.isFinite(rowCrm.quantity) && rowCrm.quantity > 0
-      ? rowCrm.quantity
-      : 1;
+  const sheet = buildWebsiteQuoteCustomerSheetFromRow(rowCrm, posNameById, {
+    websiteQuoteSubmission: row.website_quote_submission,
+    resolvedProducts,
+  });
 
-  const delivery =
-    rowCrm.customer_profiles?.delivery_address?.trim() ||
-    rowCrm.customer_profiles?.billing_address?.trim() ||
-    `Address to be confirmed (CRM quote ${rowCrm.id.slice(0, 8)}…). Company: ${normalizeText(rowCrm.company_name)}. Phone: ${normalizeText(rowCrm.phone) || "—"}.`;
-
-  const notesLines = [
-    `CRM quote request: ${rowCrm.id}`,
-    rowCrm.notes?.trim() || null,
-    `Quote company: ${normalizeText(rowCrm.company_name)}`,
-  ].filter(Boolean) as string[];
-
-  return {
-    baseOrderNumber: "",
-    customerEmail: email,
-    customerName: normalizeText(rowCrm.contact_name) || normalizeText(rowCrm.company_name) || "Quote contact",
-    quoteCompanyName: normalizeText(rowCrm.company_name) || undefined,
-    quoteContactPhone: normalizeText(rowCrm.phone) || undefined,
-    deliveryAddress: delivery,
-    currency: "AUD",
-    carrier: "Australia Post",
-    deliveryFeeCents: 0,
-    items: [
-      {
-        productId: rowCrm.product_id?.trim() ?? "",
-        productName,
-        quantity: qty,
-        unitPriceCents: 0,
-        lineTotalCents: 0,
-        serviceType: rowCrm.service_type?.trim() ? rowCrm.service_type.trim() : null,
-        color: rowCrm.product_color?.trim() ? rowCrm.product_color.trim() : null,
-        size: null,
-        placementsJson: JSON.stringify(placementLines),
-        notes: notesLines.join("\n\n"),
-      },
-    ],
-  };
+  return withCustomerQuoteNumber(websiteQuoteCustomerSheetToInternalTemplate(sheet), id);
 }
 

@@ -3,13 +3,40 @@ import { describe, expect, it } from "vitest";
 import {
   PERTH_TZ,
   addCalendarDaysYmd,
+  formatPerthDateTime,
   getPerthDateSheetRangeDescending,
+  getPerthDayUtcRange,
   getPerthYmd,
   isPerthDayOfMonth,
   perthMondayYmdOfWeekContaining,
   perthWeekdayIsoNumericMon1Sun7,
   supplierReportMonthRange,
+  todayPerthYmd,
 } from "@/lib/perth-calendar";
+
+describe("getPerthDayUtcRange", () => {
+  it("covers one Perth calendar day in UTC bounds", () => {
+    const now = new Date("2026-05-18T16:00:00.000Z"); // 2026-05-19 Perth
+    const range = getPerthDayUtcRange(now);
+    expect(range.label).toBe("2026-05-19");
+    expect(range.startIso).toBe("2026-05-18T16:00:00.000Z");
+    expect(range.endIso).toBe("2026-05-19T16:00:00.000Z");
+  });
+});
+
+describe("todayPerthYmd", () => {
+  it("matches getPerthYmd().ymd", () => {
+    const now = new Date("2026-05-18T16:00:00.000Z");
+    expect(todayPerthYmd(now)).toBe("2026-05-19");
+  });
+});
+
+describe("formatPerthDateTime", () => {
+  it("formats in Perth timezone", () => {
+    const formatted = formatPerthDateTime("2026-05-18T16:00:00.000Z");
+    expect(formatted).toMatch(/19 May 2026/);
+  });
+});
 
 describe("perth-calendar", () => {
   describe("getPerthYmd", () => {

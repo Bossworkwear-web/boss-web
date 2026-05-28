@@ -15,6 +15,7 @@ import {
   INSTORE_WALK_IN_PICKUP_ADDRESS,
   INSTORE_WALK_IN_SERVICE_TYPES,
 } from "@/lib/instore-walk-in-constants";
+import { formatPerthDateTime } from "@/lib/perth-calendar";
 import {
   instoreDiscountPercentLabel,
   instoreEffectiveUnitAud,
@@ -228,7 +229,7 @@ export function InstoreOrderForm({ savedOrderNumber }: InstoreOrderFormProps) {
     const fd = new FormData(form);
     const snapshot: InstoreOrderPrintSnapshot = {
       savedOrderNumber,
-      printedAt: new Date().toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" }),
+      printedAt: formatPerthDateTime(new Date()),
       customerName: String(fd.get("customer_name") ?? ""),
       customerPhone: String(fd.get("customer_phone") ?? ""),
       dueDate: String(fd.get("due_date") ?? ""),

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { formatPerthDateTime } from "@/lib/perth-calendar";
 import {
   QUALITY_CHECKLIST_ITEMS,
   qualityCheckInspectionStorageKey,
@@ -115,10 +116,7 @@ export function CompleteStatementLocalSnapshot({
             <div>
               <dt className="text-xs font-semibold uppercase text-slate-500">Signed off</dt>
               <dd className="mt-0.5 text-slate-900">
-                {new Date(inspection.completedAt).toLocaleString("en-AU", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
+                {formatPerthDateTime(inspection.completedAt)}
               </dd>
             </div>
           </dl>

@@ -1,3 +1,4 @@
+import { addCalendarDaysYmd, getPerthYmd, todayPerthYmd } from "@/lib/perth-calendar";
 import { xeroAccountingJson } from "@/lib/xero/api-client";
 import type { XeroConnectionRow } from "@/lib/xero/connection-db";
 
@@ -25,9 +26,9 @@ function getSalesAccountCode(): string {
 function toXeroDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) {
-    return new Date().toISOString().slice(0, 10);
+    return todayPerthYmd();
   }
-  return d.toISOString().slice(0, 10);
+  return getPerthYmd(d).ymd;
 }
 
 export async function createAuthorisedSalesInvoice(
@@ -54,8 +55,7 @@ export async function createAuthorisedSalesInvoice(
   }
 
   const invoiceDate = toXeroDate(input.createdAt);
-  const due = new Date(invoiceDate);
-  due.setDate(due.getDate() + 14);
+  const dueDate = addCalendarDaysYmd(invoiceDate, 14);
 
   const payload = {
     Invoices: [
@@ -63,7 +63,7 @@ export async function createAuthorisedSalesInvoice(
         Type: "ACCREC",
         Contact: { ContactID: input.contactId },
         Date: invoiceDate,
-        DueDate: due.toISOString().slice(0, 10),
+        DueDate: dueDate,
         LineAmountTypes: "Inclusive",
         LineItems: lineItems,
         Reference: input.orderNumber,

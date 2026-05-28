@@ -1,5 +1,75 @@
-/** Calendar date parts in Australia/Perth (for admin reporting). */
+/** Calendar date parts in Australia/Perth (AWST, UTC+8 — no DST). */
 export const PERTH_TZ = "Australia/Perth";
+export const PERTH_LOCALE = "en-AU";
+
+/** Apply Perth as the Node.js process timezone (server scripts, cron, SSR). */
+export function ensureNodeTimezone(): void {
+  if (process.env.TZ !== PERTH_TZ) {
+    process.env.TZ = PERTH_TZ;
+  }
+}
+
+/** Today's calendar date in Perth as `YYYY-MM-DD`. */
+export function todayPerthYmd(now = new Date()): string {
+  return getPerthYmd(now).ymd;
+}
+
+/** UTC ISO bounds for one Perth calendar day (for DB `timestamptz` filters). */
+export function getPerthDayUtcRange(date = new Date()): {
+  startIso: string;
+  endIso: string;
+  label: string;
+} {
+  const { ymd: label } = getPerthYmd(date);
+  const startMs = Date.parse(`${label}T00:00:00+08:00`);
+  const endMs = startMs + 24 * 60 * 60 * 1000;
+  return {
+    startIso: new Date(startMs).toISOString(),
+    endIso: new Date(endMs).toISOString(),
+    label,
+  };
+}
+
+type FormatPerthDateTimeOptions = {
+  dateStyle?: "full" | "long" | "medium" | "short";
+  timeStyle?: "full" | "long" | "medium" | "short";
+};
+
+function toDate(value: string | Date): Date | null {
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Format an instant for display in Perth (default: medium date + short time). */
+export function formatPerthDateTime(
+  value: string | Date,
+  options: FormatPerthDateTimeOptions = { dateStyle: "medium", timeStyle: "short" },
+): string {
+  const d = toDate(value);
+  if (!d) return typeof value === "string" ? value : "—";
+  return d.toLocaleString(PERTH_LOCALE, {
+    timeZone: PERTH_TZ,
+    ...options,
+  });
+}
+
+/** Format a calendar date in Perth. */
+export function formatPerthDate(
+  value: string | Date,
+  dateStyle: NonNullable<FormatPerthDateTimeOptions["dateStyle"]> = "medium",
+): string {
+  const d = toDate(value);
+  if (!d) return typeof value === "string" ? value : "—";
+  return d.toLocaleDateString(PERTH_LOCALE, {
+    timeZone: PERTH_TZ,
+    dateStyle,
+  });
+}
+
+/** Short date + time in Perth (admin tables). */
+export function formatPerthDateTimeShort(value: string | Date): string {
+  return formatPerthDateTime(value, { dateStyle: "short", timeStyle: "short" });
+}
 
 function getPerthYmdUtcOffsetFallback(d: Date): { year: number; month: number; day: number; ymd: string } {
   const perthMs = d.getTime() + 8 * 60 * 60 * 1000;

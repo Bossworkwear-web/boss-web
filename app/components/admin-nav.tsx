@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/customer-info", label: "Customer Info" },
   { href: "/admin/customer-quote", label: "Customer Quote" },
+  { href: "/admin/online-quote", label: "Online Quote" },
   { href: "/admin/online-orders", label: "Online Orders" },
   { href: "/admin/instore-orders", label: "Instore Orders" },
   { href: "/admin/supplier-orders", label: "Supplier orders" },

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { formatPerthDateTime } from "@/lib/perth-calendar";
 import {
   isQualityChecklistFullyChecked,
   notifyQualityInspectionChanged,
@@ -132,13 +133,7 @@ export function QualityCheckInspection({
     return null;
   }
 
-  const lastSavedLabel =
-    completedAt != null
-      ? new Date(completedAt).toLocaleString("en-AU", {
-          dateStyle: "medium",
-          timeStyle: "short",
-        })
-      : null;
+  const lastSavedLabel = completedAt != null ? formatPerthDateTime(completedAt) : null;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

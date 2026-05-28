@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 
+import { formatPerthDate, formatPerthDateTimeShort } from "@/lib/perth-calendar";
 import { setIncomingGoodsNote, setIncomingGoodsReceivedQty, type IncomingGoodsRowDto } from "./actions";
 
 type Props = {
@@ -352,7 +353,7 @@ export function IncomingGoodsClient({ initial }: Props) {
                                 <p className="font-mono font-semibold text-brand-navy">{header.orderNumber}</p>
                                 <p className="mt-1 text-xs text-slate-500">
                                   {header.orderCreatedAt
-                                    ? new Date(header.orderCreatedAt).toLocaleString("en-AU", { dateStyle: "medium" })
+                                    ? formatPerthDate(header.orderCreatedAt)
                                     : "—"}
                                 </p>
                               </td>
@@ -421,7 +422,7 @@ export function IncomingGoodsClient({ initial }: Props) {
                             {r.updatedAt ? (
                               <p className="mt-1 text-[0.7rem] text-slate-500">
                                 Updated{" "}
-                                {new Date(r.updatedAt).toLocaleString("en-AU", { dateStyle: "short", timeStyle: "short" })}
+                                {formatPerthDateTimeShort(r.updatedAt)}
                               </p>
                             ) : null}
                           </td>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { isAdminSession } from "@/lib/admin-auth";
+import { todayPerthYmd } from "@/lib/perth-calendar";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 function csvEscape(value: string | number | null | undefined) {
@@ -144,7 +145,7 @@ export async function GET() {
     }
 
     const csv = lines.join("\n");
-    const filename = `quote-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+    const filename = `quote-leads-${todayPerthYmd()}.csv`;
 
     return new NextResponse(csv, {
       status: 200,

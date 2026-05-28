@@ -1,5 +1,7 @@
+import { PERTH_TZ } from "@/lib/perth-calendar";
+
 /** Perth (AWST, no DST) — matches list grouping. */
-export const STORE_ORDERS_TZ = "Australia/Perth";
+export const STORE_ORDERS_TZ = PERTH_TZ;
 
 /** Default calendar-day window when no from/to filter (matches Supplier orders). */
 export const ADMIN_STORE_ORDER_DAY_WINDOW = 60;
