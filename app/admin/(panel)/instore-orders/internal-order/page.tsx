@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { ensureCustomerQuoteNumber } from "@/lib/customer-quote-number";
+import { getQuoteCatalogProducts } from "@/lib/quote-catalog-products";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 import {
@@ -56,6 +57,13 @@ export default async function AdminInstoreInternalOrderPage({ searchParams }: { 
     } catch (e) {
       loadError = e instanceof Error ? e.message : "Could not load template.";
     }
+  }
+
+  let catalog: Awaited<ReturnType<typeof getQuoteCatalogProducts>> = [];
+  try {
+    catalog = await getQuoteCatalogProducts();
+  } catch {
+    catalog = [];
   }
 
   let banner: { kind: "ok" | "err"; text: string } | null = null;
@@ -192,6 +200,7 @@ export default async function AdminInstoreInternalOrderPage({ searchParams }: { 
         variant="customer-quote"
         quoteSubmitContext="internal-order"
         quoteRequestId={quoteId || null}
+        catalog={catalog}
       />
     </div>
   );

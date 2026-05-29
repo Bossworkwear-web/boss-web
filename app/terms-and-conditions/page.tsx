@@ -168,6 +168,16 @@ function TermsAndConditionsDefault() {
               complete payment generally applies to that transaction. Non-stocked or special-order goods may be quoted
               separately. Delivery fees (if any) are shown before you pay.
             </p>
+            <p className="text-brand-navy/80">
+              <strong>Saved quotes are indicative only and are not a guaranteed price.</strong> Quotes you generate from
+              the cart and save to <strong>My account &rarr; My Quote</strong> reflect product prices and our pricing
+              rules (including volume discounts and GST) at the time you view them.               Because product prices depend on our
+              suppliers&apos; costs, the amounts on a saved quote may change at any time due to supplier price movements,
+              stock or supplier availability, decoration or setup requirements, currency or freight cost changes,
+              changes to our pricing rules, or other reasons (including factors beyond our reasonable control). The
+              price that applies to your purchase is the price shown at checkout when you complete payment, not the
+              amount on an earlier saved quote.
+            </p>
           </section>
 
           <section>
@@ -481,7 +491,7 @@ function TermsAndConditionsDefault() {
           </section>
 
           <p className="mt-8 text-xs text-brand-navy/60">
-            Last updated: 17 May 2026. Questions:{" "}
+            Last updated: 30 May 2026. Questions:{" "}
             <Link href="/contact-us" className="text-brand-orange underline hover:text-brand-orange/90">
               Contact us
             </Link>

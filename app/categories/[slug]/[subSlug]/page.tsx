@@ -7,6 +7,7 @@ import { CategorySubcategoryPicker } from "@/app/components/category-subcategory
 import { CategoryBrandFilter } from "@/app/components/category-brand-filter";
 import { CategoryBrowseProductsGrid } from "@/app/components/category-browse-products-grid";
 import { CategoryGetAQuoteCta } from "@/app/components/category-get-a-quote-cta";
+import { QuoteGuideModal } from "@/app/components/quote-guide-modal";
 import { CategoryPaginationPageSummary } from "@/app/components/category-pagination-page-summary";
 import { ProductGridPriceCells } from "@/app/components/product-grid-price";
 import { ProductNavLink } from "@/app/components/product-nav-link";
@@ -316,6 +317,7 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
   return (
     <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
       <TopNav />
+      <QuoteGuideModal />
       <MainWithSupplierRail>
         {slug === "workwear" ? <WorkwearCategoryTopAd /> : null}
         {slug === "mens" ? <MensCategoryTopAd /> : null}

@@ -5,7 +5,8 @@ import type { XeroConnectionRow } from "@/lib/xero/connection-db";
 export type XeroQuoteLineInput = {
   description: string;
   quantity: number;
-  unitAmountInclGst: number;
+  /** GST-exclusive unit price (AUD). Xero adds 10% GST on top via LineAmountTypes "Exclusive". */
+  unitAmountExclGst: number;
 };
 
 type XeroQuote = {
@@ -42,6 +43,8 @@ export function xeroQuoteViewUrl(quoteId: string): string {
 export async function createDraftSalesQuote(
   connection: XeroConnectionRow,
   input: {
+    /** When set, updates this existing Xero quote (DRAFT) instead of creating a new one. */
+    quoteId?: string | null;
     contactId: string;
     quoteNumber: string;
     reference: string;
@@ -57,7 +60,7 @@ export async function createDraftSalesQuote(
     .map((line) => ({
       Description: line.description.trim().slice(0, 4000),
       Quantity: Math.max(line.quantity, 1),
-      UnitAmount: Math.round(Math.max(0, line.unitAmountInclGst) * 100) / 100,
+      UnitAmount: Math.round(Math.max(0, line.unitAmountExclGst) * 100) / 100,
       AccountCode: getSalesAccountCode(),
       TaxType: "OUTPUT",
     }));
@@ -66,22 +69,24 @@ export async function createDraftSalesQuote(
     throw new Error("No quote line items to send to Xero.");
   }
 
-  const payload = {
-    Quotes: [
-      {
-        Contact: { ContactID: input.contactId },
-        Date: toXeroDateYmd(input.quoteDate),
-        ExpiryDate: toXeroDateYmd(input.expiryDate),
-        LineAmountTypes: "Inclusive",
-        LineItems: lineItems,
-        QuoteNumber: input.quoteNumber.trim().slice(0, 255),
-        Reference: input.reference.trim().slice(0, 255) || undefined,
-        Title: input.title?.trim().slice(0, 100) || "Quote",
-        Summary: input.summary?.trim().slice(0, 300) || undefined,
-        Status: "DRAFT",
-      },
-    ],
+  const existingQuoteId = input.quoteId?.trim();
+  const quoteBody: Record<string, unknown> = {
+    Contact: { ContactID: input.contactId },
+    Date: toXeroDateYmd(input.quoteDate),
+    ExpiryDate: toXeroDateYmd(input.expiryDate),
+    LineAmountTypes: "Exclusive",
+    LineItems: lineItems,
+    QuoteNumber: input.quoteNumber.trim().slice(0, 255),
+    Reference: input.reference.trim().slice(0, 255) || undefined,
+    Title: input.title?.trim().slice(0, 100) || "Quote",
+    Summary: input.summary?.trim().slice(0, 300) || undefined,
+    Status: "DRAFT",
   };
+  if (existingQuoteId) {
+    quoteBody.QuoteID = existingQuoteId;
+  }
+
+  const payload = { Quotes: [quoteBody] };
 
   const res = await xeroAccountingJson<{ Quotes?: XeroQuote[] }>(connection, "/Quotes", {
     method: "POST",

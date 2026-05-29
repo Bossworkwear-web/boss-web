@@ -13,8 +13,10 @@ import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 import { MY_ACCOUNT_ORDERED_RECORDS_LIMIT } from "@/lib/customer-ordered-records";
 import { getCustomerStoreCreditBalanceCents } from "@/lib/customer-store-credit";
+import { currentProductUnitFromRow, repriceQuoteLines } from "@/lib/customer-quote-pricing";
 
 import { CustomerDetailPasswordPopovers } from "./customer-detail-password-popovers";
+import { OrderFromQuoteButton } from "./order-from-quote-button";
 import { ReorderOrderButton } from "./reorder-order-button";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +86,18 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
   /** When the store_orders list query included `invoice_reference`, gate My account Invoice → Download on that value. */
   let orderQueryIncludesInvoiceReference = false;
   let storeCreditBalanceCents = 0;
+
+  let quotes: {
+    id: string;
+    quote_number: string;
+    total_cents: number;
+    total_quantity: number;
+    currency: string;
+    created_at: string;
+    /** True when current product prices differ from the prices saved on the quote. */
+    price_updated: boolean;
+    lines: { product_name: string; quantity: number; service_type: string; color: string; size: string }[];
+  }[] = [];
 
   try {
     const supabase = createSupabaseAdminClient();
@@ -175,12 +189,102 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
         });
       }
     }
+
+    try {
+      const { data: quoteRows } = await supabase
+        .from("customer_quotes")
+        .select(
+          "id, quote_number, total_cents, total_quantity, currency, created_at, logo_setup_cents, delivery_cents, lines",
+        )
+        .ilike("customer_email", ilikeExact)
+        .order("created_at", { ascending: false })
+        .limit(MY_ACCOUNT_ORDERED_RECORDS_LIMIT);
+
+      const toNum = (v: unknown) =>
+        typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0;
+
+      // Stage 1: parse the saved snapshot lines for each quote.
+      const staged = (quoteRows ?? []).map((r) => {
+        const rawLines = Array.isArray(r.lines) ? (r.lines as Record<string, unknown>[]) : [];
+        const snapshotLines = rawLines.map((line) => ({
+          productId: String(line.productId ?? "").trim() || undefined,
+          productName: String(line.productName ?? "").trim() || "—",
+          serviceType: String(line.serviceType ?? "").trim() || undefined,
+          color: String(line.color ?? "").trim() || undefined,
+          size: String(line.size ?? "").trim() || undefined,
+          quantity: toNum(line.quantity),
+          listUnitPrice: typeof line.listUnitPrice === "number" ? line.listUnitPrice : undefined,
+          unitPrice: typeof line.unitPrice === "number" ? line.unitPrice : 0,
+          totalPrice: typeof line.totalPrice === "number" ? line.totalPrice : undefined,
+          specialDealPackageId: String(line.specialDealPackageId ?? "").trim() || undefined,
+          productBaseUnit: typeof line.productBaseUnit === "number" ? line.productBaseUnit : undefined,
+        }));
+        return {
+          id: String(r.id ?? ""),
+          quote_number: String(r.quote_number ?? "").trim() || "—",
+          currency: String(r.currency ?? "AUD").trim() || "AUD",
+          created_at: String(r.created_at ?? "").trim() || new Date(0).toISOString(),
+          storedTotalCents: toNum(r.total_cents),
+          storedQuantity: toNum(r.total_quantity),
+          logoSetupCents: toNum(r.logo_setup_cents),
+          deliveryCents: toNum(r.delivery_cents),
+          snapshotLines,
+        };
+      });
+
+      // Stage 2: look up current product prices once for all quote lines.
+      const productIds = [
+        ...new Set(
+          staged
+            .flatMap((q) => q.snapshotLines.map((l) => (l.productId ?? "").trim()))
+            .filter((id) => /^[0-9a-f-]{36}$/i.test(id)),
+        ),
+      ];
+      const currentUnitByProductId = new Map<string, number>();
+      if (productIds.length > 0) {
+        const { data: productRows } = await supabase
+          .from("products")
+          .select("id, name, base_price, sale_price")
+          .in("id", productIds);
+        for (const row of productRows ?? []) {
+          const unit = currentProductUnitFromRow(row);
+          if (unit != null) {
+            currentUnitByProductId.set(String(row.id), unit);
+          }
+        }
+      }
+
+      // Stage 3: reprice the product portion live; keep logo setup + delivery as saved.
+      quotes = staged.map((q) => {
+        const repriced = repriceQuoteLines(q.snapshotLines, currentUnitByProductId);
+        const liveTotalCents = repriced.productTotalCents + q.logoSetupCents + q.deliveryCents;
+        return {
+          id: q.id,
+          quote_number: q.quote_number,
+          total_cents: liveTotalCents,
+          total_quantity: repriced.totalQuantity || q.storedQuantity,
+          currency: q.currency,
+          created_at: q.created_at,
+          price_updated: repriced.changed,
+          lines: q.snapshotLines.map((line) => ({
+            product_name: line.productName ?? "—",
+            quantity: line.quantity,
+            service_type: line.serviceType ?? "",
+            color: line.color ?? "",
+            size: line.size ?? "",
+          })),
+        };
+      });
+    } catch {
+      quotes = [];
+    }
   } catch {
     profile = null;
     orders = [];
     orderLineGroups = {};
     orderQueryIncludesInvoiceReference = false;
     storeCreditBalanceCents = 0;
+    quotes = [];
   }
 
   const canChangePassword =
@@ -228,6 +332,117 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
                 ? "This balance is applied automatically when you pay for your next order (up to the order total)."
                 : "You have no store credit on file. Credit issued after a return or adjustment will appear here."}
             </p>
+          </section>
+
+          <section id="my-quotes" className="scroll-mt-[calc(var(--site-header-height)+1rem)] space-y-4">
+            <h2 className="text-[1.62rem] font-semibold text-brand-navy">My Quote</h2>
+            <div className="space-y-2 text-[1.26rem] text-brand-navy/70">
+              <p className="flex gap-2">
+                <span className="shrink-0 select-none font-semibold text-brand-navy/45" aria-hidden>
+                  ·
+                </span>
+                <span>Quotes you emailed yourself from the cart are saved here.</span>
+              </p>
+              <p className="flex gap-2">
+                <span className="shrink-0 select-none font-semibold text-brand-navy/45" aria-hidden>
+                  ·
+                </span>
+                <span>
+                  Use <span className="font-medium text-brand-navy/80">Order</span> to load a quote into your cart, then
+                  continue to payment.
+                </span>
+              </p>
+              <p className="flex gap-2">
+                <span className="shrink-0 select-none font-semibold text-brand-navy/45" aria-hidden>
+                  ·
+                </span>
+                <span>
+                  Totals shown here reflect <span className="font-medium text-brand-navy/80">current</span> product
+                  prices and pricing rules. Saved quotes are indicative only and are not a guaranteed price — see our{" "}
+                  <Link href="/terms-and-conditions" className="font-semibold text-brand-orange hover:underline">
+                    Terms &amp; Conditions
+                  </Link>
+                  .
+                </span>
+              </p>
+            </div>
+            <div className="overflow-x-auto rounded-2xl border border-brand-navy/10 bg-brand-surface/50">
+              {quotes.length === 0 ? (
+                <p className="p-6 text-[1.26rem] text-brand-navy/70">
+                  No quotes yet. Send yourself a quote from the cart to see it here.
+                </p>
+              ) : (
+                <table className="w-full min-w-[52rem] border-collapse text-left text-[1.26rem]">
+                  <thead>
+                    <tr className="border-b border-brand-navy/10 bg-white/80 text-[1.08rem] font-semibold uppercase tracking-wide text-brand-navy/60">
+                      <th className="px-4 py-3">Quote no.</th>
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3">Items</th>
+                      <th className="px-4 py-3">Lines</th>
+                      <th className="px-4 py-3">Total</th>
+                      <th className="px-4 py-3">Order</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {quotes.map((q) => (
+                      <Fragment key={q.id}>
+                        <tr className="border-b border-brand-navy/5">
+                          <td className="px-4 py-3 font-mono font-medium text-brand-navy">{q.quote_number}</td>
+                          <td className="px-4 py-3 text-brand-navy/80">{formatOrderDate(q.created_at)}</td>
+                          <td className="px-4 py-3 text-brand-navy/80">{q.total_quantity}</td>
+                          <td className="px-4 py-3 text-brand-navy/80">{q.lines.length}</td>
+                          <td className="px-4 py-3 text-brand-navy">
+                            {formatMoneyFromCents(q.total_cents, q.currency)}
+                            {q.price_updated ? (
+                              <span
+                                className="ml-2 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[0.85rem] font-semibold text-amber-700"
+                                title="Product prices changed since this quote was saved. This total reflects current pricing."
+                              >
+                                Updated
+                              </span>
+                            ) : null}
+                          </td>
+                          <td className="px-4 py-3 align-top">
+                            <OrderFromQuoteButton quoteId={q.id} />
+                          </td>
+                        </tr>
+                        <tr className="border-b border-brand-navy/10 bg-white/40">
+                          <td colSpan={6} className="px-4 py-2">
+                            <details className="group">
+                              <summary className="cursor-pointer list-none text-[1.26rem] font-semibold text-brand-navy/80 marker:content-none [&::-webkit-details-marker]:hidden">
+                                <span className="underline decoration-brand-navy/25 decoration-1 underline-offset-2 group-open:text-brand-orange">
+                                  Line items ({q.lines.length})
+                                </span>
+                              </summary>
+                              {q.lines.length === 0 ? (
+                                <p className="mt-2 pl-1 text-[1.26rem] text-brand-navy/55">No line details stored.</p>
+                              ) : (
+                                <ul className="mt-3 space-y-2 border-l-2 border-brand-orange/30 pl-4 text-[1.26rem]">
+                                  {q.lines.map((line, idx) => {
+                                    const bits = [line.service_type, line.color, line.size]
+                                      .map((s) => String(s ?? "").trim())
+                                      .filter(Boolean);
+                                    return (
+                                      <li key={`${q.id}-${idx}`} className="text-brand-navy/90">
+                                        <span className="font-medium text-brand-navy">{line.product_name}</span>
+                                        <span className="text-brand-navy/65"> × {line.quantity}</span>
+                                        {bits.length > 0 ? (
+                                          <span className="text-brand-navy/55"> · {bits.join(" · ")}</span>
+                                        ) : null}
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              )}
+                            </details>
+                          </td>
+                        </tr>
+                      </Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </section>
 
           <section id="ordered-records" className="scroll-mt-[calc(var(--site-header-height)+1rem)] space-y-4">

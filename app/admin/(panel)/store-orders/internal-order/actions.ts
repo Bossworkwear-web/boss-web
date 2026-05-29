@@ -47,6 +47,7 @@ export type InternalOrderTemplate = {
   items: Array<{
     productId: string;
     productName: string;
+    catalogProductId?: string | null;
     quantity: number;
     unitPriceCents: number;
     lineTotalCents: number;
@@ -85,6 +86,8 @@ export type AdminCustomerQuoteSheetV1 = {
   items: Array<{
     productId: string;
     productName: string;
+    /** Linked storefront catalog product UUID (drives the Customer Quote colour dropdown). */
+    catalogProductId?: string | null;
     quantity: number;
     unitPriceCents: number;
     lineTotalCents: number;
@@ -355,6 +358,7 @@ function parseAdminCustomerQuoteSheetFromUnknown(parsed: unknown): AdminCustomer
     return {
       productId: normalizeText(rec.productId),
       productName: normalizeText(rec.productName),
+      catalogProductId: normalizeNullableText(rec.catalogProductId),
       quantity: Math.max(0, safeInt(rec.quantity, 0)),
       unitPriceCents: Math.max(0, safeInt(rec.unitPriceCents, 0)),
       lineTotalCents: Math.max(0, safeInt(rec.lineTotalCents, 0)),
@@ -455,6 +459,7 @@ function adminSheetToInternalTemplate(sheet: AdminCustomerQuoteSheetV1): Interna
     items: sheet.items.map((it) => ({
       productId: it.productId,
       productName: it.productName,
+      catalogProductId: it.catalogProductId ?? null,
       quantity: it.quantity,
       unitPriceCents: it.unitPriceCents,
       lineTotalCents: it.lineTotalCents,

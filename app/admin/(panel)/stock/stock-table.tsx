@@ -257,6 +257,7 @@ export function StockTable({ products, lowStockThreshold, warehouseStockView = f
             className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-brand-navy placeholder:text-slate-400 focus:border-brand-orange focus:outline-none sm:w-[280px]"
             disabled={pending}
             aria-label="Search products by name"
+            data-latin-mode="ascii"
           />
           {query.trim() ? (
             <button
@@ -517,6 +518,7 @@ function StockRowEditor({
                 className="w-full rounded-md border border-slate-200 px-2 py-1.5 font-mono text-sm"
                 placeholder="25.00"
                 disabled={pending}
+                data-latin-mode="decimal"
               />
               <button
                 type="button"
@@ -552,6 +554,7 @@ function StockRowEditor({
                 className="w-full rounded-md border border-slate-200 px-2 py-1.5 font-mono text-sm"
                 placeholder="0.0"
                 disabled={pending}
+                data-latin-mode="decimal"
               />
               <button
                 type="button"
@@ -578,6 +581,7 @@ function StockRowEditor({
                 placeholder="Clear = no sale"
                 disabled={pending}
                 aria-label="Sale price"
+                data-latin-mode="decimal"
               />
               <button
                 type="button"

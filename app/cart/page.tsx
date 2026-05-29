@@ -5,7 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ImageUrlLightbox } from "@/app/components/image-url-lightbox";
 import { ArrowLeftIcon, CartIcon } from "@/app/components/icons";
+import { SendCartQuoteButton } from "@/app/cart/send-cart-quote-button";
 import { TopNav } from "@/app/components/top-nav";
+import type { CreateCustomerQuotePayload } from "@/lib/customer-quote";
+import type { StoreOrderCartLine } from "@/lib/store-order-cart-payload";
 import { readResponseJson } from "@/lib/safe-json-parse";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 import { STORE_GOOGLE_MAPS_QUERY, storeGoogleMapsSearchHref } from "@/lib/store-google-maps-url";
@@ -310,6 +313,45 @@ export default function CartPage() {
   const { deliveryFeeAud, logoSetupFeeAud, logoSetupApplies, totalAud: payableTotal } = checkoutFees;
   const canCheckOut = termsAgreed && isCustomerSignedIn;
 
+  const quotePayload = useMemo<CreateCustomerQuotePayload>(() => {
+    const toCents = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100);
+    const lines: StoreOrderCartLine[] = items.map((item) => {
+      const priced = volumeAdjustedByLineId.get(item.id);
+      const { id: _id, addedAt: _addedAt, ...rest } = item;
+      return {
+        ...rest,
+        unitPrice: priced?.unitPrice ?? item.unitPrice,
+        totalPrice: priced?.totalPrice ?? item.totalPrice,
+      };
+    });
+    const appliedLogoSetupAud = isCustomerSignedIn && logoSetupApplies ? logoSetupFeeAud : 0;
+    const appliedDeliveryAud = isCustomerSignedIn && !pickUp ? deliveryFeeAud : 0;
+    return {
+      lines,
+      productGrossCents: toCents(productGrossSubtotal),
+      volumeDiscountCents: toCents(volumeDiscountAud),
+      productNetCents: toCents(productNetSubtotal),
+      logoSetupCents: toCents(appliedLogoSetupAud),
+      deliveryCents: toCents(appliedDeliveryAud),
+      totalCents: toCents(payableTotal),
+      totalQuantity,
+      pickup: isCustomerSignedIn && pickUp,
+    };
+  }, [
+    items,
+    volumeAdjustedByLineId,
+    productGrossSubtotal,
+    volumeDiscountAud,
+    productNetSubtotal,
+    logoSetupFeeAud,
+    logoSetupApplies,
+    deliveryFeeAud,
+    payableTotal,
+    totalQuantity,
+    pickUp,
+    isCustomerSignedIn,
+  ]);
+
   const detailItem = detailItemId ? items.find((i) => i.id === detailItemId) : undefined;
 
   return (
@@ -480,6 +522,8 @@ export default function CartPage() {
                   />
                 </section>
               ) : null}
+
+              <SendCartQuoteButton isSignedIn={isCustomerSignedIn} payload={quotePayload} />
             </div>
 
             <aside className="h-fit rounded-2xl border border-brand-navy/15 bg-brand-navy p-5 text-white">

@@ -156,6 +156,60 @@ export type Database = {
         };
         Relationships: [];
       };
+      customer_quotes: {
+        Row: {
+          id: string;
+          quote_number: string;
+          customer_email: string;
+          customer_name: string | null;
+          currency: string;
+          product_gross_cents: number;
+          volume_discount_cents: number;
+          product_net_cents: number;
+          logo_setup_cents: number;
+          delivery_cents: number;
+          total_cents: number;
+          total_quantity: number;
+          pickup: boolean;
+          lines: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          quote_number: string;
+          customer_email: string;
+          customer_name?: string | null;
+          currency?: string;
+          product_gross_cents?: number;
+          volume_discount_cents?: number;
+          product_net_cents?: number;
+          logo_setup_cents?: number;
+          delivery_cents?: number;
+          total_cents?: number;
+          total_quantity?: number;
+          pickup?: boolean;
+          lines?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          quote_number?: string;
+          customer_email?: string;
+          customer_name?: string | null;
+          currency?: string;
+          product_gross_cents?: number;
+          volume_discount_cents?: number;
+          product_net_cents?: number;
+          logo_setup_cents?: number;
+          delivery_cents?: number;
+          total_cents?: number;
+          total_quantity?: number;
+          pickup?: boolean;
+          lines?: Json;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       customer_store_credit_balances: {
         Row: {
           customer_email: string;

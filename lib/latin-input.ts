@@ -9,6 +9,7 @@ export type LatinInputMode =
   | "password"
   | "tel"
   | "number"
+  | "decimal"
   | "address"
   | "ascii";
 
@@ -17,6 +18,8 @@ const EMAIL_RE = /[^a-zA-Z0-9@._%+\-]/g;
 const PASSWORD_RE = /[^\x20-\x7E]/g;
 const TEL_RE = /[^0-9+()\-.\s]/g;
 const NUMBER_RE = /[^0-9]/g;
+/** Digits and a decimal point (money / quantities). */
+const DECIMAL_RE = /[^0-9.]/g;
 const ADDRESS_RE = /[^a-zA-Z0-9\s,.'\-/#]/g;
 /** General text: printable ASCII only (blocks Hangul, CJK, etc.). */
 const ASCII_RE = /[^\x20-\x7E]/g;
@@ -33,6 +36,8 @@ export function sanitizeLatinInput(value: string, mode: LatinInputMode): string 
       return value.replace(TEL_RE, "");
     case "number":
       return value.replace(NUMBER_RE, "");
+    case "decimal":
+      return value.replace(DECIMAL_RE, "");
     case "address":
       return value.replace(ADDRESS_RE, "");
     case "ascii":
@@ -42,7 +47,23 @@ export function sanitizeLatinInput(value: string, mode: LatinInputMode): string 
   }
 }
 
+const VALID_LATIN_MODES: ReadonlySet<string> = new Set<LatinInputMode>([
+  "letters",
+  "email",
+  "password",
+  "tel",
+  "number",
+  "decimal",
+  "address",
+  "ascii",
+]);
+
 export function detectLatinInputMode(el: HTMLInputElement | HTMLTextAreaElement): LatinInputMode {
+  const explicit = el.getAttribute("data-latin-mode");
+  if (explicit && VALID_LATIN_MODES.has(explicit)) {
+    return explicit as LatinInputMode;
+  }
+
   if (el instanceof HTMLTextAreaElement) {
     return "ascii";
   }

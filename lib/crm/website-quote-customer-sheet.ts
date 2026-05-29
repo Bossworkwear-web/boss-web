@@ -141,6 +141,7 @@ function buildSheetItems(
       return {
         productId: itemId,
         productName,
+        catalogProductId: resolved?.id ?? (line.productId || null),
         quantity,
         unitPriceCents: 0,
         lineTotalCents: 0,
@@ -164,6 +165,7 @@ function buildSheetItems(
     {
       productId: itemId,
       productName: primary?.name?.trim() || itemId || "Product — confirm with customer",
+      catalogProductId: primary?.id ?? null,
       quantity: qty,
       unitPriceCents: 0,
       lineTotalCents: 0,

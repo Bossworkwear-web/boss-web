@@ -6,6 +6,8 @@ import { isNextNavigationError, readResponseJson, stringifyJsonField } from "@/l
 import { todayPerthYmd } from "@/lib/perth-calendar";
 
 import { CustomerQuoteImageDropzone } from "@/app/admin/(panel)/customer-quote/customer-quote-image-dropzone";
+import { QuoteProductAutocomplete } from "@/app/components/quote-product-autocomplete";
+import { findQuoteCatalogProduct, type QuoteCatalogProduct } from "@/lib/quote-catalog-products";
 
 import {
   createInternalOrderFromTemplate,
@@ -16,6 +18,8 @@ import {
 type Item = {
   productId: string;
   productName: string;
+  /** Linked storefront catalog product UUID (drives the colour dropdown). */
+  catalogProductId: string | null;
   quantity: number;
   unitPriceCents: number;
   lineTotalCents: number;
@@ -54,6 +58,7 @@ type Template = {
   items: Array<{
     productId: string;
     productName: string;
+    catalogProductId?: string | null;
     quantity: number;
     unitPriceCents: number;
     lineTotalCents: number;
@@ -75,6 +80,7 @@ function toItem(t: Template["items"][number], groupId: number): Item {
   return {
     productId: t.productId ?? "",
     productName: t.productName ?? "",
+    catalogProductId: t.catalogProductId ?? null,
     quantity: typeof t.quantity === "number" ? t.quantity : 0,
     unitPriceCents: typeof t.unitPriceCents === "number" ? t.unitPriceCents : 0,
     lineTotalCents: typeof t.lineTotalCents === "number" ? t.lineTotalCents : 0,
@@ -96,6 +102,7 @@ function emptyItemRow(groupId: number): Item {
   return {
     productId: "",
     productName: "",
+    catalogProductId: null,
     quantity: 1,
     unitPriceCents: 0,
     lineTotalCents: 0,
@@ -154,10 +161,13 @@ export function InternalOrderForm({
   variant = "internal",
   quoteRequestId = null,
   quoteSubmitContext = "customer-quote",
+  catalog = [],
 }: {
   template: Template;
   isBlankStarter: boolean;
   variant?: "internal" | "customer-quote";
+  /** Storefront catalog for the Item ID picker + colour dropdown (Customer Quote). */
+  catalog?: QuoteCatalogProduct[];
   /** When set, Save Quote updates this `quote_requests` row. */
   quoteRequestId?: string | null;
   /**
@@ -215,6 +225,9 @@ export function InternalOrderForm({
     ...(template.quoteBoxImageUrls ?? []),
   ]);
   const [quoteBoxNote, setQuoteBoxNote] = useState(() => template.quoteBoxNote ?? "");
+  /** Raw dollar text while editing money cells (keyed by row index) so decimals like "25.5" can be typed. */
+  const [priceDrafts, setPriceDrafts] = useState<Record<number, string>>({});
+  const [totalDrafts, setTotalDrafts] = useState<Record<number, string>>({});
 
   useEffect(() => {
     setBaseOrderNumber(template.baseOrderNumber);
@@ -227,6 +240,8 @@ export function InternalOrderForm({
     setCarrier(template.carrier || "Australia Post");
     setDeliveryFeeCents(template.deliveryFeeCents ?? 0);
     setItems(template.items.map((t, idx) => toItem(t, idx + 1)));
+    setPriceDrafts({});
+    setTotalDrafts({});
     setQuoteBoxImageUrls([...(template.quoteBoxImageUrls ?? [])]);
     setQuoteBoxNote(template.quoteBoxNote ?? "");
     setXeroQuoteId(template.xeroQuoteId ?? null);
@@ -363,6 +378,7 @@ export function InternalOrderForm({
         return {
           productId,
           productName,
+          catalogProductId: row.catalogProductId ?? leader.catalogProductId ?? null,
           quantity: Math.max(0, Number(row.quantity) || 0),
           unitPriceCents: Math.max(0, Number(row.unitPriceCents) || 0),
           lineTotalCents: Math.max(0, Number(row.lineTotalCents) || 0),
@@ -909,27 +925,63 @@ export function InternalOrderForm({
                       value={it.serviceType}
                       onChange={(e) => updateItem(idx, { serviceType: e.target.value })}
                       placeholder="e.g. AUSSIE"
+                      data-latin-mode="ascii"
                     />
                   </td>
                 ) : null;
                 const showItemId = isFirstInGroup ? (
                   <td rowSpan={rowspan} className={quoteTd}>
-                    <input
-                      className={quoteCellInput}
-                      value={it.productId}
-                      onChange={(e) => updateItem(idx, { productId: e.target.value })}
+                    <QuoteProductAutocomplete
+                      id={`cq_item_${idx}`}
+                      inputName={`cq_item_spec_${idx}`}
+                      hiddenIdName={`cq_item_id_${idx}`}
+                      catalog={catalog}
+                      productId={it.catalogProductId}
+                      spec={it.productId}
+                      onChange={({ productId: catalogId, spec }) => {
+                        const product = findQuoteCatalogProduct(catalog, catalogId);
+                        const itemIdText = product ? product.styleCode ?? product.displayName : spec;
+                        updateItem(idx, {
+                          catalogProductId: catalogId,
+                          productId: itemIdText,
+                          productName: product?.displayName ?? itemIdText,
+                          color: catalogId === it.catalogProductId ? it.color : "",
+                        });
+                      }}
                       placeholder="1302"
+                      className={quoteCellInput}
                     />
                   </td>
                 ) : null;
+                const linkedProduct = findQuoteCatalogProduct(catalog, it.catalogProductId);
+                const colorOptions = linkedProduct?.availableColors ?? [];
                 const showColor = isFirstInGroup ? (
                   <td rowSpan={rowspan} className={quoteTd}>
-                    <input
-                      className={quoteCellInput}
-                      value={it.color}
-                      onChange={(e) => updateItem(idx, { color: e.target.value })}
-                      placeholder="NAVY/WHITE"
-                    />
+                    {linkedProduct && colorOptions.length > 0 ? (
+                      <select
+                        className={`${quoteCellInput} cursor-pointer`}
+                        value={it.color}
+                        onChange={(e) => updateItem(idx, { color: e.target.value })}
+                      >
+                        <option value="">Select colour</option>
+                        {colorOptions.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                        {it.color && !colorOptions.includes(it.color) ? (
+                          <option value={it.color}>{it.color}</option>
+                        ) : null}
+                      </select>
+                    ) : (
+                      <input
+                        className={quoteCellInput}
+                        value={it.color}
+                        onChange={(e) => updateItem(idx, { color: e.target.value })}
+                        placeholder="NAVY/WHITE"
+                        data-latin-mode="ascii"
+                      />
+                    )}
                   </td>
                 ) : null;
                 const showNote = isFirstInGroup ? (
@@ -994,6 +1046,7 @@ export function InternalOrderForm({
                         value={it.size}
                         onChange={(e) => updateItem(idx, { size: e.target.value })}
                         placeholder="S / M / L"
+                        data-latin-mode="ascii"
                       />
                     </td>
                     <td className={`${quoteTd} text-left`}>
@@ -1009,21 +1062,43 @@ export function InternalOrderForm({
                     <td className={quoteTd}>
                       <input
                         className={quoteCellInput}
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={centsToDollarFieldValue(it.unitPriceCents)}
-                        onChange={(e) => updateItem(idx, { unitPriceCents: parseDollarsToCents(e.target.value) })}
+                        type="text"
+                        inputMode="decimal"
+                        value={priceDrafts[idx] ?? String(centsToDollarFieldValue(it.unitPriceCents))}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setPriceDrafts((d) => ({ ...d, [idx]: raw }));
+                          updateItem(idx, { unitPriceCents: parseDollarsToCents(raw) });
+                        }}
+                        onBlur={() =>
+                          setPriceDrafts((d) => {
+                            const { [idx]: _drop, ...rest } = d;
+                            return rest;
+                          })
+                        }
+                        placeholder="0.00"
+                        data-latin-mode="decimal"
                       />
                     </td>
                     <td className={quoteTd}>
                       <input
                         className={quoteCellInput}
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={centsToDollarFieldValue(it.lineTotalCents)}
-                        onChange={(e) => updateItem(idx, { lineTotalCents: parseDollarsToCents(e.target.value) })}
+                        type="text"
+                        inputMode="decimal"
+                        value={totalDrafts[idx] ?? String(centsToDollarFieldValue(it.lineTotalCents))}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setTotalDrafts((d) => ({ ...d, [idx]: raw }));
+                          updateItem(idx, { lineTotalCents: parseDollarsToCents(raw) });
+                        }}
+                        onBlur={() =>
+                          setTotalDrafts((d) => {
+                            const { [idx]: _drop, ...rest } = d;
+                            return rest;
+                          })
+                        }
+                        placeholder="0.00"
+                        data-latin-mode="decimal"
                       />
                     </td>
                     {showNote}
@@ -1313,7 +1388,7 @@ export function InternalOrderForm({
                   });
                 }}
               >
-                {xeroQuotePending ? "Sending…" : xeroQuoteId ? "Open Xero Quote" : "Xero Quote"}
+                {xeroQuotePending ? "Sending…" : xeroQuoteId ? "Update Xero Quote" : "Xero Quote"}
               </button>
             </>
           ) : null}

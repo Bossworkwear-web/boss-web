@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { ensureCustomerQuoteNumber } from "@/lib/customer-quote-number";
+import { getQuoteCatalogProducts } from "@/lib/quote-catalog-products";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 import { CustomerQuoteList, type CustomerQuoteListRow } from "./customer-quote-list";
@@ -80,6 +81,15 @@ export default async function AdminCustomerQuotePage({ searchParams }: { searchP
       }
     } catch {
       quoteList = [];
+    }
+  }
+
+  let catalog: Awaited<ReturnType<typeof getQuoteCatalogProducts>> = [];
+  if (showForm) {
+    try {
+      catalog = await getQuoteCatalogProducts();
+    } catch {
+      catalog = [];
     }
   }
 
@@ -250,6 +260,7 @@ export default async function AdminCustomerQuotePage({ searchParams }: { searchP
             isBlankStarter={template === null || template.baseOrderNumber.trim() === ""}
             variant="customer-quote"
             quoteRequestId={quoteId || null}
+            catalog={catalog}
           />
         </>
       )}

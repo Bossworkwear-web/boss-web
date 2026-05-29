@@ -11,6 +11,7 @@ import { CategoryPaginationPageSummary } from "@/app/components/category-paginat
 import { ProductGridPriceCells } from "@/app/components/product-grid-price";
 import { ProductNavLink } from "@/app/components/product-nav-link";
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
+import { QuoteGuideModal } from "@/app/components/quote-guide-modal";
 import { TopNav } from "@/app/components/top-nav";
 import { ChefCategoryTopAd } from "@/app/components/chef-category-top-ad";
 import { HealthCareCategoryTopAd } from "@/app/components/health-care-category-top-ad";
@@ -274,6 +275,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   return (
     <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
       <TopNav />
+      <QuoteGuideModal />
       <MainWithSupplierRail>
         {slug === "workwear" ? <WorkwearCategoryTopAd /> : null}
         {slug === "mens" ? <MensCategoryTopAd /> : null}

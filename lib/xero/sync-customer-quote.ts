@@ -19,7 +19,7 @@ export type SyncCustomerQuoteToXeroResult =
     }
   | { ok: false; error: string; skipped?: boolean };
 
-function centsToAudInclGst(cents: number): number {
+function centsToAud(cents: number): number {
   return Math.round(cents) / 100;
 }
 
@@ -51,7 +51,7 @@ function sheetToXeroLineItems(sheet: AdminCustomerQuoteSheetV1): XeroQuoteLineIn
     lines.push({
       description: buildLineDescription(item),
       quantity,
-      unitAmountInclGst: centsToAudInclGst(unitCents),
+      unitAmountExclGst: centsToAud(unitCents),
     });
   }
 
@@ -59,7 +59,7 @@ function sheetToXeroLineItems(sheet: AdminCustomerQuoteSheetV1): XeroQuoteLineIn
     lines.push({
       description: "Set up fee",
       quantity: 1,
-      unitAmountInclGst: centsToAudInclGst(sheet.setupFeeCents),
+      unitAmountExclGst: centsToAud(sheet.setupFeeCents),
     });
   }
 
@@ -67,7 +67,7 @@ function sheetToXeroLineItems(sheet: AdminCustomerQuoteSheetV1): XeroQuoteLineIn
     lines.push({
       description: "Delivery fee",
       quantity: 1,
-      unitAmountInclGst: centsToAudInclGst(sheet.quoteDeliveryFeeCents),
+      unitAmountExclGst: centsToAud(sheet.quoteDeliveryFeeCents),
     });
   }
 
@@ -112,17 +112,7 @@ export async function syncCustomerQuoteSheetToXero(
     }),
   };
 
-  if (sheet.xeroQuoteId?.trim()) {
-    const quoteId = sheet.xeroQuoteId.trim();
-    return {
-      ok: true,
-      quoteId,
-      quoteNumber: (sheet.xeroQuoteNumber ?? sheet.baseOrderNumber).trim() || quoteId,
-      openUrl: xeroQuoteViewUrl(quoteId),
-      contactId: "",
-      alreadySynced: true,
-    };
-  }
+  const existingQuoteId = sheet.xeroQuoteId?.trim() || null;
 
   if (!sheet.customerEmail.trim()) {
     return { ok: false, error: "Customer email is required for Xero." };
@@ -168,6 +158,7 @@ export async function syncCustomerQuoteSheetToXero(
         : addCalendarDaysYmd(quoteDateYmd, 30);
 
     const created = await createDraftSalesQuote(connection, {
+      quoteId: existingQuoteId,
       contactId,
       quoteNumber: sheet.baseOrderNumber.trim(),
       reference: sheet.baseOrderNumber.trim(),
