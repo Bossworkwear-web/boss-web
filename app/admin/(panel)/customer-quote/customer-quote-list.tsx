@@ -23,7 +23,7 @@ export function CustomerQuoteList({ quotes }: { quotes: CustomerQuoteListRow[] }
           <h2 className="text-lg font-semibold text-brand-navy">Quote list</h2>
           <p className="mt-1 max-w-2xl text-sm text-slate-600">
             CRM <span className="font-mono">quote_requests</span> 최신 순입니다.{" "}
-            <strong>Preview</strong>로 고객이 보낸 원본을 보고, <strong>Open</strong>으로 견적 가격표를 수정·저장하세요.
+            <strong>Open</strong>으로 견적 가격표를 수정·저장하세요.
           </p>
         </div>
         <Link
@@ -65,14 +65,6 @@ export function CustomerQuoteList({ quotes }: { quotes: CustomerQuoteListRow[] }
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                      <Link
-                        href={`/admin/online-quote/${encodeURIComponent(row.id)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex rounded-lg border border-brand-navy/20 px-3 py-1.5 text-xs font-semibold text-brand-navy hover:bg-slate-50"
-                      >
-                        Preview
-                      </Link>
                       <Link
                         href={`/admin/customer-quote?quote_id=${encodeURIComponent(row.id)}`}
                         className="inline-flex rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-brand-navy hover:bg-slate-200"

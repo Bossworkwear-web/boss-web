@@ -233,21 +233,6 @@ export default async function AdminCustomerQuotePage({ searchParams }: { searchP
             ) : null}
           </section>
 
-          {quoteId ? (
-            <p className="rounded-lg border border-brand-orange/30 bg-brand-orange/10 px-4 py-3 text-sm text-brand-navy">
-              고객이 보낸 원본 내용은{" "}
-              <Link
-                href={`/admin/online-quote/${encodeURIComponent(quoteId)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold text-brand-orange hover:underline"
-              >
-                Preview original submission
-              </Link>
-              에서 확인하세요. 아래 표는 staff용 견적 가격표입니다.
-            </p>
-          ) : null}
-
           {quoteId && template && !loadError ? (
             <p className="rounded-lg border border-brand-navy/15 bg-brand-navy/5 px-4 py-3 text-sm text-brand-navy">
               <strong>CRM quote</strong>에서 불러왔습니다. 금액·배송지·라인을 조정한 뒤 <strong>Save Quote</strong>로 목록에 저장하거나{" "}

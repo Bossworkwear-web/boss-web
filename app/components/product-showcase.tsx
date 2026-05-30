@@ -137,6 +137,37 @@ function toStoreProduct(item: ProductRow): StoreProduct {
   };
 }
 
+/** Brand label for the search Brand filter — mirrors `/categories/[slug]` inference. */
+function inferSearchBrandLabel(p: StoreProduct): string {
+  const hay = `${p.name} ${p.storeSlug ?? p.slug ?? ""} ${p.description ?? ""}`.toLowerCase();
+  if (hay.includes("syzmik")) {
+    return "Syzmik";
+  }
+  if (hay.includes("bisley")) {
+    return "Bisley";
+  }
+  const direct = String(p.supplierName ?? "").trim();
+  if (direct) {
+    const lower = direct.toLowerCase();
+    if (lower === "jb's wear" || lower === "jbs wear" || lower === "jbswear" || /\bjbs\s*wear\b/i.test(lower)) {
+      return "JB's Wear";
+    }
+    return direct;
+  }
+  if (hay.includes("jb-") || hay.includes("jbs")) {
+    return "JB's Wear";
+  }
+  return "";
+}
+
+function searchSortPrice(p: StoreProduct): number {
+  if (typeof p.retailPrice === "number" && Number.isFinite(p.retailPrice)) {
+    return p.retailPrice;
+  }
+  const n = Number.parseFloat((p.priceLabel ?? "").replace(/[^0-9.]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function ProductShowcase({
   products,
   initialSearchQuery = "",
@@ -147,6 +178,8 @@ export function ProductShowcase({
   const layout = layoutProp;
   const [liveProducts, setLiveProducts] = useState<StoreProduct[]>(products);
   const [q, setQ] = useState(() => initialSearchQuery.trim());
+  const [brandFilter, setBrandFilter] = useState<string>("");
+  const [sortOrder, setSortOrder] = useState<"" | "price-asc" | "price-desc">("");
 
   useEffect(() => {
     setLiveProducts(products);
@@ -274,6 +307,37 @@ export function ProductShowcase({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [liveProducts, q]);
 
+  // Brand dropdown options derived from the current matches.
+  const searchBrandOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of searchMatches) {
+      const b = inferSearchBrandLabel(p);
+      if (b) {
+        set.add(b);
+      }
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [searchMatches]);
+
+  // Ignore a stale brand selection that no longer exists in the current matches.
+  const brandFilterEffective =
+    brandFilter && searchBrandOptions.includes(brandFilter) ? brandFilter : "";
+
+  const displayedMatches = useMemo(() => {
+    let rows = searchMatches;
+    if (brandFilterEffective) {
+      rows = rows.filter((p) => inferSearchBrandLabel(p) === brandFilterEffective);
+    }
+    if (sortOrder === "price-asc" || sortOrder === "price-desc") {
+      rows = [...rows].sort((a, b) => {
+        const ap = searchSortPrice(a);
+        const bp = searchSortPrice(b);
+        return sortOrder === "price-asc" ? ap - bp : bp - ap;
+      });
+    }
+    return rows;
+  }, [searchMatches, brandFilterEffective, sortOrder]);
+
   const hasQuery = q.trim().length > 0;
 
   return (
@@ -330,7 +394,7 @@ export function ProductShowcase({
                 <h2 className="text-3xl font-medium">Results for &ldquo;{q}&rdquo;</h2>
               )}
               <p className="text-sm text-brand-navy/65">
-                {searchMatches.length} product{searchMatches.length === 1 ? "" : "s"} — by name or style
+                {displayedMatches.length} product{displayedMatches.length === 1 ? "" : "s"} — by name or style
                 code
               </p>
               <p className="text-sm text-brand-navy/55">
@@ -353,13 +417,54 @@ export function ProductShowcase({
                 </p>
               )}
             </div>
-            {searchMatches.length === 0 ? (
+            {layout === "search" && searchMatches.length > 0 ? (
+              <div className="mb-6 flex flex-wrap items-center justify-end gap-[0.96rem]">
+                <div className="flex items-center gap-[0.72rem]">
+                  <label className="text-[0.84rem] font-semibold uppercase tracking-[0.1152em] text-brand-navy/70">
+                    Brand
+                  </label>
+                  <select
+                    className="category-filter-native-select min-w-[14.112rem] rounded-[0.72rem] bg-white px-[0.9216rem] py-[0.6912rem] text-[0.9677rem] text-brand-navy shadow-sm outline-none transition"
+                    value={brandFilterEffective}
+                    disabled={searchBrandOptions.length === 0}
+                    onChange={(e) => setBrandFilter(e.target.value)}
+                  >
+                    <option value="">All brands</option>
+                    {searchBrandOptions.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-[0.72rem]">
+                  <label className="text-[0.84rem] font-semibold uppercase tracking-[0.1152em] text-brand-navy/70">
+                    Sort
+                  </label>
+                  <select
+                    className="category-filter-native-select min-w-[13.44rem] rounded-[0.72rem] bg-white px-[0.9216rem] py-[0.6912rem] text-[0.9677rem] text-brand-navy shadow-sm outline-none transition"
+                    value={sortOrder}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setSortOrder(v === "price-asc" || v === "price-desc" ? v : "");
+                    }}
+                  >
+                    <option value="">Default</option>
+                    <option value="price-asc">Price: Low → High</option>
+                    <option value="price-desc">Price: High → Low</option>
+                  </select>
+                </div>
+              </div>
+            ) : null}
+            {displayedMatches.length === 0 ? (
               <p className="rounded-2xl border border-brand-navy/10 bg-brand-surface px-6 py-10 text-center text-brand-navy/75">
-                No products matched. Try another name or style code (e.g. ZH145, SG319M).
+                {searchMatches.length === 0
+                  ? "No products matched. Try another name or style code (e.g. ZH145, SG319M)."
+                  : "No products match this brand filter. Choose All brands to see every result."}
               </p>
             ) : layout === "search" ? (
               <div className="subcategory-browse-grid subcategory-browse-grid-gap grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5">
-                {searchMatches.map((p) => {
+                {displayedMatches.map((p) => {
                   const discountPercent = getDiscountPercent(p.name);
                   // Avoid hydration mismatch: use server-supplied retailPrice/label instead of recomputing price in render.
                   const listPrice =
@@ -448,7 +553,7 @@ export function ProductShowcase({
               </div>
             ) : (
               <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {searchMatches.map((p) => {
+                {displayedMatches.map((p) => {
                   const { productName, productCode } = productCardDisplayLines(
                     p.name,
                     undefined,

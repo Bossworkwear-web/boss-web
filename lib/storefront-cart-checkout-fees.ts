@@ -6,7 +6,7 @@ import { STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { cartHasSpecialDealPackage } from "@/lib/storefront-special-deal-package-cart";
 
 /** Product subtotal (excl. delivery & logo setup) must be at or above this for logo-setup waiver promo. */
-export const STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD = 500;
+export const STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD = 600;
 
 /** Cart → payment → Stripe return: customer chose warehouse pick-up (no delivery fee). */
 export const CHECKOUT_PICK_UP_SESSION_KEY = "boss_web_checkout_pick_up_v1";

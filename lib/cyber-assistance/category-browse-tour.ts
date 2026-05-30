@@ -41,9 +41,9 @@ const MAIN_CATEGORY_STEPS: DriveStep[] = [
   {
     element: "[data-cyber-guide='cat-quote']",
     popover: {
-      title: "Need a quote first?",
+      title: "Want a free quote?",
       description:
-        "Tap Email for a free quote to ask about bulk orders, decoration, or anything before you choose a product.",
+        "Tap Free Quote for a quick how-to: add the products, sizes, and quantities you need to your cart, then use “Send email to you as a Quote” on the cart page to email yourself a quote and save it to My account.",
       side: "bottom",
       align: "center",
     },
@@ -103,9 +103,9 @@ const SUBCATEGORY_STEPS: DriveStep[] = [
   {
     element: "[data-cyber-guide='cat-quote']",
     popover: {
-      title: "Need a quote first?",
+      title: "Want a free quote?",
       description:
-        "Tap Email for a free quote to ask about bulk orders, decoration, or anything before you choose a product.",
+        "Tap Free Quote for a quick how-to: add the products, sizes, and quantities you need to your cart, then use “Send email to you as a Quote” on the cart page to email yourself a quote and save it to My account.",
       side: "bottom",
       align: "center",
     },

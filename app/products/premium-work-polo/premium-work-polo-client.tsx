@@ -2364,6 +2364,8 @@ export function PremiumWorkPoloClient({
   const [orderNotes, setOrderNotes] = useState<string>("");
   const [logoAttachments, setLogoAttachments] = useState<LogoAttachmentRow[]>([]);
   const [logoDropActive, setLogoDropActive] = useState(false);
+  /** Embroidery setup choice (only meaningful when embroidery is selected). */
+  const [embLogoSetup, setEmbLogoSetup] = useState<"new" | "saved">("new");
   const logoInputRef = useRef<HTMLInputElement>(null);
   const logoDragDepthRef = useRef(0);
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
@@ -2792,7 +2794,14 @@ export function PremiumWorkPoloClient({
         ? `\n\n[Logo files with this line: ${logoAttachments.map((a) => `${a.file.name} (${Math.round(a.file.size / 1024)} KB)`).join(", ")}]`
         : "";
     const dealNote = activeDealPackage ? `\n\n${specialDealPackageNote(activeDealPackage)}` : "";
-    const notesForCart = (trimmedNotes + dealNote + logoExtra).trim().slice(0, 2000);
+    const embSetupNote = isEmbroiderySelected
+      ? `\n\n[Embroidery logo setup: ${
+          embLogoSetup === "new"
+            ? "My first order with logo embroidery ($66 setup fee, waived on orders $600+ total)"
+            : "Use my saved embroidery logo ($0)"
+        }]`
+      : "";
+    const notesForCart = (trimmedNotes + dealNote + logoExtra + embSetupNote).trim().slice(0, 2000);
     const fallbackHero = galleryImages.find((u) => typeof u === "string" && u.trim().length > 0)?.trim();
 
     setCartSubmitBusy(true);
@@ -3335,7 +3344,7 @@ export function PremiumWorkPoloClient({
             <div className="rounded-2xl border border-brand-orange/35 bg-gradient-to-r from-brand-orange/15 to-brand-navy/5 px-4 py-4 sm:px-5">
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-orange">Special deal</p>
               <p className="mt-1 text-[1.15rem] font-semibold leading-snug text-brand-navy sm:text-[1.25rem]">
-                Buy 5 work shirts with logo print or embroidery — {toCurrency(activeDealPackage.totalAud)} total
+                Buy {activeDealPackage.units} work shirts with logo print or embroidery — {toCurrency(activeDealPackage.totalAud)} total
               </p>
               <p className="mt-2 text-sm text-brand-navy/75">
                 Choose colours and sizes totalling {activeDealPackage.units} shirts, place your logo on the left chest
@@ -3652,6 +3661,44 @@ export function PremiumWorkPoloClient({
                       </div>
                     );
                   })}
+                </div>
+
+                <div
+                  className={`mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2 ${
+                    isEmbroiderySelected ? "" : "pointer-events-none select-none opacity-45"
+                  }`}
+                  aria-disabled={!isEmbroiderySelected}
+                >
+                  <button
+                    type="button"
+                    disabled={!isEmbroiderySelected}
+                    aria-pressed={isEmbroiderySelected && embLogoSetup === "new"}
+                    onClick={() => setEmbLogoSetup("new")}
+                    className={`flex flex-col items-start gap-0.5 rounded-xl border px-4 py-3 text-left text-[1.02rem] font-semibold transition ${
+                      isEmbroiderySelected && embLogoSetup === "new"
+                        ? "border-brand-orange bg-brand-orange text-brand-navy"
+                        : "border-brand-navy/20 bg-white text-brand-navy hover:border-brand-orange"
+                    }`}
+                  >
+                    <span>My first order with Logo Embroidery</span>
+                    <span className="text-[0.85rem] font-normal opacity-80">
+                      One off $66 Logo set up fee will be applied (waived on orders $600+ total)
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!isEmbroiderySelected}
+                    aria-pressed={isEmbroiderySelected && embLogoSetup === "saved"}
+                    onClick={() => setEmbLogoSetup("saved")}
+                    className={`flex flex-col items-start gap-0.5 rounded-xl border px-4 py-3 text-left text-[1.02rem] font-semibold transition ${
+                      isEmbroiderySelected && embLogoSetup === "saved"
+                        ? "border-brand-orange bg-brand-orange text-brand-navy"
+                        : "border-brand-navy/20 bg-white text-brand-navy hover:border-brand-orange"
+                    }`}
+                  >
+                    <span>Use my saved Embroidery Logo</span>
+                    <span className="text-[0.85rem] font-normal opacity-80">$0 — no set up fee</span>
+                  </button>
                 </div>
               </div>
 

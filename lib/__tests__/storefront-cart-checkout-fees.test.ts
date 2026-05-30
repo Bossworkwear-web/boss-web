@@ -87,7 +87,7 @@ describe("storefront-cart-checkout-fees", () => {
       expect(result.totalAud).toBe(subtotal + 66);
     });
 
-    it("waives logo setup at or above $500 subtotal promo", () => {
+    it("waives logo setup at or above the promo subtotal threshold", () => {
       const subtotal = STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD;
       const result = computeStorefrontCheckoutFees({
         ...signedInBase,

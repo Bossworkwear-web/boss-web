@@ -54,6 +54,13 @@ export function productMatchesSearchQuery(
     return true;
   }
 
+  // "Hi vis" ↔ "Hv" synonym (bidirectional): JB's Wear labels hi-visibility products as "Hv",
+  // while others spell it out. Treat both spellings as the same concept so either query finds both.
+  const queryIsHiVis = /^(HI|HIGH)VI[SZ]/.test(compactQ) || compactQ === "HV";
+  if (queryIsHiVis && (compactBlob.includes("HV") || /HI(GH)?VI[SZ]/.test(compactBlob))) {
+    return true;
+  }
+
   const slugFlat = (slug ?? "").toUpperCase().replace(/[-_]/g, "");
   return slugFlat.includes(compactQ);
 }

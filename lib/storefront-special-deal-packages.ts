@@ -67,7 +67,7 @@ export const C81_FIVE_PACK_DEAL: StorefrontSpecialDealPackage = packageDeal({
   productSlug: "bw-c81",
   styleCode: "C81",
   units: 5,
-  totalAud: 200,
+  totalAud: 210,
   imageSrc: "/special-deals/c81-5-pack.jpg",
   title: "C81 Hi-Vis Work Shirt",
 });
@@ -77,7 +77,7 @@ export const C81_TEN_PACK_DEAL: StorefrontSpecialDealPackage = packageDeal({
   productSlug: "bw-c81",
   styleCode: "C81",
   units: 10,
-  totalAud: 360,
+  totalAud: 400,
   imageSrc: "/C81_10_package.jpg",
   title: "C81 Hi-Vis Work Shirt",
 });
@@ -87,7 +87,7 @@ export const C91_FIVE_PACK_DEAL: StorefrontSpecialDealPackage = packageDeal({
   productSlug: "bw-c91",
   styleCode: "C91",
   units: 5,
-  totalAud: 250,
+  totalAud: 240,
   imageSrc: "/C91_5_package.jpg",
   title: "C91 Hi-Vis Day/Night Shirt",
 });
@@ -97,7 +97,7 @@ export const C91_TEN_PACK_DEAL: StorefrontSpecialDealPackage = packageDeal({
   productSlug: "bw-c91",
   styleCode: "C91",
   units: 10,
-  totalAud: 460,
+  totalAud: 470,
   imageSrc: "/C91_10_package.jpg",
   title: "C91 Hi-Vis Day/Night Shirt",
 });
@@ -107,7 +107,7 @@ export const SPP7_FIVE_PACK_DEAL: StorefrontSpecialDealPackage = packageDeal({
   productSlug: "jb-7spp",
   styleCode: "7SPP",
   units: 5,
-  totalAud: 165,
+  totalAud: 155,
   imageSrc: "/7SPP_5_package.jpg",
   title: "7SPP Work Polo",
 });
