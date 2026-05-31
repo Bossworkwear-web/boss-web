@@ -27,16 +27,20 @@ const useCustomTurbopackRoot = !process.env.VERCEL && projectRoot.includes(" ");
 const isProd = process.env.NODE_ENV === "production";
 
 function supabaseImageRemotePatterns(): NonNullable<NextConfig["images"]>["remotePatterns"] {
+  const patterns: NonNullable<NextConfig["images"]>["remotePatterns"] = [
+    // Placeholder/fallback category hero images (DEFAULT_IMAGE_BY_SUB).
+    { protocol: "https", hostname: "images.unsplash.com", pathname: "/**" },
+  ];
   const raw = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  if (!raw) {
-    return [];
+  if (raw) {
+    try {
+      const { hostname } = new URL(raw);
+      patterns.push({ protocol: "https", hostname, pathname: "/storage/v1/object/public/**" });
+    } catch {
+      // ignore malformed Supabase URL — same-origin proxy images still work.
+    }
   }
-  try {
-    const { hostname } = new URL(raw);
-    return [{ protocol: "https", hostname, pathname: "/storage/v1/object/public/**" }];
-  } catch {
-    return [];
-  }
+  return patterns;
 }
 
 const securityHeaders = [

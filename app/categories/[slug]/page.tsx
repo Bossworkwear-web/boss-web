@@ -7,6 +7,8 @@ import { CategorySubcategoryPicker } from "@/app/components/category-subcategory
 import { CategoryBrandFilter } from "@/app/components/category-brand-filter";
 import { CategoryBrowseProductsGrid } from "@/app/components/category-browse-products-grid";
 import { CategoryGetAQuoteCta } from "@/app/components/category-get-a-quote-cta";
+import { JsonLd } from "@/app/components/json-ld";
+import { breadcrumbJsonLd } from "@/lib/seo/json-ld";
 import { CategoryPaginationPageSummary } from "@/app/components/category-pagination-page-summary";
 import { ProductGridPriceCells } from "@/app/components/product-grid-price";
 import { ProductNavLink } from "@/app/components/product-nav-link";
@@ -54,9 +56,21 @@ type CategoryPageProps = {
 
 export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const main = getMainCategory(slug);
+  const label = main?.label ?? "Workwear";
+  const title = `${label} Workwear & Uniforms`.replace(/workwear workwear/i, "Workwear");
+  const description = `Shop ${label} workwear, uniforms and PPE at Boss Workwear — logo embroidery & printing, bulk discounts and Australia-wide shipping. Buy online or request a free quote.`;
   return {
+    title,
+    description,
     alternates: {
       canonical: `/categories/${slug}`,
+    },
+    openGraph: {
+      type: "website",
+      title,
+      description,
+      url: `/categories/${slug}`,
     },
   };
 }
@@ -274,6 +288,12 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
 
   return (
     <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: "Home", url: "/" },
+          { name: main.label, url: `/categories/${slug}` },
+        ])}
+      />
       <TopNav />
       <QuoteGuideModal />
       <MainWithSupplierRail>
@@ -351,6 +371,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
                   style={{ minWidth: 0, width: "100%" }}
                 >
                   <div className="subcategory-browse-card-media relative flex w-full shrink-0 items-center justify-center overflow-hidden border-b border-brand-navy/10 bg-white px-[0.9rem] py-[0.9rem]">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- product image_urls come from arbitrary external supplier hosts; next/image can't be host-allowlisted safely */}
                     <img
                       src={imageUrl}
                       alt={imgAlt}

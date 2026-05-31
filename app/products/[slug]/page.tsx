@@ -23,7 +23,7 @@ import {
   isSyzmikCatalogProduct,
   restrictBisleyOrangeOnlyProductColorsIfNeeded,
 } from "@/lib/product-visibility";
-import { slugifyProductNameForPath } from "@/lib/product-path-slug";
+import { productPathSegment, slugifyProductNameForPath } from "@/lib/product-path-slug";
 import { storefrontDescriptionForDisplay, storefrontLeadingSupplierBrand } from "@/lib/product-display-name";
 import { resolveStorefrontImageUrlList } from "@/lib/storefront-image-url";
 import { createSupabaseClient } from "@/lib/supabase";
@@ -66,6 +66,8 @@ import {
 } from "@/lib/ap-2310-gallery-back";
 
 import { TopNav } from "@/app/components/top-nav";
+import { JsonLd } from "@/app/components/json-ld";
+import { breadcrumbJsonLd, productJsonLd } from "@/lib/seo/json-ld";
 
 import type { PlacementData, ProductDetailData } from "../premium-work-polo/premium-work-polo-client";
 
@@ -1813,6 +1815,24 @@ function formatUsdMeta(n: number) {
 }
 
 /** Link / search snippets: use storefront retail (same as `getDetailData`), not raw supplier `base_price`. */
+/** Shared SEO fields (canonical path, images, brand, sku) derived from a product. */
+function productSeoFields(product: ProductDetailData) {
+  const urlPath = `/products/${encodeURIComponent(
+    productPathSegment({ name: product.name, slug: product.slug ?? null }),
+  )}`;
+  const images = resolveStorefrontImageUrlList(product.imageUrls).slice(0, 6);
+  const brand = (() => {
+    const line = String(product.displayBrandSkuLine ?? "").trim();
+    if (line.includes("/")) {
+      const b = line.split("/")[0]?.trim();
+      if (b) return b;
+    }
+    return product.supplierName?.trim() || null;
+  })();
+  const sku = String(product.displayProductCode ?? "").trim() || null;
+  return { urlPath, images, brand, sku };
+}
+
 export async function generateMetadata({ params }: ProductDetailPageProps): Promise<Metadata> {
   const { slug } = await params;
   const detail = await getDetailData(slug);
@@ -1853,11 +1873,24 @@ export async function generateMetadata({ params }: ProductDetailPageProps): Prom
   const clipped = plainDesc.length > 140 ? `${plainDesc.slice(0, 137)}…` : plainDesc;
   const description = clipped.length > 0 ? `${pricePhrase}. ${clipped}` : pricePhrase;
 
+  const seo = productSeoFields(product);
   return {
     title,
     description,
-    openGraph: { title, description, type: "website" },
-    twitter: { card: "summary_large_image", title, description },
+    alternates: { canonical: seo.urlPath },
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      url: seo.urlPath,
+      ...(seo.images.length ? { images: seo.images } : {}),
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      ...(seo.images.length ? { images: seo.images } : {}),
+    },
   };
 }
 
@@ -1869,8 +1902,34 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     notFound();
   }
 
+  const seoProduct = detailData.product;
+  const seo = productSeoFields(seoProduct);
+  const seoProductName = (
+    seoProduct.displayProductName?.trim() ? seoProduct.displayProductName : seoProduct.name
+  ).trim();
+  const seoDescription = (seoProduct.description ?? "").replace(/\s+/g, " ").trim().slice(0, 5000);
+  const productLd = productJsonLd({
+    name: seoProductName,
+    description: seoDescription,
+    url: seo.urlPath,
+    images: seo.images,
+    sku: seo.sku,
+    brand: seo.brand,
+    price: seoProduct.basePrice,
+    availability: "InStock",
+    rating: seoProduct.googleRating
+      ? { value: seoProduct.googleRating.rating, count: seoProduct.googleRating.userRatingsTotal }
+      : null,
+  });
+  const breadcrumbLd = breadcrumbJsonLd([
+    { name: "Home", url: "/" },
+    { name: seoProductName, url: seo.urlPath },
+  ]);
+
   return (
     <>
+      <JsonLd data={productLd} />
+      <JsonLd data={breadcrumbLd} />
       <TopNav />
       <PremiumWorkPoloClientDynamic
         product={detailData.product}

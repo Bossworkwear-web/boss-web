@@ -6,11 +6,13 @@ import "./store-ui.css";
 import "./product-listing-cards.css";
 import { GoogleAnalytics } from "@/app/components/google-analytics";
 import { GlobalLatinInputGuard } from "@/app/components/global-latin-input-guard";
+import { JsonLd } from "@/app/components/json-ld";
 import { RouteLoading } from "@/app/components/route-loading";
 import { SiteFooter } from "@/app/components/site-footer";
 import { CyberAssistanceGate } from "@/app/components/cyber-assistance/cyber-assistance-gate";
 import { StorePublicChatGate } from "@/app/components/store-public-chat-gate";
 import { finalizeCustomerAuthSession, getAuthenticatedCustomerUser } from "@/lib/customer-auth";
+import { organizationJsonLd, webSiteJsonLd } from "@/lib/seo/json-ld";
 import { getSiteUrl } from "@/lib/site-url";
 
 const encodeSansCondensed = Encode_Sans_Condensed({
@@ -44,6 +46,24 @@ export const metadata: Metadata = {
   description:
     "Professional workwear, uniforms, embroidery and printing for teams across Australia — corporate polos, medical scrubs, PPE and more.",
   applicationName: "Boss Workwear",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    siteName: "Boss Workwear",
+    locale: "en_AU",
+    url: metadataBaseUrl,
+    title: "Boss Workwear",
+    description:
+      "Professional workwear, uniforms, embroidery and printing for teams across Australia — corporate polos, medical scrubs, PPE and more.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Boss Workwear",
+    description:
+      "Professional workwear, uniforms, embroidery and printing for teams across Australia.",
+  },
   icons: {
     icon: [{ url: "/Boss_favicon.svg", type: "image/svg+xml" }],
   },
@@ -79,6 +99,8 @@ export default async function RootLayout({
       className={`${encodeSansCondensed.variable} ${montserrat.variable} font-sans h-full antialiased`}
     >
       <body suppressHydrationWarning className="flex min-h-full flex-col overflow-x-clip font-sans antialiased">
+        <JsonLd data={organizationJsonLd()} />
+        <JsonLd data={webSiteJsonLd()} />
         <GoogleAnalytics />
         <GlobalLatinInputGuard />
         <RouteLoading />

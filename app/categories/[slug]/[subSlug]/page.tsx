@@ -13,6 +13,8 @@ import { ProductGridPriceCells } from "@/app/components/product-grid-price";
 import { ProductNavLink } from "@/app/components/product-nav-link";
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
 import { TopNav } from "@/app/components/top-nav";
+import { JsonLd } from "@/app/components/json-ld";
+import { breadcrumbJsonLd } from "@/lib/seo/json-ld";
 import { ChefCategoryTopAd } from "@/app/components/chef-category-top-ad";
 import { HealthCareCategoryTopAd } from "@/app/components/health-care-category-top-ad";
 import { KidsCategoryTopAd } from "@/app/components/kids-category-top-ad";
@@ -77,11 +79,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     SUB_CATEGORIES.find((s) => s.slug === subSlug)?.label ??
     subSlug;
   const main = getMainCategory(slug);
-  const title = main ? `${main.label} — ${subLabel}` : subLabel;
+  const title = main ? `${main.label} ${subLabel}` : subLabel;
+  const scope = main ? `${main.label} ${subLabel}` : subLabel;
+  const description = `Shop ${scope} at Boss Workwear — workwear and uniforms with logo embroidery & printing, bulk discounts and Australia-wide shipping. Buy online or request a free quote.`;
   return {
     title,
+    description,
     alternates: {
       canonical: `/categories/${slug}/${subSlug}`,
+    },
+    openGraph: {
+      type: "website",
+      title,
+      description,
+      url: `/categories/${slug}/${subSlug}`,
     },
   };
 }
@@ -316,6 +327,13 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
 
   return (
     <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: "Home", url: "/" },
+          { name: main.label, url: `/categories/${slug}` },
+          { name: subMeta.label, url: `/categories/${slug}/${subSlug}` },
+        ])}
+      />
       <TopNav />
       <QuoteGuideModal />
       <MainWithSupplierRail>
@@ -402,6 +420,7 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
                   style={{ minWidth: 0, width: "100%" }}
                 >
                   <div className="subcategory-browse-card-media relative flex w-full shrink-0 items-center justify-center overflow-hidden border-b border-brand-navy/10 bg-white px-[0.9rem] py-[0.9rem]">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- product image_urls come from arbitrary external supplier hosts; next/image can't be host-allowlisted safely */}
                     <img
                       src={imageUrl}
                       alt={imgAlt}
