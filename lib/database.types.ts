@@ -210,6 +210,54 @@ export type Database = {
         };
         Relationships: [];
       };
+      order_proofs: {
+        Row: {
+          id: string;
+          store_order_id: string;
+          order_number: string;
+          round: number;
+          status: string;
+          token: string;
+          image_urls: Json;
+          note: string | null;
+          sent_to: string;
+          sent_at: string;
+          decided_at: string | null;
+          customer_comment: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_order_id: string;
+          order_number?: string;
+          round?: number;
+          status?: string;
+          token: string;
+          image_urls?: Json;
+          note?: string | null;
+          sent_to?: string;
+          sent_at?: string;
+          decided_at?: string | null;
+          customer_comment?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_order_id?: string;
+          order_number?: string;
+          round?: number;
+          status?: string;
+          token?: string;
+          image_urls?: Json;
+          note?: string | null;
+          sent_to?: string;
+          sent_at?: string;
+          decided_at?: string | null;
+          customer_comment?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       customer_store_credit_balances: {
         Row: {
           customer_email: string;

@@ -14,6 +14,12 @@ import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 import { MY_ACCOUNT_ORDERED_RECORDS_LIMIT } from "@/lib/customer-ordered-records";
 import { getCustomerStoreCreditBalanceCents } from "@/lib/customer-store-credit";
 import { currentProductUnitFromRow, repriceQuoteLines } from "@/lib/customer-quote-pricing";
+import {
+  normalizeProofStatus,
+  proofApproveUrl,
+  proofStatusLabel,
+  type OrderProofStatus,
+} from "@/lib/order-proof";
 
 import { CustomerDetailPasswordPopovers } from "./customer-detail-password-popovers";
 import { OrderFromQuoteButton } from "./order-from-quote-button";
@@ -68,6 +74,8 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
     created_at: string;
     /** When set (trimmed non-empty), My account Invoice → Download is enabled. */
     invoice_reference: string | null;
+    /** Latest design-proof round for this order (if any). */
+    proof: { status: OrderProofStatus; token: string } | null;
   }[] = [];
 
   let orderLineGroups: Record<
@@ -163,10 +171,34 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
         currency: String(r.currency ?? "AUD").trim() || "AUD",
         created_at: String(r.created_at ?? "").trim() || new Date(0).toISOString(),
         invoice_reference,
+        proof: null,
       };
     });
 
     const orderIds = orders.map((r) => r.id).filter(Boolean);
+    if (orderIds.length > 0) {
+      try {
+        const { data: proofRows } = await supabase
+          .from("order_proofs")
+          .select("store_order_id, status, token, round")
+          .in("store_order_id", orderIds)
+          .order("round", { ascending: false });
+        const latestProofByOrder = new Map<string, { status: OrderProofStatus; token: string }>();
+        for (const pr of proofRows ?? []) {
+          const oid = String(pr.store_order_id ?? "").trim();
+          if (!oid || latestProofByOrder.has(oid)) continue; // first (highest round) wins
+          latestProofByOrder.set(oid, {
+            status: normalizeProofStatus(pr.status),
+            token: String(pr.token ?? "").trim(),
+          });
+        }
+        for (const o of orders) {
+          o.proof = latestProofByOrder.get(o.id) ?? null;
+        }
+      } catch {
+        // order_proofs table may not exist yet (pre-migration) — proofs stay null.
+      }
+    }
     if (orderIds.length > 0) {
       const { data: itemRows } = await supabase
         .from("store_order_items")
@@ -533,6 +565,26 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
                               >
                                 Detail & Track
                               </Link>
+                              {row.proof ? (
+                                row.proof.status === "sent" && row.proof.token ? (
+                                  <a
+                                    href={proofApproveUrl(row.id, row.proof.token)}
+                                    className="mt-1 inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                                  >
+                                    Review proof →
+                                  </a>
+                                ) : (
+                                  <span
+                                    className={`mt-1 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                                      row.proof.status === "approved"
+                                        ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                                        : "border-amber-200 bg-amber-50 text-amber-900"
+                                    }`}
+                                  >
+                                    Proof: {proofStatusLabel(row.proof.status)}
+                                  </span>
+                                )
+                              ) : null}
                             </td>
                             <td className="px-4 py-3">
                               {canDownloadTaxInvoice ? (
