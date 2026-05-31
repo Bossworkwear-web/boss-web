@@ -126,7 +126,7 @@ export async function uploadProductionAsset(
   }
 
   const kind = kindRaw.trim();
-  if (!KIND_SET.has(kind as any)) {
+  if (!KIND_SET.has(kind as ProductionAssetKind)) {
     return { ok: false, error: "Invalid kind" };
   }
 

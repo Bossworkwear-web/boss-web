@@ -82,7 +82,7 @@ export default async function AdminCustomerInvoicesPage({
     invoiceSaveError = invoiceSaveErrorRaw || null;
   }
   let orders: OrderRow[] = [];
-  let lineGroups: Record<string, LineRow[]> = {};
+  const lineGroups: Record<string, LineRow[]> = {};
   let loadError: string | null = null;
   let serviceRoleMissing = false;
 

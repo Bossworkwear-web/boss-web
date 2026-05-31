@@ -1,0 +1,30 @@
+---
+description: Supabase client selection, types, auth, and migration rules for boss-web
+globs: lib/supabase/**,lib/supabase.ts,lib/database.types.ts,supabase/**,app/**/actions.ts,app/**/*actions.ts,lib/*auth*.ts
+alwaysApply: false
+---
+
+# Supabase rules (boss-web)
+
+## Which client to use
+
+- **User-scoped, RLS-enforced** (most server components, customer actions): `createSupabaseServerClient()` from `lib/supabase/server.ts` (cookie-based session).
+- **Browser**: `lib/supabase/client.ts`.
+- **Admin / service-role** (bypasses RLS — backoffice, webhooks, auth admin, cross-user reads): `createSupabaseAdminClient()` from `lib/supabase.ts`. Use only on the server, never in client components, and only when RLS genuinely must be bypassed. It throws in hosted prod when `SUPABASE_SERVICE_ROLE_KEY` is missing.
+- Env keys come from `lib/supabase/env.ts` (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`). `SUPABASE_SERVICE_ROLE_KEY` is server-only — never expose it to the client.
+
+## Types
+
+- All clients are typed with `Database` from `lib/database.types.ts`.
+- When you add or change a table/column, update `lib/database.types.ts` to match, or queries lose type safety.
+
+## Migrations
+
+- New schema goes in `supabase/migrations/<YYYYMMDD>_<name>.sql`.
+- If the user runs SQL by hand in the dashboard, also keep a matching script under `supabase/sql-editor/` so the schema stays reproducible.
+- Don't drop or rewrite existing customer/order/quote tables without explicit confirmation.
+
+## Auth
+
+- Supabase Auth is the source of truth for customer login. Legacy `customer_profiles.login_password` is migrated to Auth on next login and then set to `null` (`migrateLegacyPasswordToAuth`). Don't reintroduce plaintext password reads/writes.
+- Use the existing helpers in `lib/customer-auth.ts` (profile lookup, linking, reset email) rather than re-querying `auth.users` directly.

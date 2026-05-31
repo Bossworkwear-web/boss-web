@@ -248,7 +248,7 @@ async function submitCustomerDetails(formData: FormData) {
         redirect("/customer-details?status=invalid");
       }
 
-      let insertPassword: string | null = null;
+      const insertPassword: string | null = null;
 
       const { data: inserted, error } = await supabase
         .from("customer_profiles")

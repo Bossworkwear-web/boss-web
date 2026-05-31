@@ -283,7 +283,7 @@ export async function getCustomerInfoPayload(
             .in("customer_order_id", orderNumbers)
             .order("created_at", { ascending: false })
             .limit(200)
-        : { data: [] as any[] };
+        : { data: [] as never[] };
     const mockupHistory = (mockups ?? []).map((r) => ({
       id: String(r.id),
       customer_order_id: String(r.customer_order_id ?? "").trim(),

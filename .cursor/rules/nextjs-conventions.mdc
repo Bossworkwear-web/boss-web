@@ -1,0 +1,27 @@
+---
+description: Next.js 16 / React 19 conventions and project workflow for boss-web
+globs: app/**,components/**,lib/**
+alwaysApply: false
+---
+
+# Next.js / project conventions (boss-web)
+
+This repo runs **Next.js 16 + React 19**. APIs differ from older training data — when unsure about a Next API, check `node_modules/next/dist/docs/` before writing code, and heed deprecation notices.
+
+## Server vs client
+
+- Server Components are the default. Add `"use client"` only when the component needs state, effects, browser APIs, or event handlers.
+- Server mutations live in `actions.ts` files (`"use server"`). Keep secrets and admin Supabase access on the server side only.
+- `async`/`await` the dynamic APIs that are now async (`cookies()`, `headers()`, route `params`/`searchParams`).
+
+## Imports & structure
+
+- Use the `@/` path alias for absolute imports.
+- `app/` = routes/pages/actions, `lib/` = shared logic (pricing, supabase, email, xero), `components/` = shared UI, `scripts/` = node maintenance/import scripts, `data/` = supplier data, `supabase/` = migrations + SQL.
+
+## Workflow expectations
+
+- Build runs codegen first (`prebuild` regenerates SKUs/titles). Don't hand-edit generated outputs; change the generator under `scripts/` instead.
+- After non-trivial changes: `npm run lint` and `npm run test:run` (TZ is pinned to Australia/Perth in test/build scripts — keep date logic timezone-safe).
+- Commits to `main` auto-deploy via Vercel. Only commit when the user asks. Never commit `.env.local` or service-role keys.
+- Time-sensitive logic should respect `TZ=Australia/Perth` (the store's timezone), not the local machine.

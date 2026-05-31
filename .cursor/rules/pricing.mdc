@@ -1,0 +1,39 @@
+---
+description: Storefront pricing, GST, volume discounts, and money handling rules for boss-web
+globs: lib/product-price.ts,lib/discounts.ts,lib/storefront-volume-discount.ts,lib/storefront-cart-checkout-fees.ts,lib/customer-quote-pricing.ts,lib/storefront-special-deal*.ts,app/cart/**,app/products/**,app/customer/**
+alwaysApply: false
+---
+
+# Pricing rules (boss-web)
+
+Pricing is the highest-risk area. Never invent a formula — reuse the helpers in `lib/`.
+
+## Source of truth
+
+- `products.base_price` = **supplier unit cost** (공급가), NOT a retail price.
+- Storefront retail (GST incl., card-fee incl.) is derived in `lib/product-price.ts`:
+  - pre-GST = supplier × `STOREFRONT_RETAIL_MARKUP_MULTIPLIER_BEFORE_GST` (1.7)
+  - × `(1 + STOREFRONT_RETAIL_GST_RATE)` (GST 10%)
+  - × `STOREFRONT_RETAIL_CARD_SURCHARGE_MULTIPLIER` (1.02)
+  - then `roundToStorePrice` (nearest 0.1).
+- To get the card/PDP price, use `storefrontRetailFromSupplierBase` + `storefrontCardDisplayPrices` (applies sale price + `getDiscountPercent`). Do not recompute these by hand.
+
+## GST
+
+- GST is **exclusive / on top** of the displayed subtotal everywhere the customer sees it, and in Xero (`LineAmountTypes: "Exclusive"`). Never switch Xero quotes/invoices back to `"Inclusive"`.
+
+## Volume + special deals
+
+- Cart-wide volume discounts come from `storefrontVolumeAdjustedCartLines` (`lib/storefront-volume-discount.ts`). Re-apply it across all lines together, not per-line.
+- Fixed package deals live in `lib/storefront-special-deal-packages.ts` (`totalAud`, `units`). Product-page deal copy must use `activeDealPackage.units`, never a hard-coded count.
+- Logo setup fee waiver threshold is `STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD` in `lib/storefront-cart-checkout-fees.ts`. Change the constant, not scattered literals.
+
+## Saved customer quotes (live repricing)
+
+- Quote lines store `productBaseUnit` (product-only unit at save time). On display/reorder, `repriceQuoteLines` in `lib/customer-quote-pricing.ts` re-derives the product portion from current DB price while preserving the decoration extra, then re-applies the volume discount.
+- Saved quote prices are **indicative, not guaranteed** (see Terms & Conditions §7). Keep the "Updated" badge logic intact when `changed` is true.
+
+## Money units
+
+- Persisted money is stored in **cents** (`*_cents` columns). Convert at the boundary only; keep arithmetic in integer cents where a column is in cents.
+- After changing any pricing logic, run `npm run test:run` (Vitest covers fees/discounts).

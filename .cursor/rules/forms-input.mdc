@@ -1,0 +1,21 @@
+---
+description: Latin input guard rules for form fields (block non-Latin scripts) in boss-web
+globs: app/**/*.tsx,components/**/*.tsx,lib/latin-input.ts
+alwaysApply: false
+---
+
+# Form input guard (boss-web)
+
+A global guard (`lib/latin-input.ts`, `GlobalLatinInputGuard`) strips non-Latin characters (Hangul/CJK/Cyrillic) from inputs as the user types. It auto-detects a mode from `type`/`name`/`id`, but detection defaults to `letters` and **will block digits/symbols** on generic fields.
+
+## When adding or fixing an input
+
+- If a field needs anything other than plain letters, set `data-latin-mode` explicitly. Available modes: `letters`, `email`, `password`, `tel`, `number`, `decimal`, `address`, `ascii`.
+- Common fixes:
+  - Item ID / SKU / search → `data-latin-mode="ascii"` (letters + digits + symbols).
+  - Money / quantity that needs a decimal point → `data-latin-mode="decimal"`.
+  - Whole numbers only → `data-latin-mode="number"`.
+- For a numeric field that must accept decimals, also use `type="text"` + `inputMode="decimal"` and a draft string state. `type="number"` truncates/zero-pads decimals during typing.
+- To opt a field out of the guard entirely, use `data-latin-input="off"` (on the field or an ancestor).
+
+If a user reports "can't type numbers/letters in field X", it is almost always a missing `data-latin-mode`.

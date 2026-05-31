@@ -63,7 +63,7 @@ export default async function OrderedItemsListPage({ params }: Props) {
   const { data: products } =
     productIds.length > 0
       ? await supabase.from("products").select("id, image_urls").in("id", productIds)
-      : { data: [] as any[] };
+      : { data: [] as never[] };
   const imageByProductId = new Map<string, string>();
   for (const p of products ?? []) {
     const pid = String((p as { id?: string }).id ?? "").trim();
