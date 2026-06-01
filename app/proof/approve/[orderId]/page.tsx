@@ -16,14 +16,17 @@ type PageProps = {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-auto max-w-2xl px-4 py-12 sm:py-16">
-      <div className="mb-6 flex items-center gap-2">
-        <span className="inline-block h-6 w-2 rounded bg-brand-orange" />
-        <span className="text-sm font-semibold uppercase tracking-[0.18em] text-brand-navy">
-          Boss Workwear
-        </span>
+    // Force a white background even when the customer's device prefers dark mode.
+    <div className="min-h-screen bg-white text-brand-navy">
+      <div className="mx-auto max-w-2xl px-4 py-12 sm:py-16">
+        <div className="mb-6 flex items-center gap-2">
+          <span className="inline-block h-6 w-2 rounded bg-brand-orange" />
+          <span className="text-sm font-semibold uppercase tracking-[0.18em] text-brand-navy">
+            Boss Workwear
+          </span>
+        </div>
+        {children}
       </div>
-      {children}
     </div>
   );
 }
