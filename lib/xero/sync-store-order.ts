@@ -46,7 +46,7 @@ export async function syncStoreOrderToXero(storeOrderId: string): Promise<SyncSt
   const { data: order, error: orderErr } = await supabase
     .from("store_orders")
     .select(
-      "id, order_number, status, customer_email, customer_name, delivery_fee_cents, promotion_discount_cents, currency, created_at, xero_sync_status, xero_invoice_id, xero_invoice_number, xero_contact_id, xero_payment_id",
+      "id, order_number, status, customer_email, customer_name, subtotal_cents, total_cents, delivery_fee_cents, promotion_discount_cents, currency, created_at, xero_sync_status, xero_invoice_id, xero_invoice_number, xero_contact_id, xero_payment_id",
     )
     .eq("id", storeOrderId)
     .maybeSingle();
@@ -130,6 +130,22 @@ export async function syncStoreOrderToXero(storeOrderId: string): Promise<SyncSt
   }
 
   const promoCents = Math.max(0, Number(order.promotion_discount_cents) || 0);
+
+  // The one-off embroidery logo setup fee is baked into the order total but not stored as its own column,
+  // so derive it: total = products + delivery + logoSetup − promo. Without this line the invoice total can
+  // go negative (e.g. a $66 "free setup" promo offsetting a fee that was never on the invoice), which Xero
+  // rejects with "The Total for this document must be greater than or equal to zero."
+  const subtotalCents = Math.max(0, Number(order.subtotal_cents) || 0);
+  const orderTotalCents = Math.max(0, Number(order.total_cents) || 0);
+  const logoSetupCents = Math.max(0, orderTotalCents + promoCents - subtotalCents - deliveryCents);
+  if (logoSetupCents > 0) {
+    lineItems.push({
+      description: "Logo setup (one-off)",
+      quantity: 1,
+      unitAmountInclGst: centsToAudInclGst(logoSetupCents),
+    });
+  }
+
   if (promoCents > 0) {
     lineItems.push({
       description: "Promotion discount",
