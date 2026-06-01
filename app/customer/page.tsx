@@ -15,6 +15,7 @@ import { MY_ACCOUNT_ORDERED_RECORDS_LIMIT } from "@/lib/customer-ordered-records
 import { getCustomerStoreCreditBalanceCents } from "@/lib/customer-store-credit";
 import { currentProductUnitFromRow, repriceQuoteLines } from "@/lib/customer-quote-pricing";
 import { CUSTOMER_QUOTE_RETENTION_DAYS, customerQuoteRetentionCutoffIso } from "@/lib/customer-quote";
+import { STOREFRONT_QUOTE_EMAIL_RECIPIENT } from "@/lib/storefront-quote-mailto";
 import {
   normalizeProofStatus,
   proofApproveUrl,
@@ -362,15 +363,27 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
               </p>
             </div>
             {masterLogoUrl ? (
-              <>
+              <div className="flex max-w-[40%] shrink-0 flex-col items-end gap-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={masterLogoUrl}
                   alt="Master logo"
-                  className="h-auto max-h-[6.3rem] w-auto max-w-[35%] shrink-0 rounded-xl border border-brand-navy/10 bg-white object-contain"
+                  className="h-auto max-h-[6.3rem] w-auto max-w-full rounded-xl border border-brand-navy/10 bg-white object-contain"
                   loading="lazy"
                 />
-              </>
+                <a
+                  href={`mailto:${STOREFRONT_QUOTE_EMAIL_RECIPIENT}?subject=${encodeURIComponent(
+                    "Master Logo change request",
+                  )}&body=${encodeURIComponent(
+                    `Hi Boss Workwear team,\n\nI would like to change my saved Master Logo.\n\nAccount: ${
+                      sessionName || ""
+                    } (${sessionEmail})\n\nPlease attach or describe the new logo below:\n\n\nThanks,`,
+                  )}`}
+                  className="text-right text-[0.95rem] font-semibold text-brand-orange hover:underline"
+                >
+                  Want to change the Master Logo?
+                </a>
+              </div>
             ) : null}
           </header>
 
