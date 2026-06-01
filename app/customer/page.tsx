@@ -347,31 +347,31 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
       <MainWithSupplierRail>
         <div className={`${SITE_PAGE_ROW_CLASS} py-10`}>
           <div className="mx-auto w-full max-w-[70%] space-y-10">
-          <header className="space-y-3">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 text-[1.05rem] font-semibold text-brand-orange"
-            >
-              <ArrowLeftIcon className="h-[1.2rem] w-[1.2rem] shrink-0" />
-              Back to home
-            </Link>
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <header className="flex items-start justify-between gap-6">
+            <div className="min-w-0 space-y-3">
+              <Link
+                href="/"
+                className="inline-flex items-center gap-2 text-[1.05rem] font-semibold text-brand-orange"
+              >
+                <ArrowLeftIcon className="h-[1.2rem] w-[1.2rem] shrink-0" />
+                Back to home
+              </Link>
               <h1 className="text-[2.25rem] font-medium leading-tight">My account</h1>
-              {masterLogoUrl ? (
-                <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={masterLogoUrl}
-                    alt="Master logo"
-                    className="h-auto max-h-[10.5rem] w-auto max-w-full rounded-xl border border-brand-navy/10 bg-white object-contain"
-                    loading="lazy"
-                  />
-                </>
-              ) : null}
+              <p className="text-[1.05rem] text-brand-navy/70">
+                {sessionName ? `Signed in as ${sessionName}.` : "Manage your profile, password, and orders."}
+              </p>
             </div>
-            <p className="text-[1.05rem] text-brand-navy/70">
-              {sessionName ? `Signed in as ${sessionName}.` : "Manage your profile, password, and orders."}
-            </p>
+            {masterLogoUrl ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={masterLogoUrl}
+                  alt="Master logo"
+                  className="h-auto max-h-[10.5rem] w-auto max-w-[45%] shrink-0 rounded-xl border border-brand-navy/10 bg-white object-contain"
+                  loading="lazy"
+                />
+              </>
+            ) : null}
           </header>
 
           {params.placed ? (
