@@ -1,4 +1,4 @@
-import { resendFromSales } from "@/lib/resend-from";
+import { RESEND_FROM_SALES_DEFAULT } from "@/lib/resend-from";
 import {
   STOREFRONT_PHONE_DISPLAY,
   STOREFRONT_QUOTE_EMAIL_RECIPIENT,
@@ -179,8 +179,11 @@ export async function sendOrderProofEmail(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: resendFromSales(),
+        // Force sales as both sender and reply target. We intentionally ignore the legacy RESEND_FROM_EMAIL
+        // fallback here (it may be the account@ address), so proof replies always land in sales.
+        from: process.env.RESEND_FROM_SALES_EMAIL?.trim() || RESEND_FROM_SALES_DEFAULT,
         to: [to],
+        reply_to: STOREFRONT_QUOTE_EMAIL_RECIPIENT,
         subject,
         html,
       }),
