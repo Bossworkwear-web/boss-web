@@ -41,6 +41,27 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
 }
 
+type Cmyk = { c: number; m: number; y: number; k: number };
+
+/** White background — CMYK all-zero. Applied so a single template can be recoloured per order. */
+const WHITE_CMYK: Cmyk = { c: 0, m: 0, y: 0, k: 0 };
+
+function cmykToRgb({ c, m, y, k }: Cmyk): { r: number; g: number; b: number } {
+  const C = clamp(c, 0, 100) / 100;
+  const M = clamp(m, 0, 100) / 100;
+  const Y = clamp(y, 0, 100) / 100;
+  const K = clamp(k, 0, 100) / 100;
+  return {
+    r: Math.round(255 * (1 - C) * (1 - K)),
+    g: Math.round(255 * (1 - M) * (1 - K)),
+    b: Math.round(255 * (1 - Y) * (1 - K)),
+  };
+}
+
+function rgbCss({ r, g, b }: { r: number; g: number; b: number }): string {
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 /** Prefer DB-marked master (sheet or order assets); else first reference in pool. */
 function pickDefaultLogoUrl(rows: CustomerReferenceVisualDto[]): string | null {
   const master = rows.find((x) => x.is_master_logo);
@@ -291,6 +312,8 @@ export function ClickUpSheetMockupBuilderModal({
   const [exportError, setExportError] = useState<string | null>(null);
   const [decoratePick, setDecoratePick] = useState<DecoratePick>(() => emptyDecoratePick());
   const [memo, setMemo] = useState("");
+  /** Background colour applied behind the template (transparent-PNG templates), tuned in CMYK. */
+  const [bgCmyk, setBgCmyk] = useState<Cmyk>(WHITE_CMYK);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const bgImgRef = useRef<HTMLImageElement>(null);
@@ -335,6 +358,8 @@ export function ClickUpSheetMockupBuilderModal({
   const logoLayerCount = layers.filter((l) => l.kind === "logo").length;
   const textLayerCount = layers.filter((l) => l.kind === "text").length;
   const activeLayer = layers.find((l) => l.id === activeLayerId) ?? null;
+  const bgRgb = cmykToRgb(bgCmyk);
+  const bgCss = rgbCss(bgRgb);
 
   const wasOpenRef = useRef(false);
   useEffect(() => {
@@ -358,6 +383,7 @@ export function ClickUpSheetMockupBuilderModal({
         setBaseImageError(false);
         setDecoratePick(decoratePickFromLabels(editTarget.decorateMethods));
         setMemo((editTarget.memo ?? "").trim());
+        setBgCmyk(WHITE_CMYK);
       } else {
         setStep("gallery");
         setCategory(null);
@@ -371,6 +397,7 @@ export function ClickUpSheetMockupBuilderModal({
         setBaseImageError(false);
         setDecoratePick(emptyDecoratePick());
         setMemo("");
+        setBgCmyk(WHITE_CMYK);
       }
     }
   }, [open, editTarget]);
@@ -593,6 +620,9 @@ export function ClickUpSheetMockupBuilderModal({
       if (!ctx) {
         throw new Error("Canvas not supported");
       }
+      // Paint the chosen CMYK background first, then the template on top so transparent areas take the colour.
+      ctx.fillStyle = bgCss;
+      ctx.fillRect(0, 0, W, H);
       ctx.drawImage(bg, 0, 0);
 
       for (const layer of layers) {
@@ -796,6 +826,7 @@ export function ClickUpSheetMockupBuilderModal({
                       src={templateUrl}
                       alt=""
                       className="relative z-0 block h-auto max-h-[min(70vh,560px)] max-w-full object-contain"
+                      style={{ backgroundColor: bgCss }}
                       onLoad={() => {
                         setBaseImageError(false);
                         measure();
@@ -888,6 +919,60 @@ export function ClickUpSheetMockupBuilderModal({
                   </div>
                 )}
               </div>
+
+              <fieldset className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-3">
+                <legend className="px-1 text-xs font-semibold text-slate-700">Background colour (CMYK)</legend>
+                <p className="mt-1 text-[0.65rem] text-slate-500">
+                  옷 종류별로 색상 템플릿을 따로 저장할 필요 없이, 템플릿 하나를 두고 배경색을 CMYK로 조정합니다.
+                  배경이 투명한 템플릿(PNG)에 적용됩니다.
+                </p>
+                <div className="mt-3 flex items-start gap-3">
+                  <span
+                    className="mt-0.5 inline-block h-12 w-12 shrink-0 rounded border border-slate-300 shadow-inner"
+                    style={{ backgroundColor: bgCss }}
+                    aria-hidden
+                  />
+                  <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
+                    {(["c", "m", "y", "k"] as const).map((ch) => (
+                      <div key={ch} className="flex items-center gap-2">
+                        <span className="w-4 shrink-0 text-xs font-semibold uppercase text-slate-600">{ch}</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={bgCmyk[ch]}
+                          onChange={(e) => setBgCmyk((p) => ({ ...p, [ch]: Number(e.target.value) }))}
+                          className="flex-1"
+                          aria-label={`${ch.toUpperCase()} percent`}
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={bgCmyk[ch]}
+                          onChange={(e) =>
+                            setBgCmyk((p) => ({ ...p, [ch]: clamp(Math.round(Number(e.target.value) || 0), 0, 100) }))
+                          }
+                          className="w-14 rounded border border-slate-200 bg-white px-1.5 py-1 text-xs tabular-nums text-slate-800 shadow-sm focus:border-brand-orange/50 focus:outline-none"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBgCmyk(WHITE_CMYK)}
+                    className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                  >
+                    Reset to white
+                  </button>
+                  <span className="text-[0.65rem] tabular-nums text-slate-500">
+                    RGB {bgRgb.r}, {bgRgb.g}, {bgRgb.b}
+                  </span>
+                </div>
+              </fieldset>
 
               <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-3">
                 <p className="text-xs font-semibold text-slate-800">Layers</p>
