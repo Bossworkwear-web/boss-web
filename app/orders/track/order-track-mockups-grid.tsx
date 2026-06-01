@@ -80,8 +80,8 @@ export function OrderTrackMockupsGrid({
                   <p className="mt-1 whitespace-pre-wrap text-[1.125rem] text-brand-navy/85">{item.memo}</p>
                 </div>
               ) : null}
-              <div className="mt-auto border-t border-brand-navy/10 px-3 py-3">
-                {pdf ? (
+              {pdf ? (
+                <div className="border-t border-brand-navy/10 px-3 py-3">
                   <a
                     href={item.publicUrl}
                     target="_blank"
@@ -90,16 +90,8 @@ export function OrderTrackMockupsGrid({
                   >
                     Open PDF
                   </a>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setLightboxSrc(item.publicUrl)}
-                    className="text-[1.3125rem] font-semibold text-brand-orange hover:underline"
-                  >
-                    View larger
-                  </button>
-                )}
-              </div>
+                </div>
+              ) : null}
             </li>
           );
         })}
