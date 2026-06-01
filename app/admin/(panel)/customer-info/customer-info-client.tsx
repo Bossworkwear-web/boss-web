@@ -42,6 +42,61 @@ function signInStatusLabel(
   }
 }
 
+/** Drag-and-drop (or click-to-browse) picker for the master logo image. */
+function MasterLogoDropzone({
+  file,
+  onFile,
+  disabled,
+}: {
+  file: File | null;
+  onFile: (file: File | null) => void;
+  disabled: boolean;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+
+  function pickFromList(list: FileList | null) {
+    if (!list || list.length === 0) return;
+    const arr = Array.from(list);
+    const img = arr.find((f) => f.type.startsWith("image/")) ?? arr[0];
+    if (img) onFile(img);
+  }
+
+  return (
+    <label
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (!disabled) setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        if (disabled) return;
+        pickFromList(e.dataTransfer.files);
+      }}
+      className={`mt-2 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-6 text-center transition ${
+        dragOver
+          ? "border-brand-orange bg-brand-orange/5"
+          : "border-slate-300 bg-white hover:border-brand-orange/60"
+      } ${disabled ? "opacity-60" : ""}`}
+    >
+      <input
+        type="file"
+        accept="image/*"
+        disabled={disabled}
+        onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+        className="hidden"
+      />
+      <span className="text-sm font-medium text-brand-navy">
+        {file ? file.name : "Drag & drop the logo image here"}
+      </span>
+      <span className="text-xs text-slate-500">
+        {file ? "Click to choose a different image" : "or click to choose · PNG, JPEG, SVG, WebP"}
+      </span>
+    </label>
+  );
+}
+
 export function CustomerInfoClient() {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Array<{ email: string; name: string | null; phone: string | null; organisation: string | null }>>([]);
@@ -457,26 +512,15 @@ export function CustomerInfoClient() {
                 </div>
                 <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Replace master logo</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      disabled={pending}
-                      onChange={(e) => setMasterLogoFile(e.target.files?.[0] ?? null)}
-                      className="text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={uploadMasterLogo}
-                      disabled={pending || !masterLogoFile || !payload.email}
-                      className="rounded-lg border border-brand-orange bg-brand-orange px-4 py-2 text-sm font-semibold text-brand-navy hover:brightness-95 disabled:opacity-50"
-                    >
-                      {pending ? "…" : "Upload & replace"}
-                    </button>
-                  </div>
-                  {masterLogoFile ? (
-                    <p className="mt-2 text-xs text-slate-600">Selected: {masterLogoFile.name}</p>
-                  ) : null}
+                  <MasterLogoDropzone file={masterLogoFile} onFile={setMasterLogoFile} disabled={pending} />
+                  <button
+                    type="button"
+                    onClick={uploadMasterLogo}
+                    disabled={pending || !masterLogoFile || !payload.email}
+                    className="mt-2 rounded-lg border border-brand-orange bg-brand-orange px-4 py-2 text-sm font-semibold text-brand-navy hover:brightness-95 disabled:opacity-50"
+                  >
+                    {pending ? "…" : "Upload & replace"}
+                  </button>
                 </div>
               </div>
             ) : (
@@ -484,26 +528,15 @@ export function CustomerInfoClient() {
                 <p className="text-sm text-slate-600">No master logo set.</p>
                 <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Upload master logo</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      disabled={pending}
-                      onChange={(e) => setMasterLogoFile(e.target.files?.[0] ?? null)}
-                      className="text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={uploadMasterLogo}
-                      disabled={pending || !masterLogoFile || !payload.email}
-                      className="rounded-lg border border-brand-orange bg-brand-orange px-4 py-2 text-sm font-semibold text-brand-navy hover:brightness-95 disabled:opacity-50"
-                    >
-                      {pending ? "…" : "Upload"}
-                    </button>
-                  </div>
-                  {masterLogoFile ? (
-                    <p className="mt-2 text-xs text-slate-600">Selected: {masterLogoFile.name}</p>
-                  ) : null}
+                  <MasterLogoDropzone file={masterLogoFile} onFile={setMasterLogoFile} disabled={pending} />
+                  <button
+                    type="button"
+                    onClick={uploadMasterLogo}
+                    disabled={pending || !masterLogoFile || !payload.email}
+                    className="mt-2 rounded-lg border border-brand-orange bg-brand-orange px-4 py-2 text-sm font-semibold text-brand-navy hover:brightness-95 disabled:opacity-50"
+                  >
+                    {pending ? "…" : "Upload"}
+                  </button>
                 </div>
               </div>
             )}
