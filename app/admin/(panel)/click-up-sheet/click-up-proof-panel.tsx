@@ -10,6 +10,7 @@ import type { ClickUpSheetImageDto } from "./actions";
 
 type ProofContext = {
   storeOrderId: string;
+  orderNumber: string;
   mockupImages: ClickUpSheetImageDto[];
   proofs: OrderProofRecord[];
 };
@@ -48,6 +49,7 @@ export function ClickUpProofPanel({ customerOrderId }: { customerOrderId: string
         }
         setCtx({
           storeOrderId: res.storeOrderId,
+          orderNumber: res.orderNumber,
           mockupImages: res.mockupImages,
           proofs: res.proofs,
         });
@@ -94,6 +96,7 @@ export function ClickUpProofPanel({ customerOrderId }: { customerOrderId: string
     <OrderProofPanel
       key={ctx.storeOrderId}
       orderId={ctx.storeOrderId}
+      orderNumber={ctx.orderNumber}
       mockupImages={ctx.mockupImages}
       initialProofs={ctx.proofs}
     />

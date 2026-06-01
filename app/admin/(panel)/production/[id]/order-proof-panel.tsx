@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 
 import type { ClickUpSheetImageDto } from "@/app/admin/(panel)/click-up-sheet/actions";
 import {
   listOrderProofs,
   sendOrderProofForApproval,
+  uploadProofLogoImage,
 } from "@/app/admin/(panel)/production/proof-actions";
 import { ImageUrlLightbox } from "@/app/components/image-url-lightbox";
 import {
@@ -40,10 +41,12 @@ function statusBadgeClass(status: OrderProofStatus): string {
 
 export function OrderProofPanel({
   orderId,
+  orderNumber = "",
   mockupImages,
   initialProofs,
 }: {
   orderId: string;
+  orderNumber?: string;
   mockupImages: ClickUpSheetImageDto[];
   initialProofs: OrderProofRecord[];
 }) {
@@ -52,6 +55,10 @@ export function OrderProofPanel({
   const [selected, setSelected] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(mockupImages.map((m) => [m.public_url, true])),
   );
+  /** Externally-produced embroidery/print logo images, sent ahead of the mock-ups. */
+  const [logoUrls, setLogoUrls] = useState<string[]>([]);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -61,6 +68,9 @@ export function OrderProofPanel({
     [mockupImages, selected],
   );
 
+  // Logo artwork first, then the selected mock-ups — the order the customer sees in the email.
+  const outgoingUrls = useMemo(() => [...logoUrls, ...selectedUrls], [logoUrls, selectedUrls]);
+
   const latest = proofs[0] ?? null;
 
   function reload() {
@@ -69,16 +79,41 @@ export function OrderProofPanel({
     });
   }
 
+  async function onPickLogo(file: File) {
+    setStatus(null);
+    setUploadingLogo(true);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      fd.set("order_number", orderNumber);
+      const res = await uploadProofLogoImage(fd);
+      if (!res.ok) {
+        setStatus({ ok: false, text: res.error });
+        return;
+      }
+      setLogoUrls((prev) => (prev.includes(res.url) ? prev : [...prev, res.url]));
+    } catch {
+      setStatus({ ok: false, text: "Logo upload failed." });
+    } finally {
+      setUploadingLogo(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  }
+
+  function removeLogo(url: string) {
+    setLogoUrls((prev) => prev.filter((u) => u !== url));
+  }
+
   function onSend() {
-    if (selectedUrls.length === 0) {
-      setStatus({ ok: false, text: "Select at least one proof image to send." });
+    if (outgoingUrls.length === 0) {
+      setStatus({ ok: false, text: "Upload a logo image or select at least one mock-up to send." });
       return;
     }
     setStatus({ ok: true, text: "Sending…" });
     startTransition(async () => {
       const res = await sendOrderProofForApproval({
         storeOrderId: orderId,
-        imageUrls: selectedUrls,
+        imageUrls: outgoingUrls,
         note,
       });
       if (!res.ok) {
@@ -86,6 +121,7 @@ export function OrderProofPanel({
         return;
       }
       setNote("");
+      setLogoUrls([]);
       setStatus({ ok: true, text: `Proof sent to the customer (round ${res.round}).` });
       reload();
     });
@@ -121,9 +157,57 @@ export function OrderProofPanel({
           {proofs.length > 0 ? "Send a revised proof" : "Send proof for approval"}
         </p>
 
+        {/* Embroidery/print logo artwork (made in an external program) — sent first, before the mock-ups. */}
+        <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+          <p className="text-xs font-semibold text-brand-navy">Embroidery / print logo image (sent first)</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Upload artwork you produced in another program. It appears ahead of the mock-ups in the customer email.
+          </p>
+
+          {logoUrls.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {logoUrls.map((url) => (
+                <div key={url} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- logo images are supabase public URLs */}
+                  <img
+                    src={url}
+                    alt="Logo"
+                    className="h-20 w-20 cursor-pointer rounded border border-brand-orange/40 object-contain p-1"
+                    onClick={() => setLightboxSrc(url)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeLogo(url)}
+                    className="absolute -right-2 -top-2 inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-600 shadow hover:bg-red-50 hover:text-red-600"
+                    aria-label="Remove logo image"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="mt-2 flex items-center gap-3">
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              disabled={uploadingLogo}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onPickLogo(f);
+              }}
+              className="text-xs text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-brand-navy file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:brightness-110 disabled:opacity-50"
+            />
+            {uploadingLogo ? <span className="text-xs text-slate-500">Uploading…</span> : null}
+          </div>
+        </div>
+
         {mockupImages.length === 0 ? (
-          <p className="mt-2 text-sm text-amber-800">
-            No mock-up images found for this order. Add mock-ups on the Click-up sheet first, then refresh.
+          <p className="mt-3 text-sm text-amber-800">
+            No mock-up images found for this order. Add mock-ups on the Click-up sheet to include them — or send just
+            the logo image above.
           </p>
         ) : (
           <>
@@ -160,30 +244,31 @@ export function OrderProofPanel({
                 );
               })}
             </div>
-
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={3}
-              placeholder="Optional message to the customer (e.g. logo placement, thread colours)…"
-              className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-orange focus:outline-none"
-            />
-
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={onSend}
-                disabled={pending || selectedUrls.length === 0}
-                className="inline-flex items-center justify-center rounded-lg bg-brand-orange px-4 py-2 text-xs font-semibold uppercase tracking-wide text-brand-navy shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {pending ? "Sending…" : proofs.length > 0 ? "Send revised proof" : "Send proof for approval"}
-              </button>
-              <span className="text-xs text-slate-500">
-                {selectedUrls.length} image{selectedUrls.length === 1 ? "" : "s"} selected
-              </span>
-            </div>
           </>
         )}
+
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={3}
+          placeholder="Optional message to the customer (e.g. logo placement, thread colours)…"
+          className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-orange focus:outline-none"
+        />
+
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={onSend}
+            disabled={pending || outgoingUrls.length === 0}
+            className="inline-flex items-center justify-center rounded-lg bg-brand-orange px-4 py-2 text-xs font-semibold uppercase tracking-wide text-brand-navy shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {pending ? "Sending…" : proofs.length > 0 ? "Send revised proof" : "Send proof for approval"}
+          </button>
+          <span className="text-xs text-slate-500">
+            {outgoingUrls.length} image{outgoingUrls.length === 1 ? "" : "s"} selected
+            {logoUrls.length > 0 ? ` · ${logoUrls.length} logo${logoUrls.length === 1 ? "" : "s"} first` : ""}
+          </span>
+        </div>
 
         {status ? (
           <p className={`mt-2 text-sm ${status.ok ? "text-emerald-700" : "text-red-700"}`}>{status.text}</p>

@@ -12,10 +12,21 @@ import {
   type OrderProofRecord,
 } from "@/lib/order-proof";
 import { createSupabaseAdminClient } from "@/lib/supabase";
+import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
 import {
   listClickUpMockupsByStoreOrderNumber,
   type ClickUpSheetImageDto,
 } from "@/app/admin/(panel)/click-up-sheet/actions";
+
+/** Reuse the Click-up sheet bucket; proof logo uploads live under a dedicated prefix (no DB row needed). */
+const PROOF_LOGO_BUCKET = "click-up-sheet-images";
+const PROOF_LOGO_MAX_BYTES = 15 * 1024 * 1024;
+const PROOF_LOGO_EXT_BY_MIME: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+};
 
 export type ListOrderProofsResult =
   | { ok: true; proofs: OrderProofRecord[] }
@@ -154,6 +165,57 @@ export async function loadProofContextByOrderNumber(
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Load failed" };
+  }
+}
+
+export type UploadProofLogoResult = { ok: true; url: string } | { ok: false; error: string };
+
+/**
+ * Upload an externally-produced embroidery/print logo image to send with a proof. Returns a public URL the
+ * proof panel prepends ahead of the mock-ups, so the customer sees the logo artwork first, then the mock-ups.
+ */
+export async function uploadProofLogoImage(formData: FormData): Promise<UploadProofLogoResult> {
+  try {
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Choose a logo image file." };
+  }
+
+  let ext = PROOF_LOGO_EXT_BY_MIME[file.type.toLowerCase()];
+  if (!ext) {
+    const m = file.name.toLowerCase().match(/\.(jpe?g|png|gif|webp)$/);
+    if (m) ext = m[1] === "jpeg" ? "jpg" : m[1];
+  }
+  if (!ext) {
+    return { ok: false, error: "Use a JPEG, PNG, GIF, or WebP image for the logo." };
+  }
+
+  if (file.size > PROOF_LOGO_MAX_BYTES) {
+    return { ok: false, error: `Logo image must be at most ${Math.round(PROOF_LOGO_MAX_BYTES / (1024 * 1024))} MB.` };
+  }
+
+  const orderNumber = String(formData.get("order_number") ?? "").trim();
+  const safeOrder = (orderNumber.replace(/[^a-z0-9_-]/gi, "_").slice(0, 40) || "order").toLowerCase();
+  const storagePath = `proof-logos/${safeOrder}/${randomBytes(8).toString("hex")}.${ext}`;
+  const contentType = ext === "jpg" ? "image/jpeg" : `image/${ext}`;
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const buf = Buffer.from(await file.arrayBuffer());
+    const { error } = await supabase.storage
+      .from(PROOF_LOGO_BUCKET)
+      .upload(storagePath, buf, { contentType, upsert: false });
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    return { ok: true, url: publicStorageObjectUrl(PROOF_LOGO_BUCKET, storagePath) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Upload failed" };
   }
 }
 
