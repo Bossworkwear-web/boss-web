@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import {
+  deleteOrderProductionAsset,
   listCustomerReferenceVisualsForStoreOrderNumber,
   setCustomerMasterCompanyLogoFromOrderAsset,
   type CustomerReferenceVisualDto,
@@ -21,6 +22,7 @@ export function ClickUpSheetCustomerReferenceSection({ customerOrderId, initialI
   const [items, setItems] = useState<CustomerReferenceVisualDto[]>(initialItems);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
   useEffect(() => {
     const id = customerOrderId.trim();
@@ -87,6 +89,29 @@ export function ClickUpSheetCustomerReferenceSection({ customerOrderId, initialI
     }
   }
 
+  async function deleteAsset(row: CustomerReferenceVisualDto) {
+    const orderNumber = customerOrderId.trim();
+    const assetId = row.key.startsWith("prod:") ? row.key.slice("prod:".length) : "";
+    if (!orderNumber || !assetId) {
+      return;
+    }
+    if (!window.confirm("Delete this order asset? This cannot be undone.")) {
+      return;
+    }
+    setDeletingKey(row.key);
+    setError(null);
+    try {
+      const res = await deleteOrderProductionAsset({ orderNumber, assetId });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setItems((prev) => prev.filter((it) => it.key !== row.key));
+    } finally {
+      setDeletingKey(null);
+    }
+  }
+
   return (
     <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
@@ -117,8 +142,20 @@ export function ClickUpSheetCustomerReferenceSection({ customerOrderId, initialI
           {items.map((row) => (
             <li
               key={row.key}
-              className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50 shadow-sm"
+              className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50 shadow-sm"
             >
+              {row.key.startsWith("prod:") && !row.is_master_logo ? (
+                <button
+                  type="button"
+                  onClick={() => void deleteAsset(row)}
+                  disabled={deletingKey === row.key}
+                  aria-label="Delete this order asset"
+                  title="Delete"
+                  className="absolute right-1.5 top-1.5 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 bg-white/90 text-sm font-bold text-slate-600 shadow hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {deletingKey === row.key ? "…" : "\u00d7"}
+                </button>
+              ) : null}
               {isPdfUrl(row.public_url) ? (
                 <div className="flex h-44 flex-col items-center justify-center gap-2 bg-white px-3 text-center">
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">PDF</span>

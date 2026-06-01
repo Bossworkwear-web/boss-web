@@ -963,6 +963,86 @@ export async function setCustomerMasterCompanyLogoFromOrderAsset(args: {
   }
 }
 
+/**
+ * Delete one Order asset (production_order_assets row) for an order, removing the stored object too. Used by the
+ * X button on the Order assets gallery. The master logo is never deletable here (the panel hides its X), and we
+ * also refuse to delete an asset that is currently the customer's saved master logo as a safeguard.
+ */
+export async function deleteOrderProductionAsset(args: {
+  orderNumber: string;
+  assetId: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const orderNumber = args.orderNumber.trim();
+  const assetId = args.assetId.trim();
+  if (!orderNumber || !assetId) {
+    return { ok: false, error: "Missing order or asset id." };
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { data: so, error: soErr } = await supabase
+      .from("store_orders")
+      .select("id, customer_email")
+      .eq("order_number", orderNumber)
+      .maybeSingle();
+    if (soErr || !so) {
+      return { ok: false, error: "Order not found." };
+    }
+
+    const { data: asset, error: aErr } = await supabase
+      .from("production_order_assets")
+      .select("id, order_id, storage_bucket, storage_path")
+      .eq("id", assetId)
+      .maybeSingle();
+    if (aErr || !asset) {
+      return { ok: false, error: "Asset not found." };
+    }
+    if (String((asset as { order_id?: string }).order_id ?? "") !== String(so.id)) {
+      return { ok: false, error: "Asset does not belong to this order." };
+    }
+
+    const bucket = String((asset as { storage_bucket?: string | null }).storage_bucket ?? "").trim()
+      || PRODUCTION_ORDER_ASSETS_BUCKET;
+    const path = String((asset as { storage_path?: string | null }).storage_path ?? "").trim();
+
+    // Safeguard: don't delete the file that is the customer's saved master logo.
+    const email = String((so as { customer_email?: string | null }).customer_email ?? "").trim().toLowerCase();
+    if (email && path) {
+      const { data: master } = await supabase
+        .from("customer_master_company_logo")
+        .select("storage_bucket, storage_path")
+        .eq("customer_email", email)
+        .maybeSingle();
+      const mBucket = String((master as { storage_bucket?: string | null })?.storage_bucket ?? "").trim();
+      const mPath = String((master as { storage_path?: string | null })?.storage_path ?? "").trim();
+      if (mBucket === bucket && mPath === path) {
+        return { ok: false, error: "This file is the customer's master logo and cannot be deleted here." };
+      }
+    }
+
+    const { error: delErr } = await supabase.from("production_order_assets").delete().eq("id", assetId);
+    if (delErr) {
+      return { ok: false, error: delErr.message };
+    }
+
+    if (path) {
+      // Best-effort: remove the underlying object so storage doesn't accumulate orphans.
+      await supabase.storage.from(bucket).remove([path]).catch(() => undefined);
+    }
+
+    revalidatePath("/admin/click-up-sheet");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Delete failed" };
+  }
+}
+
 export type UploadClickUpSheetImageResult =
   | { ok: true; image: ClickUpSheetImageDto }
   | { ok: false; error: string };
