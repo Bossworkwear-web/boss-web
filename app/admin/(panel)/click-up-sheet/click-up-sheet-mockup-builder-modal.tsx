@@ -340,6 +340,26 @@ export function ClickUpSheetMockupBuilderModal({
   const [galleryError, setGalleryError] = useState<string | null>(null);
   const [templateUrl, setTemplateUrl] = useState<string | null>(null);
 
+  /** Custom base image dropped/uploaded by the user (kept as an object URL until the modal closes). */
+  const [customDragOver, setCustomDragOver] = useState(false);
+  const customObjectUrlRef = useRef<string | null>(null);
+  const customFileInputRef = useRef<HTMLInputElement>(null);
+
+  function applyCustomBaseImage(file: File | null | undefined) {
+    if (!file || !file.type.startsWith("image/")) {
+      return;
+    }
+    if (customObjectUrlRef.current) {
+      URL.revokeObjectURL(customObjectUrlRef.current);
+    }
+    const objUrl = URL.createObjectURL(file);
+    customObjectUrlRef.current = objUrl;
+    setBaseImageError(false);
+    setCategory(null);
+    setTemplateUrl(objUrl);
+    setStep("compose");
+  }
+
   const [logos, setLogos] = useState<CustomerReferenceVisualDto[]>([]);
   const [logosLoading, setLogosLoading] = useState(false);
 
@@ -406,6 +426,10 @@ export function ClickUpSheetMockupBuilderModal({
     if (!open) {
       wasOpenRef.current = false;
       setGalleryLoading(false);
+      if (customObjectUrlRef.current) {
+        URL.revokeObjectURL(customObjectUrlRef.current);
+        customObjectUrlRef.current = null;
+      }
       return;
     }
     if (!wasOpenRef.current) {
@@ -798,6 +822,49 @@ export function ClickUpSheetMockupBuilderModal({
                   각 옷 종류 폴더(<span className="font-mono">public/Mock_up/TEE</span> …)에 넣은 이미지가 아래에 표시됩니다.
                 </p>
               </div>
+
+              {/* Drag & drop a custom base image, then add logo/text layers on top and save. */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  내 이미지로 시작 (Drag &amp; drop)
+                </p>
+                <label
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setCustomDragOver(true);
+                  }}
+                  onDragLeave={() => setCustomDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setCustomDragOver(false);
+                    const files = Array.from(e.dataTransfer.files);
+                    const f = files.find((file) => file.type.startsWith("image/")) ?? files[0];
+                    applyCustomBaseImage(f);
+                  }}
+                  className={`mt-2 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-8 text-center transition ${
+                    customDragOver
+                      ? "border-brand-orange bg-brand-orange/5"
+                      : "border-slate-300 bg-slate-50 hover:border-brand-orange/60"
+                  }`}
+                >
+                  <input
+                    ref={customFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      applyCustomBaseImage(e.target.files?.[0]);
+                      e.target.value = "";
+                    }}
+                    className="hidden"
+                  />
+                  <span className="text-sm font-medium text-brand-navy">
+                    이미지를 끌어다 놓으면 베이스로 사용합니다
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    또는 클릭해서 선택 · PNG, JPEG, WebP — 로고·텍스트 레이어를 올린 뒤 저장
+                  </span>
+                </label>
+              </div>
               {galleryLoading ? (
                 <p className="text-sm text-slate-500">템플릿 목록을 불러오는 중…</p>
               ) : galleryError ? (
@@ -851,6 +918,10 @@ export function ClickUpSheetMockupBuilderModal({
                 <button
                   type="button"
                   onClick={() => {
+                    if (customObjectUrlRef.current && templateUrl === customObjectUrlRef.current) {
+                      URL.revokeObjectURL(customObjectUrlRef.current);
+                      customObjectUrlRef.current = null;
+                    }
                     setStep("gallery");
                     setTemplateUrl(null);
                     setCategory(null);
