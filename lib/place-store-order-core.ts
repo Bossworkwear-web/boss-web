@@ -500,6 +500,7 @@ export async function placeStoreOrderCore(
 
   const totalFormatted = formatMoneyFromCents(totalCents, "AUD");
   let xeroInvoiceNumber: string | undefined;
+  let xeroFailureReason: string | null = null;
   try {
     const { syncStoreOrderToXero } = await import("@/lib/xero/sync-store-order");
     const xeroRes = await syncStoreOrderToXero(orderId);
@@ -514,10 +515,25 @@ export async function placeStoreOrderCore(
           .eq("id", orderId);
       }
     } else if (!xeroRes.skipped) {
+      xeroFailureReason = xeroRes.error;
       console.error("[placeStoreOrderCore] xero sync:", xeroRes.error);
     }
   } catch (e) {
+    xeroFailureReason = e instanceof Error ? e.message : "Xero sync failed";
     console.error("[placeStoreOrderCore] xero sync:", e);
+  }
+  // Alert staff when Xero is configured but the invoice was not created, so they can fix the connection
+  // and resync. Best-effort and never blocks the order (the customer already has a fallback invoice).
+  if (xeroFailureReason) {
+    try {
+      const { isXeroOAuthConfigured } = await import("@/lib/xero/config");
+      if (isXeroOAuthConfigured()) {
+        const { sendXeroSyncFailureAlert } = await import("@/lib/xero/sync-failure-alert");
+        await sendXeroSyncFailureAlert({ orderNumber, error: xeroFailureReason });
+      }
+    } catch (e) {
+      console.error("[placeStoreOrderCore] xero alert:", e);
+    }
   }
 
   let taxInvoicePdf: { filename: string; base64: string } | undefined;

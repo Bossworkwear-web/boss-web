@@ -19,6 +19,8 @@ type Search = {
   refund_error?: string;
   xero?: string;
   xero_error?: string;
+  n?: string;
+  f?: string;
 };
 
 export default async function AdminAccountingPage({ searchParams }: { searchParams: Promise<Search> }) {
@@ -103,6 +105,16 @@ export default async function AdminAccountingPage({ searchParams }: { searchPara
   let banner: { kind: "ok" | "err"; text: string } | null = null;
   if (q.xero === "connected") banner = { kind: "ok", text: "Xero connected successfully." };
   else if (q.xero === "disconnected") banner = { kind: "ok", text: "Xero disconnected." };
+  else if (q.xero === "resynced") {
+    const n = Number(q.n ?? "0") || 0;
+    const f = Number(q.f ?? "0") || 0;
+    banner = {
+      kind: f > 0 ? "err" : "ok",
+      text: `Xero resync: ${n} order(s) synced${f > 0 ? `, ${f} still pending — check the connection and try again.` : "."}`,
+    };
+  } else if (q.xero === "resync_none") {
+    banner = { kind: "ok", text: "No paid orders are missing from Xero." };
+  }
   else if (q.xero_error) {
     try {
       banner = { kind: "err", text: decodeURIComponent(q.xero_error.replace(/\+/g, " ")) };
