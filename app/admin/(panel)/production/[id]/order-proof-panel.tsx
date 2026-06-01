@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import type { ClickUpSheetImageDto } from "@/app/admin/(panel)/click-up-sheet/actions";
 import {
@@ -69,6 +69,25 @@ export function OrderProofPanel({
   const [selected, setSelected] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(mockupImages.map((m) => [m.public_url, true])),
   );
+  /** Local order of the mock-ups so staff can drag to reorder how they appear in the proof email. */
+  const [orderedMockups, setOrderedMockups] = useState<ClickUpSheetImageDto[]>(mockupImages);
+  const dragIndexRef = useRef<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    setOrderedMockups(mockupImages);
+  }, [mockupImages]);
+
+  function moveMockup(from: number, to: number) {
+    if (from === to || from < 0 || to < 0) return;
+    setOrderedMockups((prev) => {
+      if (from >= prev.length || to >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }
   /** Externally-produced embroidery/print logo images, sent ahead of the mock-ups. */
   const [logoUrls, setLogoUrls] = useState<string[]>([]);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -79,8 +98,8 @@ export function OrderProofPanel({
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const selectedUrls = useMemo(
-    () => mockupImages.map((m) => m.public_url).filter((u) => selected[u]),
-    [mockupImages, selected],
+    () => orderedMockups.map((m) => m.public_url).filter((u) => selected[u]),
+    [orderedMockups, selected],
   );
 
   // Logo artwork first, then the selected mock-ups — the order the customer sees in the email.
@@ -261,15 +280,42 @@ export function OrderProofPanel({
           </p>
         ) : (
           <>
-            <p className="mt-2 text-xs text-slate-500">Choose the images to include:</p>
+            <p className="mt-2 text-xs text-slate-500">
+              Choose the images to include. Drag a mock-up left or right to change its order in the email.
+            </p>
             <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-              {mockupImages.map((m) => {
+              {orderedMockups.map((m, index) => {
                 const checked = Boolean(selected[m.public_url]);
+                const isDragOver = dragOverIndex === index;
                 return (
                   <label
                     key={m.id}
-                    className={`group relative block cursor-pointer overflow-hidden rounded-lg border bg-white ${
-                      checked ? "border-brand-orange ring-2 ring-brand-orange/40" : "border-slate-200"
+                    draggable
+                    onDragStart={() => {
+                      dragIndexRef.current = index;
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (dragOverIndex !== index) setDragOverIndex(index);
+                    }}
+                    onDragLeave={() => setDragOverIndex((cur) => (cur === index ? null : cur))}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const from = dragIndexRef.current;
+                      if (from != null) moveMockup(from, index);
+                      dragIndexRef.current = null;
+                      setDragOverIndex(null);
+                    }}
+                    onDragEnd={() => {
+                      dragIndexRef.current = null;
+                      setDragOverIndex(null);
+                    }}
+                    className={`group relative block cursor-move overflow-hidden rounded-lg border bg-white ${
+                      isDragOver
+                        ? "border-brand-orange ring-2 ring-brand-orange"
+                        : checked
+                          ? "border-brand-orange ring-2 ring-brand-orange/40"
+                          : "border-slate-200"
                     }`}
                   >
                     <input
@@ -280,11 +326,15 @@ export function OrderProofPanel({
                         setSelected((prev) => ({ ...prev, [m.public_url]: e.target.checked }))
                       }
                     />
+                    <span className="absolute right-2 top-2 z-10 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-brand-navy/80 px-1 text-[0.7rem] font-bold text-white">
+                      {index + 1}
+                    </span>
                     {/* eslint-disable-next-line @next/next/no-img-element -- proof images are supabase public URLs, shown small in admin */}
                     <img
                       src={m.public_url}
                       alt="Mock-up"
                       className="aspect-square w-full object-contain p-1"
+                      draggable={false}
                       onClick={(e) => {
                         e.preventDefault();
                         setLightboxSrc(m.public_url);
