@@ -42,15 +42,15 @@ function signInStatusLabel(
   }
 }
 
-/** Drag-and-drop (or click-to-browse) picker for the master logo image. */
+/** Drag-and-drop (or click-to-browse) picker for the master logo image. Selecting a file uploads it. */
 function MasterLogoDropzone({
-  file,
-  onFile,
+  onSelect,
   disabled,
+  uploading,
 }: {
-  file: File | null;
-  onFile: (file: File | null) => void;
+  onSelect: (file: File) => void;
   disabled: boolean;
+  uploading: boolean;
 }) {
   const [dragOver, setDragOver] = useState(false);
 
@@ -58,7 +58,7 @@ function MasterLogoDropzone({
     if (!list || list.length === 0) return;
     const arr = Array.from(list);
     const img = arr.find((f) => f.type.startsWith("image/")) ?? arr[0];
-    if (img) onFile(img);
+    if (img) onSelect(img);
   }
 
   return (
@@ -84,15 +84,17 @@ function MasterLogoDropzone({
         type="file"
         accept="image/*"
         disabled={disabled}
-        onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onSelect(f);
+          e.target.value = "";
+        }}
         className="hidden"
       />
       <span className="text-sm font-medium text-brand-navy">
-        {file ? file.name : "Drag & drop the logo image here"}
+        {uploading ? "Uploading…" : "Drag & drop the logo image to upload"}
       </span>
-      <span className="text-xs text-slate-500">
-        {file ? "Click to choose a different image" : "or click to choose · PNG, JPEG, SVG, WebP"}
-      </span>
+      <span className="text-xs text-slate-500">or click to choose · PNG, JPEG, SVG, WebP</span>
     </label>
   );
 }
@@ -307,13 +309,14 @@ export function CustomerInfoClient() {
     });
   }
 
-  async function uploadMasterLogo() {
+  function uploadMasterLogo(fileArg?: File) {
     const email = selectedEmail ?? payload?.email ?? "";
-    if (!email || !masterLogoFile) return;
+    const file = fileArg ?? masterLogoFile;
+    if (!email || !file) return;
     setError(null);
     startTransition(() => {
       void (async () => {
-        const res = await replaceCustomerMasterLogo({ customerEmail: email, file: masterLogoFile });
+        const res = await replaceCustomerMasterLogo({ customerEmail: email, file });
         if (!res.ok) {
           setError(res.error);
           return;
@@ -512,15 +515,11 @@ export function CustomerInfoClient() {
                 </div>
                 <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Replace master logo</p>
-                  <MasterLogoDropzone file={masterLogoFile} onFile={setMasterLogoFile} disabled={pending} />
-                  <button
-                    type="button"
-                    onClick={uploadMasterLogo}
-                    disabled={pending || !masterLogoFile || !payload.email}
-                    className="mt-2 rounded-lg border border-brand-orange bg-brand-orange px-4 py-2 text-sm font-semibold text-brand-navy hover:brightness-95 disabled:opacity-50"
-                  >
-                    {pending ? "…" : "Upload & replace"}
-                  </button>
+                  <MasterLogoDropzone
+                    onSelect={(f) => uploadMasterLogo(f)}
+                    disabled={pending || !payload.email}
+                    uploading={pending}
+                  />
                 </div>
               </div>
             ) : (
@@ -528,15 +527,11 @@ export function CustomerInfoClient() {
                 <p className="text-sm text-slate-600">No master logo set.</p>
                 <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Upload master logo</p>
-                  <MasterLogoDropzone file={masterLogoFile} onFile={setMasterLogoFile} disabled={pending} />
-                  <button
-                    type="button"
-                    onClick={uploadMasterLogo}
-                    disabled={pending || !masterLogoFile || !payload.email}
-                    className="mt-2 rounded-lg border border-brand-orange bg-brand-orange px-4 py-2 text-sm font-semibold text-brand-navy hover:brightness-95 disabled:opacity-50"
-                  >
-                    {pending ? "…" : "Upload"}
-                  </button>
+                  <MasterLogoDropzone
+                    onSelect={(f) => uploadMasterLogo(f)}
+                    disabled={pending || !payload.email}
+                    uploading={pending}
+                  />
                 </div>
               </div>
             )}
