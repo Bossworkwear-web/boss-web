@@ -227,6 +227,8 @@ export type SendOrderProofResult =
 export async function sendOrderProofForApproval(args: {
   storeOrderId: string;
   imageUrls: string[];
+  /** How many leading entries in `imageUrls` are logo artwork (shown large) vs. mock-ups (gridded). */
+  logoCount?: number;
   note: string;
 }): Promise<SendOrderProofResult> {
   try {
@@ -287,6 +289,7 @@ export async function sendOrderProofForApproval(args: {
       orderNumber: order.order_number,
       round: nextRound,
       imageUrls,
+      logoCount: Math.max(0, Math.min(imageUrls.length, args.logoCount ?? 0)),
       note: note || null,
       approveUrl: proofApproveUrl(storeOrderId, token),
     });

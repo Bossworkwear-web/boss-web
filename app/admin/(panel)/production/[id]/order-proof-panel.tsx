@@ -115,6 +115,7 @@ export function OrderProofPanel({
       const res = await sendOrderProofForApproval({
         storeOrderId: orderId,
         imageUrls: outgoingUrls,
+        logoCount: logoUrls.length,
         note,
       });
       if (!res.ok) {

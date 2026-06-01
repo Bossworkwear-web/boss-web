@@ -18,9 +18,39 @@ export type SendOrderProofEmailArgs = {
   orderNumber: string;
   round: number;
   imageUrls: string[];
+  /** Leading `imageUrls` that are logo artwork (shown large, one per row) vs. mock-ups (3-up grid). */
+  logoCount?: number;
   note: string | null;
   approveUrl: string;
 };
+
+/** Table-based 3-up grid of proof images at half size (email-client safe). */
+function proofImageGridHtml(urls: string[]): string {
+  if (urls.length === 0) return "";
+  const COLS = 3;
+  const rows: string[][] = [];
+  for (let i = 0; i < urls.length; i += COLS) {
+    rows.push(urls.slice(i, i + COLS));
+  }
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;margin:16px 0">${rows
+    .map((row) => {
+      const cells = row
+        .map(
+          (url) =>
+            `<td width="33.33%" valign="top" align="center" style="padding:6px"><a href="${escapeHtml(
+              url,
+            )}" style="display:block;text-decoration:none"><img src="${escapeHtml(
+              url,
+            )}" alt="Design proof" width="320" style="width:100%;max-width:320px;height:auto;border:1px solid #e2e8f0;border-radius:8px" /></a></td>`,
+        )
+        .join("");
+      const fillers = Array.from({ length: COLS - row.length })
+        .map(() => `<td width="33.33%" style="padding:6px"></td>`)
+        .join("");
+      return `<tr>${cells}${fillers}</tr>`;
+    })
+    .join("")}</table>`;
+}
 
 export type SendOrderProofEmailResult =
   | { ok: true }
@@ -44,33 +74,22 @@ export async function sendOrderProofEmail(
   const roundSuffix = args.round > 1 ? ` (revision ${args.round})` : "";
   const subject = `Your design proof for order ${args.orderNumber}${roundSuffix}`;
 
-  // Grid the proofs 3-per-row at half their previous size so several mock-ups fit on a wide,
-  // professional-looking layout. Table-based for email-client compatibility (Gmail/Outlook).
-  const PROOF_COLS = 3;
-  const proofRows: string[][] = [];
-  for (let i = 0; i < args.imageUrls.length; i += PROOF_COLS) {
-    proofRows.push(args.imageUrls.slice(i, i + PROOF_COLS));
-  }
-  const imagesHtml = proofRows.length
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;margin:16px 0">${proofRows
-        .map((row) => {
-          const cells = row
-            .map(
-              (url) =>
-                `<td width="33.33%" valign="top" align="center" style="padding:6px"><a href="${escapeHtml(
-                  url,
-                )}" style="display:block;text-decoration:none"><img src="${escapeHtml(
-                  url,
-                )}" alt="Design proof" width="320" style="width:100%;max-width:320px;height:auto;border:1px solid #e2e8f0;border-radius:8px" /></a></td>`,
-            )
-            .join("");
-          const fillers = Array.from({ length: PROOF_COLS - row.length })
-            .map(() => `<td width="33.33%" style="padding:6px"></td>`)
-            .join("");
-          return `<tr>${cells}${fillers}</tr>`;
-        })
-        .join("")}</table>`
-    : "";
+  // Logo artwork (the leading entries) is shown large, one per row; the mock-ups that follow are
+  // gridded 3-per-row at half size for a clean, professional layout.
+  const logoCount = Math.max(0, Math.min(args.imageUrls.length, args.logoCount ?? 0));
+  const logoUrls = args.imageUrls.slice(0, logoCount);
+  const mockupUrls = args.imageUrls.slice(logoCount);
+
+  const logosHtml = logoUrls
+    .map(
+      (url) =>
+        `<a href="${escapeHtml(url)}" style="display:block;margin:12px 0;text-align:center"><img src="${escapeHtml(
+          url,
+        )}" alt="Logo artwork" style="max-width:100%;border:1px solid #e2e8f0;border-radius:8px" /></a>`,
+    )
+    .join("");
+
+  const imagesHtml = `${logosHtml}${proofImageGridHtml(mockupUrls)}`;
 
   const noteHtml = args.note?.trim()
     ? `<p style="margin:12px 0;color:#334155">${escapeHtml(args.note.trim()).replace(/\n/g, "<br/>")}</p>`
