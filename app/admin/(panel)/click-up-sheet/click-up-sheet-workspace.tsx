@@ -14,6 +14,7 @@ import {
   loadSupplierOrderLinesForClickUpSheet,
   lookupCustomerByStoreOrderNumber,
   moveClickUpSheetOrderToProduction,
+  storeOrderProductionQueueStatus,
   type ClickUpSheetImageDto,
   type ClickUpSupplierLineRow,
   type CustomerReferenceVisualDto,
@@ -274,6 +275,14 @@ export function ClickUpSheetWorkspace({
     window.alert(`Move to Production — 확인이 필요합니다\n\n${body}`);
   }
 
+  function confirmMoveToProductionAgain(): boolean {
+    return window.confirm(
+      "Move to Production — 확인이 필요합니다\n\n" +
+        "이 주문은 이미 Production으로 이동한 적이 있습니다.\n" +
+        "다시 Production pack으로 이동하시겠습니까?",
+    );
+  }
+
   async function moveToProduction() {
     if (completeOrdersDocumentsView) {
       return;
@@ -283,6 +292,16 @@ export function ClickUpSheetWorkspace({
       alertMoveToProductionBlocked("Order ID를 입력한 뒤 Production으로 이동할 수 있습니다.");
       return;
     }
+
+    const queueStatus = await storeOrderProductionQueueStatus(id);
+    if (!queueStatus.ok) {
+      alertMoveToProductionBlocked(queueStatus.error);
+      return;
+    }
+    if (queueStatus.inProductionQueue && !confirmMoveToProductionAgain()) {
+      return;
+    }
+
     setSheetActionMessage(null);
     setMoveToProductionBusy(true);
     const result = await moveClickUpSheetOrderToProduction(id, initialListDate.trim());

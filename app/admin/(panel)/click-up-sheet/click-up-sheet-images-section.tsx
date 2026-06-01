@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import { ImageUrlLightbox } from "@/app/components/image-url-lightbox";
-import { parseMockupDecorateMethodsJson } from "@/lib/click-up-sheet-mockup-methods";
+import { parseMockupDecorateMethodsJson, sortClickUpSheetMockupsForDisplay } from "@/lib/click-up-sheet-mockup-methods";
 import {
   deleteClickUpSheetImage,
   listClickUpSheetImages,
@@ -93,7 +93,9 @@ export function ClickUpSheetImagesSection({
 }: Props) {
   const isMockup = variant === "mockup";
   const assetFilter: ClickUpSheetImageFilter = isMockup ? "mockup" : "reference";
-  const [images, setImages] = useState<ClickUpSheetImageDto[]>(() => initialImages ?? []);
+  const [images, setImages] = useState<ClickUpSheetImageDto[]>(() =>
+    isMockup ? sortClickUpSheetMockupsForDisplay(initialImages ?? []) : (initialImages ?? []),
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [dragActive, setDragActive] = useState(false);
@@ -113,7 +115,7 @@ export function ClickUpSheetImagesSection({
     return out;
   });
   const [sendOrder, setSendOrder] = useState<string[]>(() =>
-    isMockup ? (initialImages ?? []).map((i) => i.id) : [],
+    isMockup ? sortClickUpSheetMockupsForDisplay(initialImages ?? []).map((i) => i.id) : [],
   );
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
@@ -130,7 +132,7 @@ export function ClickUpSheetImagesSection({
       const t = window.setTimeout(() => {
         void listClickUpSheetMockupsIncludingReorderPrior(ld, cid).then((r) => {
           if (!cancelled && r.ok) {
-            setImages(r.images);
+            setImages(sortClickUpSheetMockupsForDisplay(r.images));
           }
         });
       }, 280);
@@ -160,24 +162,24 @@ export function ClickUpSheetImagesSection({
     };
   }, [listDateYmd, customerOrderId, assetFilter, isMockup]);
 
-  /* Keep the send selection + order in sync as mock-ups are added/removed: new ones are selected & appended. */
+  /* Keep send selection + order aligned with creation order (sort_order) as mock-ups are added/removed. */
   useEffect(() => {
     if (!isMockup) {
       return;
     }
-    const ids = images.map((i) => i.id);
+    const chronologicalIds = sortClickUpSheetMockupsForDisplay(images).map((i) => i.id);
     setSendOrder((prev) => {
-      const kept = prev.filter((id) => ids.includes(id));
-      const added = ids.filter((id) => !kept.includes(id));
-      const next = [...kept, ...added];
-      return next.length === prev.length && next.every((v, i) => v === prev[i]) ? prev : next;
+      if (prev.length === chronologicalIds.length && prev.every((id, i) => id === chronologicalIds[i])) {
+        return prev;
+      }
+      return chronologicalIds;
     });
     setSendSelected((prev) => {
       const next: Record<string, boolean> = {};
-      for (const id of ids) {
+      for (const id of chronologicalIds) {
         next[id] = id in prev ? prev[id] : true;
       }
-      const sameKeys = Object.keys(prev).length === ids.length && ids.every((id) => id in prev);
+      const sameKeys = Object.keys(prev).length === chronologicalIds.length && chronologicalIds.every((id) => id in prev);
       return sameKeys ? prev : next;
     });
   }, [images, isMockup]);
@@ -274,16 +276,15 @@ export function ClickUpSheetImagesSection({
         if (replaceId) {
           const del = await deleteClickUpSheetImage(replaceId);
           if (del.ok) {
-            setImages((prev) => {
-              const rest = prev.filter((i) => i.id !== replaceId);
-              return [...rest, imageRow].sort((a, b) => a.sort_order - b.sort_order);
-            });
+            setImages((prev) =>
+              sortClickUpSheetMockupsForDisplay(prev.filter((i) => i.id !== replaceId).concat(imageRow)),
+            );
           } else {
             setError(`New mock-up was saved, but the previous file could not be removed: ${del.error}`);
-            setImages((prev) => [...prev, imageRow].sort((a, b) => a.sort_order - b.sort_order));
+            setImages((prev) => sortClickUpSheetMockupsForDisplay([...prev, imageRow]));
           }
         } else {
-          setImages((prev) => [...prev, imageRow]);
+          setImages((prev) => sortClickUpSheetMockupsForDisplay([...prev, imageRow]));
         }
       })();
     });
@@ -314,7 +315,7 @@ export function ClickUpSheetImagesSection({
             setError(result.error);
             break;
           }
-          setImages((prev) => [...prev, result.image]);
+          setImages((prev) => sortClickUpSheetMockupsForDisplay([...prev, result.image]));
         }
         if (fileInputRef.current) {
           fileInputRef.current.value = "";

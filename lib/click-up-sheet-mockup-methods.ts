@@ -59,3 +59,36 @@ export function parseMockupDecorateMethodsJson(s: string | null | undefined): st
     return [];
   }
 }
+
+type MockupDisplaySortable = {
+  sort_order: number;
+  created_at: string;
+  inherited_from_order_number?: string | null;
+};
+
+function compareMockupsChronologically(a: MockupDisplaySortable, b: MockupDisplaySortable): number {
+  const bySort = a.sort_order - b.sort_order;
+  if (bySort !== 0) {
+    return bySort;
+  }
+  return a.created_at.localeCompare(b.created_at);
+}
+
+/**
+ * Own mock-ups first, oldest → newest (`sort_order`, then `created_at`).
+ * Reorder carry-over mock-ups from a prior order are appended after.
+ */
+export function sortClickUpSheetMockupsForDisplay<T extends MockupDisplaySortable>(images: T[]): T[] {
+  const own: T[] = [];
+  const inherited: T[] = [];
+  for (const img of images) {
+    if ((img.inherited_from_order_number ?? "").trim()) {
+      inherited.push(img);
+    } else {
+      own.push(img);
+    }
+  }
+  own.sort(compareMockupsChronologically);
+  inherited.sort(compareMockupsChronologically);
+  return [...own, ...inherited];
+}

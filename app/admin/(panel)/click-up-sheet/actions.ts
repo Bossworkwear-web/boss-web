@@ -5,7 +5,7 @@ import { refresh, revalidatePath } from "next/cache";
 
 import { assertAdminSession, assertAdminSessionForPathSegment } from "@/lib/admin-auth";
 import { formatClickUpSheetStorageError } from "@/lib/click-up-sheet-storage-errors";
-import { sanitizeMockupDecorateMethodsFromClient } from "@/lib/click-up-sheet-mockup-methods";
+import { sanitizeMockupDecorateMethodsFromClient, sortClickUpSheetMockupsForDisplay } from "@/lib/click-up-sheet-mockup-methods";
 import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
 import {
   getCustomerDetailForStoreOrderNumber,
@@ -367,6 +367,36 @@ export async function resolveProductionOrderIdForStoreOrderNumber(
       };
     }
     return { ok: true, productionOrderId: data.id };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Lookup failed";
+    return { ok: false, error: msg };
+  }
+}
+
+export type StoreOrderProductionQueueStatusResult =
+  | { ok: true; inProductionQueue: boolean }
+  | { ok: false; error: string };
+
+/** Whether this store order already has a row in `click_up_production_queue` (moved to Production before). */
+export async function storeOrderProductionQueueStatus(
+  orderNumber: string,
+): Promise<StoreOrderProductionQueueStatusResult> {
+  const resolved = await resolveProductionOrderIdForStoreOrderNumber(orderNumber);
+  if (!resolved.ok) {
+    return resolved;
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("click_up_production_queue")
+      .select("id")
+      .eq("store_order_id", resolved.productionOrderId)
+      .maybeSingle();
+    if (error) {
+      return { ok: false, error: appendClickUpProductionQueueSetupHint(error.message) };
+    }
+    return { ok: true, inProductionQueue: Boolean(data?.id) };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Lookup failed";
     return { ok: false, error: msg };
@@ -773,7 +803,7 @@ export async function listClickUpSheetMockupsIncludingReorderPrior(
     });
   }
 
-  return { ok: true, images: [...own, ...inherited] };
+  return { ok: true, images: sortClickUpSheetMockupsForDisplay([...own, ...inherited]) };
 }
 
 export type ListClickUpMockupsByOrderResult =
