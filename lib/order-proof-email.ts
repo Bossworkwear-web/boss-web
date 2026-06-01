@@ -148,19 +148,19 @@ export async function sendOrderProofEmail(
       ${noteHtml}
       ${imagesHtml}
       <p style="margin:20px 0 8px;color:#334155">
-        Happy with the design? Click the button below to approve.
+        Happy with the design? Click the button below to approve — your order goes straight to production.
         <strong>Need changes to the logo or mock-up?</strong> Just reply to this email with what you'd like
         adjusted and we'll send you a revised proof.
       </p>
       <p style="margin:8px 0 24px">
-        <a href="${escapeHtml(args.approveUrl)}"
+        <a href="${escapeHtml(`${args.approveUrl}&approve=1`)}"
            style="background:#f97316;color:#0f172a;font-weight:bold;text-decoration:none;padding:12px 22px;border-radius:10px;display:inline-block">
-          Review &amp; approve your proof
+          Approve your proof
         </a>
       </p>
       <p style="font-size:13px;color:#64748b">
         If the button does not work, copy this link into your browser:<br/>
-        <span style="word-break:break-all">${escapeHtml(args.approveUrl)}</span>
+        <span style="word-break:break-all">${escapeHtml(`${args.approveUrl}&approve=1`)}</span>
       </p>
       <p style="font-size:13px;color:#64748b;margin-top:24px">
         Questions? Reply to this email or call ${escapeHtml(STOREFRONT_PHONE_DISPLAY)}.<br/>

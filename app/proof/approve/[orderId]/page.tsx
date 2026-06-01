@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{ orderId: string }>;
-  searchParams: Promise<{ token?: string }>;
+  searchParams: Promise<{ token?: string; approve?: string }>;
 };
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -30,7 +30,8 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 export default async function ProofApprovePage({ params, searchParams }: PageProps) {
   const { orderId } = await params;
-  const { token = "" } = await searchParams;
+  const { token = "", approve = "" } = await searchParams;
+  const autoApprove = approve === "1";
 
   const id = (orderId ?? "").trim();
   const tok = (token ?? "").trim();
@@ -104,7 +105,7 @@ export default async function ProofApprovePage({ params, searchParams }: PagePro
 
       <div className="mt-6">
         {status === "sent" ? (
-          <ProofApproveClient storeOrderId={id} token={tok} />
+          <ProofApproveClient storeOrderId={id} token={tok} autoApprove={autoApprove} />
         ) : status === "approved" ? (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-950">
             <p className="text-base font-semibold">This proof is approved.</p>

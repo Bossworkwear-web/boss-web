@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { submitOrderProofDecision } from "@/app/proof/approve/actions";
 
 export function ProofApproveClient({
   storeOrderId,
   token,
+  autoApprove = false,
 }: {
   storeOrderId: string;
   token: string;
+  /** When true, approve immediately on load (email "Approve your proof" button) — no extra click. */
+  autoApprove?: boolean;
 }) {
   const [mode, setMode] = useState<"idle" | "decline">("idle");
   const [comment, setComment] = useState("");
@@ -29,6 +32,17 @@ export function ProofApproveClient({
     });
   }
 
+  // Auto-approve once on mount when arriving from the email's "Approve your proof" button. Running this in
+  // JS (not on the server GET) avoids email link scanners/prefetchers accidentally approving the proof.
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (autoApprove && !autoRan.current) {
+      autoRan.current = true;
+      submit("approve");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoApprove]);
+
   if (done === "approved") {
     return (
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-950">
@@ -47,6 +61,15 @@ export function ProofApproveClient({
         <p className="mt-1">
           Our team will update the design based on your notes and send you a new proof to review.
         </p>
+      </div>
+    );
+  }
+
+  if (autoApprove && !done && !error) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+        <p className="text-base font-semibold">Approving your proof…</p>
+        <p className="mt-1">One moment, please.</p>
       </div>
     );
   }
