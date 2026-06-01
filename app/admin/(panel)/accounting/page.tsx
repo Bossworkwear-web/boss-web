@@ -19,6 +19,7 @@ type Search = {
   refund_error?: string;
   xero?: string;
   xero_error?: string;
+  xero_msg?: string;
   n?: string;
   f?: string;
 };
@@ -108,9 +109,24 @@ export default async function AdminAccountingPage({ searchParams }: { searchPara
   else if (q.xero === "resynced") {
     const n = Number(q.n ?? "0") || 0;
     const f = Number(q.f ?? "0") || 0;
+    let detail = "";
+    if (f > 0) {
+      detail = `, ${f} still pending`;
+      if (q.xero_msg) {
+        try {
+          detail += ` — ${decodeURIComponent(q.xero_msg.replace(/\+/g, " "))}`;
+        } catch {
+          detail += ` — ${q.xero_msg}`;
+        }
+      } else {
+        detail += " — check the connection and try again.";
+      }
+    } else {
+      detail = ".";
+    }
     banner = {
       kind: f > 0 ? "err" : "ok",
-      text: `Xero resync: ${n} order(s) synced${f > 0 ? `, ${f} still pending — check the connection and try again.` : "."}`,
+      text: `Xero resync: ${n} order(s) synced${detail}`,
     };
   } else if (q.xero === "resync_none") {
     banner = { kind: "ok", text: "No paid orders are missing from Xero." };

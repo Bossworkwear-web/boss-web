@@ -24,7 +24,16 @@ export async function resyncFailedXeroOrdersAction(): Promise<void> {
     redirect(`/admin/accounting?xero_error=${encodeURIComponent(`Resync blocked: ${reason}`)}`);
   }
 
-  redirect(
-    `/admin/accounting?xero=resynced&n=${result.succeeded}&f=${result.failed + result.skipped}`,
-  );
+  const pending = result.failed + result.skipped;
+  const params = new URLSearchParams({
+    xero: "resynced",
+    n: String(result.succeeded),
+    f: String(pending),
+  });
+  // Surface the actual Xero error so misconfig (e.g. missing sales account code) is visible at a glance.
+  const firstError = result.errors[0]?.error;
+  if (pending > 0 && firstError) {
+    params.set("xero_msg", firstError.slice(0, 300));
+  }
+  redirect(`/admin/accounting?${params.toString()}`);
 }
