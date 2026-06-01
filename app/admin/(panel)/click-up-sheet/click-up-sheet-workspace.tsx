@@ -18,6 +18,7 @@ import {
   type ClickUpSupplierLineRow,
   type CustomerReferenceVisualDto,
 } from "./actions";
+import { ClickUpProofPanel } from "./click-up-proof-panel";
 import { ClickUpSheetCustomerReferenceSection } from "./click-up-sheet-customer-reference-section";
 import { ClickUpSheetImagesSection } from "./click-up-sheet-images-section";
 
@@ -592,6 +593,12 @@ export function ClickUpSheetWorkspace({
             readOnly={completeOrdersDocumentsView}
           />
         </div>
+
+        {!completeOrdersDocumentsView ? (
+          <div className="click-up-sheet-print-span-2 min-w-0 lg:col-span-2 print:hidden">
+            <ClickUpProofPanel customerOrderId={orderId} />
+          </div>
+        ) : null}
       </div>
     </div>
   );

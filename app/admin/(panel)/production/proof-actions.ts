@@ -12,6 +12,10 @@ import {
   type OrderProofRecord,
 } from "@/lib/order-proof";
 import { createSupabaseAdminClient } from "@/lib/supabase";
+import {
+  listClickUpMockupsByStoreOrderNumber,
+  type ClickUpSheetImageDto,
+} from "@/app/admin/(panel)/click-up-sheet/actions";
 
 export type ListOrderProofsResult =
   | { ok: true; proofs: OrderProofRecord[] }
@@ -75,6 +79,81 @@ export async function listOrderProofs(storeOrderId: string): Promise<ListOrderPr
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Load failed";
     return { ok: false, error: msg };
+  }
+}
+
+export type ProofContextByOrderNumberResult =
+  | {
+      ok: true;
+      storeOrderId: string;
+      orderNumber: string;
+      mockupImages: ClickUpSheetImageDto[];
+      proofs: OrderProofRecord[];
+    }
+  | { ok: false; error: string };
+
+/**
+ * Resolve everything the proof panel needs from a Customer Order ID (order number): the store order UUID,
+ * its mock-up images, and existing proof rounds. Lets the Click-up sheet send proofs for whichever order is
+ * loaded, without the page knowing the UUID up front.
+ */
+export async function loadProofContextByOrderNumber(
+  orderNumber: string,
+): Promise<ProofContextByOrderNumberResult> {
+  try {
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const num = (orderNumber ?? "").trim();
+  if (!num) {
+    return { ok: false, error: "No order id." };
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { data: order, error } = await supabase
+      .from("store_orders")
+      .select("id, order_number")
+      .ilike("order_number", num)
+      .maybeSingle();
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    if (!order) {
+      return { ok: false, error: `No order found for "${num}".` };
+    }
+
+    const storeOrderId = String(order.id);
+    const orderNumberResolved = String(order.order_number ?? num);
+
+    const { data: proofRows, error: proofErr } = await supabase
+      .from("order_proofs")
+      .select(
+        "id, store_order_id, order_number, round, status, token, image_urls, note, sent_to, sent_at, decided_at, customer_comment",
+      )
+      .eq("store_order_id", storeOrderId)
+      .order("round", { ascending: false });
+    if (proofErr) {
+      return { ok: false, error: proofErr.message };
+    }
+
+    const mockupsRes = await listClickUpMockupsByStoreOrderNumber(orderNumberResolved).catch(() => ({
+      ok: false as const,
+      error: "Mockups load failed",
+    }));
+    const mockupImages = mockupsRes.ok ? mockupsRes.images : [];
+
+    return {
+      ok: true,
+      storeOrderId,
+      orderNumber: orderNumberResolved,
+      mockupImages,
+      proofs: (proofRows ?? []).map(mapProofRow),
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Load failed" };
   }
 }
 
@@ -172,6 +251,7 @@ export async function sendOrderProofForApproval(args: {
     }
 
     revalidatePath(`/admin/production/${storeOrderId}`);
+    revalidatePath("/admin/click-up-sheet");
     revalidatePath("/customer");
     return { ok: true, round: nextRound };
   } catch (e) {

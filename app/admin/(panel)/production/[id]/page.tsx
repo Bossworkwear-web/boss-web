@@ -11,8 +11,6 @@ import { normalizeStoreOrderUuidParam, storeOrderScanPayloadFromId } from "@/lib
 
 import { listClickUpMockupsByStoreOrderNumber } from "@/app/admin/(panel)/click-up-sheet/actions";
 import { hasProductionPackForStoreOrder } from "../actions";
-import { listOrderProofs } from "../proof-actions";
-import { OrderProofPanel } from "./order-proof-panel";
 import { ProductionPackNotStarted } from "./production-pack-not-started";
 import { ProductionWorkspace } from "./production-workspace";
 import { PrintButton } from "../print-button";
@@ -156,12 +154,6 @@ export default async function AdminProductionOrderPage({
   }));
   const initialMockupImages = mockupsRes.ok ? mockupsRes.images : [];
 
-  const proofsRes = await listOrderProofs(orderId).catch(() => ({
-    ok: false as const,
-    error: "Proofs load failed",
-  }));
-  const initialProofs = proofsRes.ok ? proofsRes.proofs : [];
-
   const sp = spEarly;
   const qcMoveErrorRaw = (sp.qc_move_error ?? "").trim();
   let qcMoveError: string | null = null;
@@ -285,14 +277,6 @@ export default async function AdminProductionOrderPage({
         initialMockupImages={initialMockupImages}
         completeOrdersDocumentsView={completeOrdersDocumentsView}
       />
-
-      {!completeOrdersDocumentsView ? (
-        <OrderProofPanel
-          orderId={orderId}
-          mockupImages={initialMockupImages}
-          initialProofs={initialProofs}
-        />
-      ) : null}
     </div>
   );
 }
