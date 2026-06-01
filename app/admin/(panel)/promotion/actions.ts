@@ -64,7 +64,7 @@ export async function createPromotionCode(formData: FormData): Promise<void> {
 
   const code = normalizePromotionCodeInput((formData.get("code") ?? "").toString());
   if (code.length < 3 || code.length > 32) {
-    redirectWithError("Code must be 3–32 characters (letters and numbers).");
+    redirectWithError("Code must be 3–32 characters.");
   }
 
   const discountType = parseDiscountType((formData.get("discount_type") ?? "").toString());

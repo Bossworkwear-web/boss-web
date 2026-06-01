@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     return Response.json({ ok: false, error: "Sign in to use a discount code." }, { status: 401 });
   }
 
-  let body: { code?: string; productSubtotalAud?: number } = {};
+  let body: { code?: string; productSubtotalAud?: number; logoSetupFeeAud?: number } = {};
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -22,6 +22,10 @@ export async function POST(req: Request) {
   if (!Number.isFinite(productSubtotalAud) || productSubtotalAud < 0) {
     return Response.json({ ok: false, error: "Invalid order subtotal." }, { status: 400 });
   }
+  const logoSetupFeeAud = Number(body.logoSetupFeeAud);
+  // Discount may also offset the logo setup fee (e.g. a "FREESETUP" code), so the cap includes it.
+  const maxDiscountableAud =
+    productSubtotalAud + (Number.isFinite(logoSetupFeeAud) && logoSetupFeeAud > 0 ? logoSetupFeeAud : 0);
 
   let supabase;
   try {
@@ -34,6 +38,7 @@ export async function POST(req: Request) {
     codeInput: code,
     customerEmail,
     productSubtotalAud,
+    maxDiscountableAud,
     preview: true,
   });
 

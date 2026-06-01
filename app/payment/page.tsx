@@ -185,7 +185,11 @@ export default function PaymentPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ code: appliedPromo.code, productSubtotalAud: productNetSubtotal }),
+          body: JSON.stringify({
+            code: appliedPromo.code,
+            productSubtotalAud: productNetSubtotal,
+            logoSetupFeeAud: logoSetupFee,
+          }),
         });
         const data = await readResponseJson<{
           ok?: boolean;
@@ -225,7 +229,7 @@ export default function PaymentPage() {
     return () => {
       cancelled = true;
     };
-  }, [appliedPromo?.code, productNetSubtotal, items.length]);
+  }, [appliedPromo?.code, productNetSubtotal, logoSetupFee, items.length]);
 
   async function applyPromoCode() {
     setPromoError(null);
@@ -240,7 +244,7 @@ export default function PaymentPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ code, productSubtotalAud: productNetSubtotal }),
+        body: JSON.stringify({ code, productSubtotalAud: productNetSubtotal, logoSetupFeeAud: logoSetupFee }),
       });
       const data = await readResponseJson<{
         ok?: boolean;

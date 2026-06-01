@@ -37,6 +37,12 @@ export function roundPromotionMoneyAud(amount: number): number {
 export function computePromotionDiscountAud(
   row: Pick<PromotionCodeRow, "discount_type" | "discount_value">,
   productSubtotalAud: number,
+  /**
+   * Largest amount the discount may consume. Defaults to the product subtotal, but pass a larger value
+   * (e.g. product subtotal + logo setup fee) so a fixed-amount code can also offset add-on fees such as
+   * the embroidery logo setup charge. Percent codes are always computed off the product subtotal.
+   */
+  maxDiscountableAud?: number,
 ): number {
   const subtotal = Math.max(0, productSubtotalAud);
   let discount = 0;
@@ -46,7 +52,11 @@ export function computePromotionDiscountAud(
   } else {
     discount = Math.max(0, Number(row.discount_value));
   }
-  return roundPromotionMoneyAud(Math.min(discount, subtotal));
+  const cap =
+    typeof maxDiscountableAud === "number" && Number.isFinite(maxDiscountableAud) && maxDiscountableAud >= 0
+      ? maxDiscountableAud
+      : subtotal;
+  return roundPromotionMoneyAud(Math.min(discount, cap));
 }
 
 export type ValidatePromotionResult =
@@ -67,6 +77,11 @@ export async function validatePromotionCodeForCheckout(
     codeInput: string;
     customerEmail: string;
     productSubtotalAud: number;
+    /**
+     * Largest amount the discount may consume (defaults to the product subtotal). Pass
+     * product subtotal + logo setup fee so a fixed code can also offset the setup charge.
+     */
+    maxDiscountableAud?: number;
     /** When true, skip increment checks that only matter at redemption (still checks validity window). */
     preview?: boolean;
   },
@@ -145,7 +160,7 @@ export async function validatePromotionCodeForCheckout(
     }
   }
 
-  const discountAud = computePromotionDiscountAud(promo, subtotal);
+  const discountAud = computePromotionDiscountAud(promo, subtotal, args.maxDiscountableAud);
   if (discountAud <= 0) {
     return { ok: false, error: "This discount code does not apply to your order." };
   }

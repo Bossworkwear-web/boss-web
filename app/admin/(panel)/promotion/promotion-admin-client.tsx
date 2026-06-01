@@ -80,6 +80,7 @@ export function PromotionAdminClient({ rows }: Props) {
               id="new-code"
               name="code"
               required
+              data-latin-mode="ascii"
               className={inputClass}
               placeholder="SUMMER20"
               autoComplete="off"

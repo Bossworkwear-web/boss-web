@@ -241,6 +241,7 @@ export async function placeStoreOrderCore(
       codeInput: promoRow.code,
       customerEmail,
       productSubtotalAud: subtotalDollars,
+      maxDiscountableAud: subtotalDollars + fees.logoSetupFeeAud,
     });
     if (!promoCheck.ok) {
       return { ok: false, error: promoCheck.error };

@@ -106,6 +106,24 @@ export async function POST(req: Request) {
     return Response.json({ ok: false, error: "Checkout is temporarily unavailable." }, { status: 503 });
   }
 
+  const feeItems = items.map((it) => ({
+    serviceType: typeof it.serviceType === "string" ? it.serviceType : "",
+    referenceImageUrls: Array.isArray(it.referenceImageUrls) ? it.referenceImageUrls : undefined,
+  }));
+  const pickUp = body.pickUp === true;
+  const fees = computeStorefrontCheckoutFees({
+    subtotalAud: subtotal,
+    items: feeItems,
+    deliveryPostcode: postcode,
+    estimatedWeightKg,
+    isCustomerSignedIn: true,
+    hasPriorEmbroideryOrder: hasPriorEmbroidery,
+    pickUp,
+  });
+  const deliveryFee = fees.deliveryFeeAud;
+  const logoSetupFee = fees.logoSetupFeeAud;
+  const totalBeforePromo = fees.totalAud;
+
   const promotionCodeId = (body.promotionCodeId ?? "").trim();
   let promoDiscountCents = 0;
   let promoCodeLabel = "";
@@ -126,6 +144,7 @@ export async function POST(req: Request) {
       codeInput: promoRow.code,
       customerEmail,
       productSubtotalAud: subtotal,
+      maxDiscountableAud: subtotal + logoSetupFee,
     });
     if (!promoCheck.ok) {
       return Response.json({ ok: false, error: promoCheck.error }, { status: 400 });
@@ -138,23 +157,6 @@ export async function POST(req: Request) {
     validatedPromoId = promoCheck.promotionCodeId;
   }
 
-  const feeItems = items.map((it) => ({
-    serviceType: typeof it.serviceType === "string" ? it.serviceType : "",
-    referenceImageUrls: Array.isArray(it.referenceImageUrls) ? it.referenceImageUrls : undefined,
-  }));
-  const pickUp = body.pickUp === true;
-  const fees = computeStorefrontCheckoutFees({
-    subtotalAud: subtotal,
-    items: feeItems,
-    deliveryPostcode: postcode,
-    estimatedWeightKg,
-    isCustomerSignedIn: true,
-    hasPriorEmbroideryOrder: hasPriorEmbroidery,
-    pickUp,
-  });
-  const deliveryFee = fees.deliveryFeeAud;
-  const logoSetupFee = fees.logoSetupFeeAud;
-  const totalBeforePromo = fees.totalAud;
   const total = Math.max(0, totalBeforePromo - promoDiscountCents / 100);
   const totalCents = dollarsToCents(total);
 

@@ -173,6 +173,25 @@ describe("promotion-codes", () => {
         ),
       ).toBe(0);
     });
+
+    it("lets a fixed code offset the logo setup fee when a higher cap is given", () => {
+      // Cart: $8.30 product subtotal + $66 logo setup fee. A $66 FREESETUP code should
+      // discount the full $66 (cap = subtotal + setup fee), not just the $8.30 subtotal.
+      expect(
+        computePromotionDiscountAud(
+          { discount_type: "fixed_aud", discount_value: 66 },
+          8.3,
+          8.3 + 66,
+        ),
+      ).toBe(66);
+      // Without the higher cap it stays capped at the product subtotal (legacy behaviour).
+      expect(
+        computePromotionDiscountAud(
+          { discount_type: "fixed_aud", discount_value: 66 },
+          8.3,
+        ),
+      ).toBe(8.3);
+    });
   });
 
   describe("validatePromotionCodeForCheckout", () => {
