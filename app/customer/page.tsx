@@ -355,7 +355,20 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
               <ArrowLeftIcon className="h-[1.2rem] w-[1.2rem] shrink-0" />
               Back to home
             </Link>
-            <h1 className="text-[2.25rem] font-medium leading-tight">My account</h1>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+              <h1 className="text-[2.25rem] font-medium leading-tight">My account</h1>
+              {masterLogoUrl ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={masterLogoUrl}
+                    alt="Master logo"
+                    className="h-auto max-h-[10.5rem] w-auto max-w-full rounded-xl border border-brand-navy/10 bg-white object-contain"
+                    loading="lazy"
+                  />
+                </>
+              ) : null}
+            </div>
             <p className="text-[1.05rem] text-brand-navy/70">
               {sessionName ? `Signed in as ${sessionName}.` : "Manage your profile, password, and orders."}
             </p>
@@ -524,17 +537,6 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
           </section>
 
           <section id="ordered-records" className="scroll-mt-[calc(var(--site-header-height)+1rem)] space-y-4">
-            {masterLogoUrl ? (
-              <div>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={masterLogoUrl}
-                  alt="Master logo"
-                  className="h-[21rem] w-auto max-w-full rounded-xl border border-brand-navy/10 bg-white object-contain"
-                  loading="lazy"
-                />
-              </div>
-            ) : null}
             <h2 className="text-[1.62rem] font-semibold text-brand-navy">Ordered records</h2>
             <div className="space-y-2 text-[1.26rem] text-brand-navy/70">
               <p className="flex gap-2">
