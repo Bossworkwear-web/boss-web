@@ -219,6 +219,64 @@ export async function uploadProofLogoImage(formData: FormData): Promise<UploadPr
   }
 }
 
+function proofExtFromContentTypeOrUrl(contentType: string, url: string): string {
+  const ct = contentType.toLowerCase();
+  if (ct.includes("png")) return "png";
+  if (ct.includes("jpeg") || ct.includes("jpg")) return "jpg";
+  if (ct.includes("gif")) return "gif";
+  if (ct.includes("webp")) return "webp";
+  if (ct.includes("pdf")) return "pdf";
+  const m = url.toLowerCase().match(/\.(png|jpe?g|gif|webp|pdf)(\?|$)/);
+  if (m) return m[1] === "jpeg" ? "jpg" : m[1];
+  return "png";
+}
+
+/**
+ * Copy each proof image into a stable `order-proofs/<order>/r<round>/` path so the proof is immutable. Without
+ * this, a proof references live mock-up objects by URL; when staff later delete or replace a mock-up, the
+ * already-sent proof (and its history thumbnail) breaks (Supabase 400/404). Images already living under our
+ * stable prefixes are kept as-is; any copy failure falls back to the original URL.
+ */
+async function snapshotProofImages(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  orderNumber: string,
+  round: number,
+  urls: string[],
+): Promise<string[]> {
+  const safeOrder = (orderNumber.replace(/[^a-z0-9_-]/gi, "_").slice(0, 40) || "order").toLowerCase();
+  const out: string[] = [];
+  let idx = 0;
+  for (const url of urls) {
+    idx += 1;
+    if (/\/(proof-logos|order-proofs)\//.test(url)) {
+      out.push(url);
+      continue;
+    }
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        out.push(url);
+        continue;
+      }
+      const contentType = resp.headers.get("content-type") ?? "";
+      const ext = proofExtFromContentTypeOrUrl(contentType, url);
+      const buf = Buffer.from(await resp.arrayBuffer());
+      const path = `order-proofs/${safeOrder}/r${round}/${idx}-${randomBytes(6).toString("hex")}.${ext}`;
+      const { error } = await supabase.storage
+        .from(PROOF_LOGO_BUCKET)
+        .upload(path, buf, { contentType: contentType || `image/${ext}`, upsert: false });
+      if (error) {
+        out.push(url);
+        continue;
+      }
+      out.push(publicStorageObjectUrl(PROOF_LOGO_BUCKET, path));
+    } catch {
+      out.push(url);
+    }
+  }
+  return out;
+}
+
 export type SendOrderProofResult =
   | { ok: true; round: number }
   | { ok: false; error: string };
@@ -285,13 +343,16 @@ export async function sendOrderProofForApproval(args: {
 
     const token = randomBytes(24).toString("hex");
 
+    // Snapshot images into a stable location so the proof never breaks if the source mock-up is later changed.
+    const stableUrls = await snapshotProofImages(supabase, order.order_number, nextRound, imageUrls);
+
     const emailResult = await sendOrderProofEmail({
       to: customerEmail,
       contactName: order.customer_name ?? "",
       orderNumber: order.order_number,
       round: nextRound,
-      imageUrls,
-      logoCount: Math.max(0, Math.min(imageUrls.length, args.logoCount ?? 0)),
+      imageUrls: stableUrls,
+      logoCount: Math.max(0, Math.min(stableUrls.length, args.logoCount ?? 0)),
       captions: args.captions,
       note: note || null,
       approveUrl: proofApproveUrl(storeOrderId, token),
@@ -310,7 +371,7 @@ export async function sendOrderProofForApproval(args: {
       round: nextRound,
       status: "sent",
       token,
-      image_urls: imageUrls,
+      image_urls: stableUrls,
       note: note || null,
       sent_to: customerEmail,
     });
