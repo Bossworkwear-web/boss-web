@@ -229,6 +229,8 @@ export async function sendOrderProofForApproval(args: {
   imageUrls: string[];
   /** How many leading entries in `imageUrls` are logo artwork (shown large) vs. mock-ups (gridded). */
   logoCount?: number;
+  /** Per-image decorate method + MEMO, aligned to `imageUrls`, shown under each image in the email. */
+  captions?: Array<{ method: string; memo: string }>;
   note: string;
 }): Promise<SendOrderProofResult> {
   try {
@@ -290,6 +292,7 @@ export async function sendOrderProofForApproval(args: {
       round: nextRound,
       imageUrls,
       logoCount: Math.max(0, Math.min(imageUrls.length, args.logoCount ?? 0)),
+      captions: args.captions,
       note: note || null,
       approveUrl: proofApproveUrl(storeOrderId, token),
     });

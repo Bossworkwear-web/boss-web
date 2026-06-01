@@ -12,6 +12,8 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+export type ProofImageCaption = { method: string; memo: string };
+
 export type SendOrderProofEmailArgs = {
   to: string;
   contactName: string;
@@ -20,28 +22,51 @@ export type SendOrderProofEmailArgs = {
   imageUrls: string[];
   /** Leading `imageUrls` that are logo artwork (shown large, one per row) vs. mock-ups (3-up grid). */
   logoCount?: number;
+  /** Per-image decorate method + MEMO, aligned to `imageUrls`, rendered under each mock-up. */
+  captions?: ProofImageCaption[];
   note: string | null;
   approveUrl: string;
 };
 
-/** Table-based 3-up grid of proof images at half size (email-client safe). */
-function proofImageGridHtml(urls: string[]): string {
-  if (urls.length === 0) return "";
+type ProofGridItem = { url: string; caption?: ProofImageCaption };
+
+/** Caption block (decorate method + MEMO) shown under a mock-up image. */
+function captionHtml(caption: ProofImageCaption | undefined): string {
+  if (!caption) return "";
+  const method = caption.method?.trim();
+  const memo = caption.memo?.trim();
+  if (!method && !memo) return "";
+  const methodHtml = method
+    ? `<div style="margin-top:6px;font-weight:bold;color:#1e3a8a;font-size:13px">${escapeHtml(method)}</div>`
+    : "";
+  const memoHtml = memo
+    ? `<div style="margin-top:3px;color:#475569;font-size:12px;line-height:1.45;text-align:left">${escapeHtml(
+        memo,
+      ).replace(/\n/g, "<br/>")}</div>`
+    : "";
+  return `<div style="max-width:320px;margin:0 auto">${methodHtml}${memoHtml}</div>`;
+}
+
+/** Table-based 3-up grid of proof images at half size (email-client safe), with captions underneath. */
+function proofImageGridHtml(items: ProofGridItem[]): string {
+  if (items.length === 0) return "";
   const COLS = 3;
-  const rows: string[][] = [];
-  for (let i = 0; i < urls.length; i += COLS) {
-    rows.push(urls.slice(i, i + COLS));
+  const rows: ProofGridItem[][] = [];
+  for (let i = 0; i < items.length; i += COLS) {
+    rows.push(items.slice(i, i + COLS));
   }
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;margin:16px 0">${rows
     .map((row) => {
       const cells = row
         .map(
-          (url) =>
+          (item) =>
             `<td width="33.33%" valign="top" align="center" style="padding:6px"><a href="${escapeHtml(
-              url,
+              item.url,
             )}" style="display:block;text-decoration:none"><img src="${escapeHtml(
-              url,
-            )}" alt="Design proof" width="320" style="width:100%;max-width:320px;height:auto;border:1px solid #e2e8f0;border-radius:8px" /></a></td>`,
+              item.url,
+            )}" alt="Design proof" width="320" style="width:100%;max-width:320px;height:auto;border:1px solid #e2e8f0;border-radius:8px" /></a>${captionHtml(
+              item.caption,
+            )}</td>`,
         )
         .join("");
       const fillers = Array.from({ length: COLS - row.length })
@@ -79,6 +104,7 @@ export async function sendOrderProofEmail(
   const logoCount = Math.max(0, Math.min(args.imageUrls.length, args.logoCount ?? 0));
   const logoUrls = args.imageUrls.slice(0, logoCount);
   const mockupUrls = args.imageUrls.slice(logoCount);
+  const mockupCaptions = (args.captions ?? []).slice(logoCount);
 
   const logosHtml = logoUrls
     .map(
@@ -89,7 +115,8 @@ export async function sendOrderProofEmail(
     )
     .join("");
 
-  const imagesHtml = `${logosHtml}${proofImageGridHtml(mockupUrls)}`;
+  const mockupItems: ProofGridItem[] = mockupUrls.map((url, i) => ({ url, caption: mockupCaptions[i] }));
+  const imagesHtml = `${logosHtml}${proofImageGridHtml(mockupItems)}`;
 
   const noteHtml = args.note?.trim()
     ? `<p style="margin:12px 0;color:#334155">${escapeHtml(args.note.trim()).replace(/\n/g, "<br/>")}</p>`

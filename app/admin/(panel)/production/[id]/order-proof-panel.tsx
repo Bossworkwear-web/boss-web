@@ -28,6 +28,20 @@ function formatDateTime(iso: string | null): string {
   });
 }
 
+/** Parse the mock-up's decorate methods JSON (e.g. `["Embroidery","DTF/HTV"]`) into a display string. */
+function decorateMethodLabel(raw: string | null): string {
+  if (!raw) return "";
+  try {
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr)) {
+      return arr.map((m) => String(m).trim()).filter(Boolean).join(" / ");
+    }
+  } catch {
+    // fall through to raw string
+  }
+  return raw.trim();
+}
+
 function statusBadgeClass(status: OrderProofStatus): string {
   switch (status) {
     case "approved":
@@ -111,11 +125,20 @@ export function OrderProofPanel({
       return;
     }
     setStatus({ ok: true, text: "Sending…" });
+    // Caption each outgoing image with its decorate method + MEMO (logos have none), aligned to imageUrls.
+    const metaByUrl = new Map(
+      mockupImages.map((m) => [
+        m.public_url,
+        { method: decorateMethodLabel(m.mockup_decorate_methods), memo: (m.mockup_memo ?? "").trim() },
+      ]),
+    );
+    const captions = outgoingUrls.map((u) => metaByUrl.get(u) ?? { method: "", memo: "" });
     startTransition(async () => {
       const res = await sendOrderProofForApproval({
         storeOrderId: orderId,
         imageUrls: outgoingUrls,
         logoCount: logoUrls.length,
+        captions,
         note,
       });
       if (!res.ok) {
