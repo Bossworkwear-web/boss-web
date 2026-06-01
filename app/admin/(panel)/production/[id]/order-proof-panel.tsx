@@ -58,6 +58,7 @@ export function OrderProofPanel({
   /** Externally-produced embroidery/print logo images, sent ahead of the mock-ups. */
   const [logoUrls, setLogoUrls] = useState<string[]>([]);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoDragOver, setLogoDragOver] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
@@ -188,7 +189,26 @@ export function OrderProofPanel({
             </div>
           ) : null}
 
-          <div className="mt-2 flex items-center gap-3">
+          <label
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (!uploadingLogo) setLogoDragOver(true);
+            }}
+            onDragLeave={() => setLogoDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setLogoDragOver(false);
+              if (uploadingLogo) return;
+              const files = Array.from(e.dataTransfer.files);
+              const f = files.find((file) => file.type.startsWith("image/")) ?? files[0];
+              if (f) void onPickLogo(f);
+            }}
+            className={`mt-2 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-6 text-center transition ${
+              logoDragOver
+                ? "border-brand-orange bg-brand-orange/5"
+                : "border-slate-300 bg-slate-50/60 hover:border-brand-orange/60"
+            } ${uploadingLogo ? "opacity-60" : ""}`}
+          >
             <input
               ref={logoInputRef}
               type="file"
@@ -198,10 +218,15 @@ export function OrderProofPanel({
                 const f = e.target.files?.[0];
                 if (f) void onPickLogo(f);
               }}
-              className="text-xs text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-brand-navy file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:brightness-110 disabled:opacity-50"
+              className="hidden"
             />
-            {uploadingLogo ? <span className="text-xs text-slate-500">Uploading…</span> : null}
-          </div>
+            <span className="text-sm font-medium text-brand-navy">
+              {uploadingLogo ? "Uploading…" : "Drag & drop logo image here"}
+            </span>
+            <span className="text-xs text-slate-500">
+              or click to choose · PNG, JPEG, GIF, WebP (max 15&nbsp;MB)
+            </span>
+          </label>
         </div>
 
         {mockupImages.length === 0 ? (
