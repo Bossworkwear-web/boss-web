@@ -125,6 +125,43 @@ function wrapCaptionForCanvas(ctx: CanvasRenderingContext2D, text: string, maxWi
   return all;
 }
 
+/** "Embroidery · Left chest" style tag shown next to a logo on the proof; empty when there is nothing to say. */
+function logoLabelText(placement: string | undefined, method: string | null): string {
+  return [method, (placement ?? "").trim()].filter((s): s is string => Boolean(s && s.trim())).join(" · ");
+}
+
+/** Draw a small dark pill with white text centred at (cx, topY) on the export canvas. */
+function drawCanvasLabel(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cx: number,
+  topY: number,
+  fontPx: number,
+): void {
+  ctx.save();
+  ctx.font = `600 ${fontPx}px Arial, Helvetica, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  const padX = fontPx * 0.6;
+  const padY = fontPx * 0.4;
+  const tw = ctx.measureText(text).width;
+  const boxW = tw + padX * 2;
+  const boxH = fontPx + padY * 2;
+  const x = cx - boxW / 2;
+  const r = Math.min(boxH / 2, fontPx * 0.5);
+  ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+  if (typeof ctx.roundRect === "function") {
+    ctx.beginPath();
+    ctx.roundRect(x, topY, boxW, boxH, r);
+    ctx.fill();
+  } else {
+    ctx.fillRect(x, topY, boxW, boxH);
+  }
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(text, cx, topY + padY);
+  ctx.restore();
+}
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const im = new Image();
@@ -241,6 +278,8 @@ type LogoLayerState = {
   u: number;
   v: number;
   widthFrac: number;
+  /** Optional placement label (e.g. "Left chest") burned next to the logo on the proof. */
+  placement?: string;
 };
 
 type TextLayerState = {
@@ -360,6 +399,7 @@ export function ClickUpSheetMockupBuilderModal({
   const activeLayer = layers.find((l) => l.id === activeLayerId) ?? null;
   const bgRgb = cmykToRgb(bgCmyk);
   const bgCss = rgbCss(bgRgb);
+  const selectedMethod = MOCKUP_DECORATE_METHOD_OPTIONS.find((m) => decoratePick[m]) ?? null;
 
   const wasOpenRef = useRef(false);
   useEffect(() => {
@@ -566,6 +606,7 @@ export function ClickUpSheetMockupBuilderModal({
         u: DEFAULT_LOGO_U,
         v: DEFAULT_LOGO_V,
         widthFrac: 0.22,
+        placement: "",
       },
     ]);
     setActiveLayerId(id);
@@ -634,15 +675,21 @@ export function ClickUpSheetMockupBuilderModal({
 
       for (const layer of layers) {
         if (layer.kind === "logo") {
-          if (!layer.logoUrl) {
-            continue;
-          }
-          const logo = await loadImageViaFetch(layer.logoUrl);
           const lw = W * layer.widthFrac;
-          const lh = (logo.naturalHeight / logo.naturalWidth) * lw;
           const cx = layer.u * W;
           const cy = layer.v * H;
-          ctx.drawImage(logo, cx - lw / 2, cy - lh / 2, lw, lh);
+          let lh = lw * 0.32;
+          if (layer.logoUrl) {
+            const logo = await loadImageViaFetch(layer.logoUrl);
+            lh = (logo.naturalHeight / logo.naturalWidth) * lw;
+            ctx.drawImage(logo, cx - lw / 2, cy - lh / 2, lw, lh);
+          }
+          // Burn the decorate method + placement under the logo so the customer sees what & where.
+          const label = logoLabelText(layer.placement, selectedMethod);
+          if (label) {
+            const fontPx = Math.max(12, Math.round(W * 0.02));
+            drawCanvasLabel(ctx, label, cx, cy + lh / 2 + Math.round(H * 0.012), fontPx);
+          }
         } else {
           const raw = layer.text.trim();
           if (!raw) {
@@ -939,6 +986,29 @@ export function ClickUpSheetMockupBuilderModal({
                           );
                         })
                       : null}
+                    {layout
+                      ? layers.map((layer) => {
+                          if (layer.kind !== "logo") {
+                            return null;
+                          }
+                          const label = logoLabelText(layer.placement, selectedMethod);
+                          if (!label) {
+                            return null;
+                          }
+                          const left = layout.ox + layer.u * layout.dw;
+                          const top = layout.oy + layer.v * layout.dh;
+                          const approxHalfH = layout.dw * layer.widthFrac * (layer.logoUrl ? 0.4 : 0.18);
+                          return (
+                            <div
+                              key={`label-${layer.id}`}
+                              className="pointer-events-none absolute z-[60] whitespace-nowrap rounded bg-brand-navy/85 px-1.5 py-0.5 text-[0.6rem] font-semibold text-white shadow"
+                              style={{ left, top: top + approxHalfH + 4, transform: "translate(-50%, 0)" }}
+                            >
+                              {label}
+                            </div>
+                          );
+                        })
+                      : null}
                   </div>
                 )}
               </div>
@@ -1086,6 +1156,30 @@ export function ClickUpSheetMockupBuilderModal({
                       }}
                       className="mt-1 block w-full"
                     />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-slate-600" htmlFor="logo-placement">
+                      Placement label (shown on the proof — e.g. Left chest, Back, Right sleeve)
+                    </label>
+                    <input
+                      id="logo-placement"
+                      type="text"
+                      value={activeLayer.placement ?? ""}
+                      onChange={(e) => {
+                        const v = e.target.value.slice(0, 40);
+                        const id = activeLayer.id;
+                        setLayers((prev) =>
+                          prev.map((p) => (p.id === id && p.kind === "logo" ? { ...p, placement: v } : p)),
+                        );
+                      }}
+                      placeholder="Left chest"
+                      className="mt-1 block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm placeholder:text-slate-400 focus:border-brand-orange/50 focus:outline-none focus:ring-2 focus:ring-brand-orange/25"
+                    />
+                    <p className="mt-1 text-[0.65rem] text-slate-500">
+                      Combined with the selected decorate method below as a tag on the logo (e.g.{" "}
+                      <span className="font-semibold">Embroidery · Left chest</span>).
+                    </p>
                   </div>
 
                   <div>
