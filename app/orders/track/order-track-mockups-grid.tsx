@@ -36,7 +36,7 @@ export function OrderTrackMockupsGrid({
           return (
             <li
               key={item.id}
-              className="overflow-hidden rounded-2xl border border-brand-navy/15 bg-brand-surface/30"
+              className="flex flex-col overflow-hidden rounded-2xl border border-brand-navy/15 bg-brand-surface/30"
             >
               {priorRef ? (
                 <p className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-center text-[0.75rem] font-semibold uppercase tracking-wide text-amber-950">
@@ -61,7 +61,7 @@ export function OrderTrackMockupsGrid({
               ) : (
                 <button
                   type="button"
-                  className="block h-48 w-full cursor-zoom-in bg-white/50 p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-inset sm:h-56"
+                  className="block h-48 w-full shrink-0 cursor-zoom-in bg-white/50 p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-inset sm:h-56"
                   onClick={() => setLightboxSrc(item.publicUrl)}
                   aria-label="View mock-up larger"
                 >
@@ -74,7 +74,13 @@ export function OrderTrackMockupsGrid({
                   />
                 </button>
               )}
-              <div className="border-t border-brand-navy/10 px-3 py-3">
+              {item.memo ? (
+                <div className="border-t border-brand-navy/10 bg-white/60 px-3 py-2 text-left">
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-brand-navy/50">Memo</p>
+                  <p className="mt-1 whitespace-pre-wrap text-[1.125rem] text-brand-navy/85">{item.memo}</p>
+                </div>
+              ) : null}
+              <div className="mt-auto border-t border-brand-navy/10 px-3 py-3">
                 {pdf ? (
                   <a
                     href={item.publicUrl}
@@ -94,12 +100,6 @@ export function OrderTrackMockupsGrid({
                   </button>
                 )}
               </div>
-              {item.memo ? (
-                <div className="border-t border-brand-navy/10 bg-white/60 px-3 py-2 text-left">
-                  <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-brand-navy/50">Memo</p>
-                  <p className="mt-1 whitespace-pre-wrap text-[1.125rem] text-brand-navy/85">{item.memo}</p>
-                </div>
-              ) : null}
             </li>
           );
         })}
