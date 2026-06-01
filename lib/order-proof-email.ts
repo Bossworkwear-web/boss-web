@@ -1,4 +1,4 @@
-import { resendFromAccount } from "@/lib/resend-from";
+import { resendFromSales } from "@/lib/resend-from";
 import {
   STOREFRONT_PHONE_DISPLAY,
   STOREFRONT_QUOTE_EMAIL_RECIPIENT,
@@ -130,7 +130,7 @@ export async function sendOrderProofEmail(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: resendFromAccount(),
+        from: resendFromSales(),
         to: [to],
         subject,
         html,
