@@ -7,7 +7,7 @@ import { totalEstimatedShippingWeightKg } from "@/lib/delivery-shipping-weight";
 import type { StoreOrderCartLine } from "@/lib/store-order-cart-payload";
 import { storefrontVolumeAdjustedCartLines } from "@/lib/storefront-volume-discount";
 import { sendStoreOrderConfirmationEmail } from "@/lib/store-order-email";
-import { allocateNextBossStoreOrderNumber } from "@/lib/boss-customer-order-id";
+import { allocateNextBossStoreOrderNumber, invoiceNumberFromOrderNumber } from "@/lib/boss-customer-order-id";
 import { getPerthYmd } from "@/lib/perth-calendar";
 import { insertSupplierOrderLinesFromStoreCheckout } from "@/lib/supplier-order-lines-from-store-order";
 import { ensureClickUpSheetListForSupplierListDate } from "@/lib/supplier-sheet-click-up-bootstrap";
@@ -357,6 +357,9 @@ export async function placeStoreOrderCore(
       .insert({
         ...insertPayload,
         order_number: orderNumber,
+        // Auto-assign an invoice number so customers can download their tax invoice immediately
+        // after payment, without waiting for an admin to enter one manually.
+        invoice_reference: invoiceNumberFromOrderNumber(orderNumber),
         ...(reorderedFromResolved ? { reordered_from_store_order_id: reorderedFromResolved } : {}),
       })
       .select("id, tracking_token")
@@ -502,6 +505,14 @@ export async function placeStoreOrderCore(
     const xeroRes = await syncStoreOrderToXero(orderId);
     if (xeroRes.ok) {
       xeroInvoiceNumber = xeroRes.invoiceNumber;
+      // When Xero is connected, keep the customer-downloadable invoice number aligned with Xero's
+      // official number; otherwise the order-based INV_ number set at insert remains the fallback.
+      if (xeroInvoiceNumber && xeroInvoiceNumber.trim()) {
+        await supabase
+          .from("store_orders")
+          .update({ invoice_reference: xeroInvoiceNumber.trim() })
+          .eq("id", orderId);
+      }
     } else if (!xeroRes.skipped) {
       console.error("[placeStoreOrderCore] xero sync:", xeroRes.error);
     }

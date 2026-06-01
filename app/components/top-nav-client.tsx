@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { RefObject } from "react";
-import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { CartIcon, MenuIcon, SearchIcon, UserIcon } from "@/app/components/icons";
 import { LoadingRingSpinner } from "@/app/components/loading-ring-spinner";
@@ -15,6 +15,15 @@ import type { StorefrontNavSub } from "@/lib/catalog";
 import { readSidebarNavClient } from "@/lib/sidebar-nav";
 import { notifyRouteLoadingStart } from "@/lib/route-loading";
 import { SITE_PAGE_INSET_X_CLASS } from "@/lib/site-layout";
+
+/** Sign signed-in customers out after this much inactivity. */
+const CUSTOMER_IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+/** localStorage key holding the last customer interaction timestamp (shared across tabs). */
+const CUSTOMER_IDLE_ACTIVITY_KEY = "boss-customer-last-activity";
+/** Throttle how often activity events rewrite the timestamp. */
+const ACTIVITY_WRITE_THROTTLE_MS = 30 * 1000;
+/** How often the idle timer re-checks for expiry. */
+const IDLE_CHECK_INTERVAL_MS = 60 * 1000;
 
 function getCookieValue(name: string) {
   if (typeof document === "undefined") {
@@ -469,6 +478,7 @@ export function TopNavClient({
   const cartCount = useCartCount();
   const [customerName, setCustomerName] = useState("");
   const [logoutOverlay, setLogoutOverlay] = useState<"signing-out" | "signed-out" | null>(null);
+  const [signedOutByIdle, setSignedOutByIdle] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [productSidebarNav, setProductSidebarNav] = useState<ProductSidebarNav | null>(null);
@@ -616,28 +626,109 @@ export function TopNavClient({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [mobileNavOpen]);
 
+  const runSignOut = useCallback(
+    async (opts?: { idle?: boolean }) => {
+      const idle = opts?.idle === true;
+      setLogoutOverlay("signing-out");
+      setMobileNavOpen(false);
+      try {
+        await fetch("/api/auth/signout", { method: "POST" });
+      } catch {
+        /* still clear local state */
+      }
+      document.cookie = "customer_name=; Max-Age=0; path=/";
+      document.cookie = "customer_email=; Max-Age=0; path=/";
+      document.cookie = "customer_delivery_address=; Max-Age=0; path=/";
+      try {
+        window.localStorage.removeItem(CUSTOMER_IDLE_ACTIVITY_KEY);
+      } catch {
+        /* ignore storage errors */
+      }
+      clearCartItems();
+      setCustomerName("");
+      setSignedOutByIdle(idle);
+      setLogoutOverlay("signed-out");
+      const leaveToHome =
+        idle ||
+        pathname === "/customer" ||
+        pathname.startsWith("/customer/") ||
+        pathname === "/customer-details";
+      if (leaveToHome) {
+        router.push("/");
+      }
+    },
+    [pathname, router],
+  );
+
   async function handleLogOut() {
-    setLogoutOverlay("signing-out");
-    setMobileNavOpen(false);
-    try {
-      await fetch("/api/auth/signout", { method: "POST" });
-    } catch {
-      /* still clear local state */
-    }
-    document.cookie = "customer_name=; Max-Age=0; path=/";
-    document.cookie = "customer_email=; Max-Age=0; path=/";
-    document.cookie = "customer_delivery_address=; Max-Age=0; path=/";
-    clearCartItems();
-    setCustomerName("");
-    setLogoutOverlay("signed-out");
-    const leaveToHome =
-      pathname === "/customer" ||
-      pathname.startsWith("/customer/") ||
-      pathname === "/customer-details";
-    if (leaveToHome) {
-      router.push("/");
-    }
+    await runSignOut();
   }
+
+  // Auto sign out customers after 2 hours of inactivity (idle timeout).
+  const runSignOutRef = useRef(runSignOut);
+  runSignOutRef.current = runSignOut;
+  useEffect(() => {
+    if (typeof window === "undefined" || !customerName) {
+      return;
+    }
+
+    const readLastActivity = (): number => {
+      try {
+        const raw = window.localStorage.getItem(CUSTOMER_IDLE_ACTIVITY_KEY);
+        const value = raw ? Number(raw) : NaN;
+        return Number.isFinite(value) ? value : 0;
+      } catch {
+        return 0;
+      }
+    };
+    const markActivity = () => {
+      try {
+        window.localStorage.setItem(CUSTOMER_IDLE_ACTIVITY_KEY, String(Date.now()));
+      } catch {
+        /* ignore storage errors */
+      }
+    };
+
+    // Seed the timer on first sign-in, but keep an existing (possibly stale) value
+    // so reopening the tab after the timeout still logs the customer out.
+    if (!readLastActivity()) {
+      markActivity();
+    }
+
+    let lastWrite = 0;
+    const onActivity = () => {
+      const now = Date.now();
+      if (now - lastWrite < ACTIVITY_WRITE_THROTTLE_MS) {
+        return;
+      }
+      lastWrite = now;
+      markActivity();
+    };
+
+    const checkIdle = () => {
+      const last = readLastActivity();
+      if (last && Date.now() - last >= CUSTOMER_IDLE_TIMEOUT_MS) {
+        runSignOutRef.current({ idle: true });
+      }
+    };
+
+    const activityEvents = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "click", "wheel"];
+    activityEvents.forEach((evt) => window.addEventListener(evt, onActivity, { passive: true }));
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        checkIdle();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    const intervalId = window.setInterval(checkIdle, IDLE_CHECK_INTERVAL_MS);
+    checkIdle();
+
+    return () => {
+      activityEvents.forEach((evt) => window.removeEventListener(evt, onActivity));
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.clearInterval(intervalId);
+    };
+  }, [customerName]);
 
   return (
     <>
@@ -858,7 +949,9 @@ export function TopNavClient({
                   id="logout-overlay-desc"
                   className="mt-4 text-lg leading-snug text-brand-navy/80 sm:mt-5 sm:text-xl"
                 >
-                  You have been logged out.
+                  {signedOutByIdle
+                    ? "You were signed out after 2 hours of inactivity. Please sign in again."
+                    : "You have been logged out."}
                 </p>
               </>
             )}

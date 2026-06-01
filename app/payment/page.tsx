@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { PurchaseAnalyticsTracker } from "@/app/components/purchase-analytics-tracker";
@@ -61,6 +62,7 @@ function getCookieValue(name: string) {
 }
 
 export default function PaymentPage() {
+  const router = useRouter();
   const [items, setItems] = useState<CartItem[]>([]);
   /** Read only after mount so SSR + first client paint match (cookies are not available on the server). */
   const [deliveryPostcode, setDeliveryPostcode] = useState<string | null>(null);
@@ -485,6 +487,14 @@ export default function PaymentPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
 
+  // After a successful order, send the customer to their My account page instead of a standalone receipt.
+  useEffect(() => {
+    if (!placed) {
+      return;
+    }
+    router.replace(`/customer?placed=${encodeURIComponent(placed.orderNumber)}`);
+  }, [placed, router]);
+
   if (placed) {
     return (
       <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
@@ -496,28 +506,18 @@ export default function PaymentPage() {
         <TopNav />
         <div className={STORE_MAIN_SHELL_CLASS}>
           <section className={`${SITE_PAGE_ROW_CLASS} py-10`}>
-            <div className={`${PAYMENT_PAGE_ZOOM_WRAP_CLASS} space-y-6 text-base`}>
-              <header className="space-y-2">
-                <h1 className="text-[2.925rem] font-medium leading-tight">Your order is completed</h1>
-                <p className="text-brand-navy/70">
-                  Thanks for your shopping. Your order ID{" "}
-                  <span className="font-mono font-semibold">{placed.orderNumber}</span> is confirmed. We will email you a receipt and link.
-                </p>
-              </header>
-              <div className="rounded-2xl border border-brand-navy/15 bg-brand-surface/50 p-5">
-                <p className="font-medium text-brand-navy">Delivery tracking</p>
-                <p className="mt-2 text-brand-navy/80">
-                  Save this page — you can check status and tracking any time:
-                </p>
-                <Link
-                  href={placed.trackUrl}
-                  className="mt-3 inline-block font-semibold text-brand-orange underline hover:text-brand-orange/90"
-                >
-                  View order &amp; tracking
-                </Link>
-              </div>
-              <Link href="/" className="inline-block font-semibold text-brand-navy hover:text-brand-orange">
-                Continue shopping
+            <div className={`${PAYMENT_PAGE_ZOOM_WRAP_CLASS} space-y-4 text-base`}>
+              <h1 className="text-[2.25rem] font-medium leading-tight">Order confirmed</h1>
+              <p className="text-brand-navy/70">
+                Thanks for your shopping. Your order ID{" "}
+                <span className="font-mono font-semibold">{placed.orderNumber}</span> is confirmed — taking you to your
+                account…
+              </p>
+              <Link
+                href={`/customer?placed=${encodeURIComponent(placed.orderNumber)}`}
+                className="inline-block font-semibold text-brand-orange underline hover:text-brand-orange/90"
+              >
+                Go to My account
               </Link>
             </div>
           </section>

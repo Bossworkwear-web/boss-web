@@ -28,7 +28,7 @@ import { ReorderOrderButton } from "./reorder-order-button";
 export const dynamic = "force-dynamic";
 
 type CustomerPageProps = {
-  searchParams: Promise<{ password?: string }>;
+  searchParams: Promise<{ password?: string; placed?: string }>;
 };
 
 function formatOrderDate(iso: string) {
@@ -342,6 +342,19 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
               {sessionName ? `Signed in as ${sessionName}.` : "Manage your profile, password, and orders."}
             </p>
           </header>
+
+          {params.placed ? (
+            <div
+              className="rounded-2xl border border-emerald-200/80 bg-emerald-50/60 p-5 text-emerald-900 shadow-sm"
+              role="status"
+            >
+              <p className="text-[1.1rem] font-semibold">Thanks for your order!</p>
+              <p className="mt-1 text-[1rem] text-emerald-900/80">
+                Your order ID <span className="font-mono font-semibold">{params.placed}</span> is confirmed. A receipt
+                and tracking link are on the way to your email, and your order is listed below.
+              </p>
+            </div>
+          ) : null}
 
           <CustomerDetailPasswordPopovers
             profile={profile}

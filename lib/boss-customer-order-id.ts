@@ -6,6 +6,24 @@ import { getPerthYmd } from "@/lib/perth-calendar";
 /** Public customer-facing order id: `BOS_YYYYMMDD_001` (Perth calendar date, daily sequence). */
 export const BOSS_CUSTOMER_ORDER_PREFIX = "BOS_";
 
+/** Invoice-number prefix used for the auto-generated tax-invoice reference (`INV_YYYYMMDD_001`). */
+export const BOSS_INVOICE_NUMBER_PREFIX = "INV_";
+
+/**
+ * Derive the auto invoice number from a store order number so customers can download a tax invoice
+ * immediately after payment. `BOS_YYYYMMDD_001` → `INV_YYYYMMDD_001`; other formats get an `INV-` prefix.
+ */
+export function invoiceNumberFromOrderNumber(orderNumber: string): string {
+  const trimmed = (orderNumber ?? "").trim();
+  if (!trimmed) {
+    return "";
+  }
+  if (trimmed.startsWith(BOSS_CUSTOMER_ORDER_PREFIX)) {
+    return `${BOSS_INVOICE_NUMBER_PREFIX}${trimmed.slice(BOSS_CUSTOMER_ORDER_PREFIX.length)}`;
+  }
+  return `INV-${trimmed}`;
+}
+
 /**
  * Build a BOS id for a Perth worksheet date and 1-based sequence within that day (e.g. supplier demo rows).
  * @param perthYmd - `YYYY-MM-DD` (Perth calendar)
