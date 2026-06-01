@@ -120,25 +120,26 @@ export function OrderProofPanel({
   }
 
   function onSend() {
-    if (outgoingUrls.length === 0) {
+    if (selectedUrls.length === 0 && logoUrls.length === 0) {
       setStatus({ ok: false, text: "Upload a logo image or select at least one mock-up to send." });
       return;
     }
     setStatus({ ok: true, text: "Sending…" });
-    // Caption each outgoing image with its decorate method + MEMO (logos have none), aligned to imageUrls.
     const metaByUrl = new Map(
       mockupImages.map((m) => [
         m.public_url,
         { method: decorateMethodLabel(m.mockup_decorate_methods), memo: (m.mockup_memo ?? "").trim() },
       ]),
     );
-    const captions = outgoingUrls.map((u) => metaByUrl.get(u) ?? { method: "", memo: "" });
+    const mockups = selectedUrls.map((url) => {
+      const meta = metaByUrl.get(url) ?? { method: "", memo: "" };
+      return { url, method: meta.method, memo: meta.memo };
+    });
     startTransition(async () => {
       const res = await sendOrderProofForApproval({
         storeOrderId: orderId,
-        imageUrls: outgoingUrls,
-        logoCount: logoUrls.length,
-        captions,
+        mockups,
+        embroideryPreviews: logoUrls,
         note,
       });
       if (!res.ok) {

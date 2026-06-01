@@ -284,11 +284,10 @@ export type SendOrderProofResult =
 /** Create a new proof round, email it to the order customer with a no-login approve link. */
 export async function sendOrderProofForApproval(args: {
   storeOrderId: string;
-  imageUrls: string[];
-  /** How many leading entries in `imageUrls` are logo artwork (shown large) vs. mock-ups (gridded). */
-  logoCount?: number;
-  /** Per-image decorate method + MEMO, aligned to `imageUrls`, shown under each image in the email. */
-  captions?: Array<{ method: string; memo: string }>;
+  /** Click-up mock-ups (with decorate method + MEMO), shown under "Logo Location, Colour & Size". */
+  mockups: Array<{ url: string; method: string; memo: string }>;
+  /** Drag-and-dropped artwork, shown under "Embroidery Preview". */
+  embroideryPreviews: string[];
   note: string;
 }): Promise<SendOrderProofResult> {
   try {
@@ -302,9 +301,10 @@ export async function sendOrderProofForApproval(args: {
     return { ok: false, error: "Missing order id." };
   }
 
-  const imageUrls = parseProofImageUrls(args.imageUrls);
-  if (imageUrls.length === 0) {
-    return { ok: false, error: "Select at least one proof image to send." };
+  const mockupUrls = parseProofImageUrls((args.mockups ?? []).map((m) => m.url));
+  const previewUrls = parseProofImageUrls(args.embroideryPreviews ?? []);
+  if (mockupUrls.length === 0 && previewUrls.length === 0) {
+    return { ok: false, error: "Upload a logo image or select at least one mock-up to send." };
   }
 
   const note = (args.note ?? "").trim();
@@ -329,6 +329,21 @@ export async function sendOrderProofForApproval(args: {
       return { ok: false, error: "This order has no customer email to send the proof to." };
     }
 
+    // The customer's saved master logo is always included at the top of the proof when configured.
+    let masterLogoUrl = "";
+    {
+      const { data: master } = await supabase
+        .from("customer_master_company_logo")
+        .select("storage_bucket, storage_path")
+        .eq("customer_email", customerEmail.toLowerCase())
+        .maybeSingle();
+      const mBucket = String((master as { storage_bucket?: string | null })?.storage_bucket ?? "").trim();
+      const mPath = String((master as { storage_path?: string | null })?.storage_path ?? "").trim();
+      if (mBucket && mPath) {
+        masterLogoUrl = publicStorageObjectUrl(mBucket, mPath);
+      }
+    }
+
     const { data: latest, error: latestErr } = await supabase
       .from("order_proofs")
       .select("round")
@@ -344,16 +359,25 @@ export async function sendOrderProofForApproval(args: {
     const token = randomBytes(24).toString("hex");
 
     // Snapshot images into a stable location so the proof never breaks if the source mock-up is later changed.
-    const stableUrls = await snapshotProofImages(supabase, order.order_number, nextRound, imageUrls);
+    const stableMockupUrls = await snapshotProofImages(supabase, order.order_number, nextRound, mockupUrls);
+    const stablePreviewUrls = await snapshotProofImages(supabase, order.order_number, nextRound, previewUrls);
+
+    const captionByUrl = new Map(
+      (args.mockups ?? []).map((m) => [m.url, { method: m.method ?? "", memo: m.memo ?? "" }]),
+    );
+    const mockupItems = stableMockupUrls.map((url, i) => ({
+      url,
+      caption: captionByUrl.get(mockupUrls[i]) ?? { method: "", memo: "" },
+    }));
 
     const emailResult = await sendOrderProofEmail({
       to: customerEmail,
       contactName: order.customer_name ?? "",
       orderNumber: order.order_number,
       round: nextRound,
-      imageUrls: stableUrls,
-      logoCount: Math.max(0, Math.min(stableUrls.length, args.logoCount ?? 0)),
-      captions: args.captions,
+      masterLogoUrl,
+      mockups: mockupItems,
+      embroideryPreviews: stablePreviewUrls,
       note: note || null,
       approveUrl: proofApproveUrl(storeOrderId, token),
     });
@@ -365,13 +389,21 @@ export async function sendOrderProofForApproval(args: {
       return { ok: false, error: `Could not send the proof email${hint}: ${emailResult.error}` };
     }
 
+    // Store the master logo first (when present), then mock-ups, then previews — the same order the
+    // customer sees in the email and on the approval page.
+    const storedImageUrls = [
+      ...(masterLogoUrl ? [masterLogoUrl] : []),
+      ...stableMockupUrls,
+      ...stablePreviewUrls,
+    ];
+
     const { error: insErr } = await supabase.from("order_proofs").insert({
       store_order_id: storeOrderId,
       order_number: order.order_number,
       round: nextRound,
       status: "sent",
       token,
-      image_urls: stableUrls,
+      image_urls: storedImageUrls,
       note: note || null,
       sent_to: customerEmail,
     });

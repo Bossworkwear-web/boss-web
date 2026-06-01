@@ -14,21 +14,38 @@ function escapeHtml(s: string): string {
 
 export type ProofImageCaption = { method: string; memo: string };
 
+export type ProofMockupItem = { url: string; caption?: ProofImageCaption };
+
 export type SendOrderProofEmailArgs = {
   to: string;
   contactName: string;
   orderNumber: string;
   round: number;
-  imageUrls: string[];
-  /** Leading `imageUrls` that are logo artwork (shown large, one per row) vs. mock-ups (3-up grid). */
-  logoCount?: number;
-  /** Per-image decorate method + MEMO, aligned to `imageUrls`, rendered under each mock-up. */
-  captions?: ProofImageCaption[];
+  /** Customer's saved master logo — always shown at the top when available. */
+  masterLogoUrl?: string | null;
+  /** Click-up mock-ups, shown under "Logo Location, Colour & Size" (3-up grid with method + MEMO). */
+  mockups: ProofMockupItem[];
+  /** Drag-and-dropped artwork, shown under "Embroidery Preview" (large, one per row). */
+  embroideryPreviews: string[];
   note: string | null;
   approveUrl: string;
 };
 
-type ProofGridItem = { url: string; caption?: ProofImageCaption };
+type ProofGridItem = ProofMockupItem;
+
+/** Section heading used between proof image groups. */
+function sectionTitleHtml(text: string): string {
+  return `<h2 style="margin:26px 0 8px;font-size:16px;font-weight:bold;color:#0f172a;border-bottom:1px solid #e2e8f0;padding-bottom:6px">${escapeHtml(
+    text,
+  )}</h2>`;
+}
+
+/** One large image, centered (master logo / embroidery preview). */
+function largeImageHtml(url: string, alt: string): string {
+  return `<a href="${escapeHtml(url)}" style="display:block;margin:12px 0;text-align:center"><img src="${escapeHtml(
+    url,
+  )}" alt="${escapeHtml(alt)}" style="max-width:100%;border:1px solid #e2e8f0;border-radius:8px" /></a>`;
+}
 
 /** Caption block (decorate method + MEMO) shown under a mock-up image. */
 function captionHtml(caption: ProofImageCaption | undefined): string {
@@ -99,24 +116,24 @@ export async function sendOrderProofEmail(
   const roundSuffix = args.round > 1 ? ` (revision ${args.round})` : "";
   const subject = `Your design proof for order ${args.orderNumber}${roundSuffix}`;
 
-  // Logo artwork (the leading entries) is shown large, one per row; the mock-ups that follow are
-  // gridded 3-per-row at half size for a clean, professional layout.
-  const logoCount = Math.max(0, Math.min(args.imageUrls.length, args.logoCount ?? 0));
-  const logoUrls = args.imageUrls.slice(0, logoCount);
-  const mockupUrls = args.imageUrls.slice(logoCount);
-  const mockupCaptions = (args.captions ?? []).slice(logoCount);
+  // Sections, in order: Master logo (always when available) → "Logo Location, Colour & Size" (Click-up
+  // mock-ups) → "Embroidery Preview" (drag-and-dropped artwork).
+  const masterLogoUrl = (args.masterLogoUrl ?? "").trim();
+  const masterSection = masterLogoUrl
+    ? `${sectionTitleHtml("Master logo")}${largeImageHtml(masterLogoUrl, "Master logo")}`
+    : "";
 
-  const logosHtml = logoUrls
-    .map(
-      (url) =>
-        `<a href="${escapeHtml(url)}" style="display:block;margin:12px 0;text-align:center"><img src="${escapeHtml(
-          url,
-        )}" alt="Logo artwork" style="max-width:100%;border:1px solid #e2e8f0;border-radius:8px" /></a>`,
-    )
-    .join("");
+  const mockupSection = args.mockups.length
+    ? `${sectionTitleHtml("Logo Location, Colour & Size")}${proofImageGridHtml(args.mockups)}`
+    : "";
 
-  const mockupItems: ProofGridItem[] = mockupUrls.map((url, i) => ({ url, caption: mockupCaptions[i] }));
-  const imagesHtml = `${logosHtml}${proofImageGridHtml(mockupItems)}`;
+  const previewSection = args.embroideryPreviews.length
+    ? `${sectionTitleHtml("Embroidery Preview")}${args.embroideryPreviews
+        .map((url) => largeImageHtml(url, "Embroidery preview"))
+        .join("")}`
+    : "";
+
+  const imagesHtml = `${masterSection}${mockupSection}${previewSection}`;
 
   const noteHtml = args.note?.trim()
     ? `<p style="margin:12px 0;color:#334155">${escapeHtml(args.note.trim()).replace(/\n/g, "<br/>")}</p>`
