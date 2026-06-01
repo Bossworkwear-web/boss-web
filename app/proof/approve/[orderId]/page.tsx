@@ -18,7 +18,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     // Force a white background even when the customer's device prefers dark mode.
     <div className="min-h-screen bg-white text-brand-navy">
-      <div className="mx-auto max-w-2xl px-4 py-12 sm:py-16">
+      <div className="mx-auto max-w-[84rem] px-4 py-12 sm:py-16">
         <div className="mb-6 flex items-center gap-2">
           <span className="inline-block h-6 w-2 rounded bg-brand-orange" />
           <span className="text-sm font-semibold uppercase tracking-[0.18em] text-brand-navy">
@@ -90,17 +90,31 @@ export default async function ProofApprovePage({ params, searchParams }: PagePro
       ) : null}
 
       {images.length > 0 ? (
-        <div className="mt-5 space-y-4">
-          {images.map((url) => (
-            <a key={url} href={url} target="_blank" rel="noreferrer" className="block">
-              {/* eslint-disable-next-line @next/next/no-img-element -- proof images are supabase public URLs from arbitrary buckets */}
-              <img
-                src={url}
-                alt="Design proof"
-                className="w-full rounded-xl border border-slate-200 bg-white object-contain"
-              />
-            </a>
-          ))}
+        <div className="mt-5 space-y-6">
+          {/* First stored image is the master logo: shown on its own, left-aligned, at a small size. */}
+          <a href={images[0]} target="_blank" rel="noreferrer" className="block">
+            {/* eslint-disable-next-line @next/next/no-img-element -- proof images are supabase public URLs from arbitrary buckets */}
+            <img
+              src={images[0]}
+              alt="Master logo"
+              className="h-auto w-auto max-w-[25%] rounded-xl border border-slate-200 bg-white object-contain"
+            />
+          </a>
+          {/* Mock-ups & previews below: up to 4 per row, ~25% width (≈75% smaller), left-aligned. */}
+          {images.length > 1 ? (
+            <div className="grid grid-cols-4 justify-items-start gap-3">
+              {images.slice(1).map((url) => (
+                <a key={url} href={url} target="_blank" rel="noreferrer" className="block w-full">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- proof images are supabase public URLs from arbitrary buckets */}
+                  <img
+                    src={url}
+                    alt="Design proof"
+                    className="w-full rounded-xl border border-slate-200 bg-white object-contain"
+                  />
+                </a>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : (
         <p className="mt-5 text-sm text-amber-800">No proof images were attached. Please contact us.</p>

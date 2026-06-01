@@ -18,9 +18,9 @@ import {
   type ClickUpSupplierLineRow,
   type CustomerReferenceVisualDto,
 } from "./actions";
-import { ClickUpProofPanel } from "./click-up-proof-panel";
 import { ClickUpSheetCustomerReferenceSection } from "./click-up-sheet-customer-reference-section";
 import { ClickUpSheetImagesSection } from "./click-up-sheet-images-section";
+import { ClickUpSheetLogoFileLinksSection } from "./click-up-sheet-logo-file-links-section";
 
 const aud = new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" });
 
@@ -36,8 +36,6 @@ type ClickUpSheetDraftV1 = {
   v: 1;
   orderId: string;
   organisationName: string;
-  embroideryLogoId: string;
-  printingLogoId: string;
   logoLocations: string;
   savedAt: string;
 };
@@ -52,8 +50,6 @@ function parseClickUpDraft(raw: string): ClickUpSheetDraftV1 | null {
       v: 1,
       orderId: typeof d.orderId === "string" ? d.orderId : "",
       organisationName: typeof d.organisationName === "string" ? d.organisationName : "",
-      embroideryLogoId: typeof d.embroideryLogoId === "string" ? d.embroideryLogoId : "",
-      printingLogoId: typeof d.printingLogoId === "string" ? d.printingLogoId : "",
       logoLocations: typeof d.logoLocations === "string" ? d.logoLocations : "",
       savedAt: typeof d.savedAt === "string" ? d.savedAt : "",
     };
@@ -119,8 +115,6 @@ export function ClickUpSheetWorkspace({
   const [orderScanPayload, setOrderScanPayload] = useState<string | null>(initialOrderScanPayload);
   const [organisationName, setOrganisationName] = useState(initialOrganisationName);
   const [supplierLines, setSupplierLines] = useState<ClickUpSupplierLineRow[]>(initialSupplierLines);
-  const [embroideryLogoId, setEmbroideryLogoId] = useState("");
-  const [printingLogoId, setPrintingLogoId] = useState("");
   const [logoLocations, setLogoLocations] = useState(initialLogoLocations);
   const [checkoutMemos, setCheckoutMemos] = useState<StoreOrderCustomerMemoLine[]>(initialCheckoutMemos);
   const [sheetActionMessage, setSheetActionMessage] = useState<string | null>(null);
@@ -146,8 +140,6 @@ export function ClickUpSheetWorkspace({
     /* eslint-disable react-hooks/set-state-in-effect -- restore draft from localStorage once */
     setOrderId(draft.orderId);
     setOrganisationName(draft.organisationName);
-    setEmbroideryLogoId(draft.embroideryLogoId);
-    setPrintingLogoId(draft.printingLogoId);
     setLogoLocations(draft.logoLocations);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [initialListDate, initialCustomerOrderId]);
@@ -246,8 +238,6 @@ export function ClickUpSheetWorkspace({
       v: 1,
       orderId,
       organisationName,
-      embroideryLogoId,
-      printingLogoId,
       logoLocations,
       savedAt: new Date().toISOString(),
     };
@@ -398,7 +388,7 @@ export function ClickUpSheetWorkspace({
 
         <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Order</h2>
-          <div className="click-up-sheet-print-order-4 mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end lg:grid-cols-4">
+          <div className="click-up-sheet-print-order-4 mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end">
             <div className="min-w-0">
               <label htmlFor="cus-order-id" className="text-[1.125rem] font-medium text-slate-600">
                 Order ID
@@ -421,30 +411,6 @@ export function ClickUpSheetWorkspace({
                 placeholder="Company name"
                 value={organisationName}
                 onChange={(e) => setOrganisationName(e.target.value)}
-              />
-            </div>
-            <div className="min-w-0">
-              <label htmlFor="emb-id" className="text-[1.125rem] font-medium text-slate-600">
-                Embroidery Logo File
-              </label>
-              <input
-                id="emb-id"
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-[1.3125rem]"
-                placeholder="—"
-                value={embroideryLogoId}
-                onChange={(e) => setEmbroideryLogoId(e.target.value)}
-              />
-            </div>
-            <div className="min-w-0">
-              <label htmlFor="prt-id" className="text-[1.125rem] font-medium text-slate-600">
-                Printing Logo File
-              </label>
-              <input
-                id="prt-id"
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-[1.3125rem]"
-                placeholder="—"
-                value={printingLogoId}
-                onChange={(e) => setPrintingLogoId(e.target.value)}
               />
             </div>
           </div>
@@ -594,11 +560,12 @@ export function ClickUpSheetWorkspace({
           />
         </div>
 
-        {!completeOrdersDocumentsView ? (
-          <div className="click-up-sheet-print-span-2 min-w-0 lg:col-span-2 print:hidden">
-            <ClickUpProofPanel customerOrderId={orderId} />
-          </div>
-        ) : null}
+        <div className="click-up-sheet-print-span-2 min-w-0 lg:col-span-2">
+          <ClickUpSheetLogoFileLinksSection
+            customerOrderId={orderId}
+            readOnly={completeOrdersDocumentsView}
+          />
+        </div>
       </div>
     </div>
   );

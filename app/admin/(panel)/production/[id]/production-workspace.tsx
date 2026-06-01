@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 import {
   listClickUpMockupsByStoreOrderNumber,
@@ -10,8 +10,9 @@ import {
 import {
   deleteProductionAsset,
   listProductionAssets,
-  uploadProductionAsset,
+  loadProductionOrderLogoFileLinks,
   type ProductionAssetDto,
+  type ProductionOrderLogoFileLinks,
 } from "@/app/admin/(panel)/production/actions";
 import { ImageUrlLightbox } from "@/app/components/image-url-lightbox";
 import {
@@ -19,14 +20,44 @@ import {
   parseMockupDecorateMethodsJson,
 } from "@/lib/click-up-sheet-mockup-methods";
 
+import { parseStoreOrderLogoFileLinks } from "@/lib/store-order-logo-file-links";
+
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value.trim());
+}
+
+function LogoFileLinksDisplay({ values }: { values: string[] }) {
+  const links = parseStoreOrderLogoFileLinks(values);
+  if (links.length === 0) return null;
+
+  return (
+    <div className="space-y-1.5 text-sm leading-relaxed text-brand-navy">
+      {links.map((linkValue, idx) => (
+        <div key={`${linkValue}-${idx}`} className="break-all">
+          {isHttpUrl(linkValue) ? (
+            <a
+              href={linkValue}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-brand-orange hover:underline"
+            >
+              {linkValue}
+            </a>
+          ) : (
+            <span className="font-mono">{linkValue}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const KIND_OPTIONS = [
   { id: "embroidery_logo", label: "Embroidery logo file" },
   { id: "printing_logo", label: "Printing logo file" },
 ] as const;
 
 const IMAGE_NAME_RE = /\.(png|jpe?g|gif|webp|svg|bmp|heic|avif)$/i;
-
-type KindId = (typeof KIND_OPTIONS)[number]["id"];
 
 function isPdfUrl(url: string): boolean {
   return /\.pdf(\?|$)/i.test(url);
@@ -136,13 +167,10 @@ export function ProductionWorkspace({
   const [mockupImages, setMockupImages] = useState<ClickUpSheetImageDto[]>(initialMockupImages);
   const [mockupsError, setMockupsError] = useState<string | null>(null);
   const [mockupLightboxSrc, setMockupLightboxSrc] = useState<string | null>(null);
-  /** Which mock-up row shows file / sheet metadata (collapsed on screen to save space; always shown when printing). */
-  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
-
-  const [kind, setKind] = useState<KindId>("embroidery_logo");
-  const [label, setLabel] = useState<string>("");
-  const [file, setFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [logoLinks, setLogoLinks] = useState<ProductionOrderLogoFileLinks>({
+    embroideryLogoFileLinks: [],
+    printingLogoFileLinks: [],
+  });
 
   const grouped = useMemo(() => {
     const by = new Map<string, ProductionAssetDto[]>();
@@ -159,9 +187,10 @@ export function ProductionWorkspace({
   }, [assets]);
 
   async function reload() {
-    const [res, mockRes] = await Promise.all([
+    const [res, mockRes, linksRes] = await Promise.all([
       listProductionAssets(orderId),
       listClickUpMockupsByStoreOrderNumber(orderNumber),
+      loadProductionOrderLogoFileLinks(orderId),
     ]);
     if (!res.ok) {
       setLoadError(res.error);
@@ -177,32 +206,17 @@ export function ProductionWorkspace({
       setMockupsError(null);
       setMockupImages(mockRes.images);
     }
+    if (linksRes.ok) {
+      setLogoLinks({
+        embroideryLogoFileLinks: linksRes.embroideryLogoFileLinks,
+        printingLogoFileLinks: linksRes.printingLogoFileLinks,
+      });
+    }
   }
 
   useEffect(() => {
     void reload();
   }, [orderId, orderNumber]);
-
-  function onUpload() {
-    if (completeOrdersDocumentsView || !file) return;
-    setStatus({ ok: true, text: "Uploading…" });
-    startTransition(async () => {
-      const res = await uploadProductionAsset(orderId, kind, label, file);
-      if (!res.ok) {
-        setLoadError(res.error);
-        setStatus({ ok: false, text: res.error });
-        return;
-      }
-      setLoadError(null);
-      setFile(null);
-      setLabel("");
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-      await reload();
-      setStatus({ ok: true, text: "Saved." });
-    });
-  }
 
   function onDelete(assetId: string) {
     if (completeOrdersDocumentsView) return;
@@ -224,7 +238,12 @@ export function ProductionWorkspace({
       <div>
         <h2 className="text-lg font-medium text-brand-navy">Production files</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Attach files to order <span className="font-mono font-semibold text-brand-navy">{orderNumber}</span>.
+          Logo file links for order{" "}
+          <span className="font-mono font-semibold text-brand-navy">{orderNumber}</span>. Edit links on{" "}
+          <Link href="/admin/click-up-sheet" className="font-semibold text-brand-orange hover:underline">
+            Click up sheet
+          </Link>{" "}
+          (Mock-up designs → Logo file links).
         </p>
       </div>
 
@@ -238,79 +257,29 @@ export function ProductionWorkspace({
           Mock-ups: {mockupsError}
         </div>
       ) : null}
-      {status ? (
-        <div
-          className={`mt-4 rounded-lg border px-4 py-3 text-sm print:hidden ${
-            status.ok ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-red-200 bg-red-50 text-red-900"
-          }`}
-        >
-          {status.text}
-        </div>
-      ) : null}
-
-      {completeOrdersDocumentsView ? (
-        <p className="mt-5 text-sm text-slate-600 print:hidden">
-          Completed Order 문서 보기 모드: 생산 파일을 추가·삭제할 수 없습니다.
-        </p>
-      ) : (
-        <div className="mt-5 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 print:hidden">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="grid gap-1">
-              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Type</span>
-              <select
-                value={kind}
-                onChange={(e) => setKind(e.target.value as KindId)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-              >
-                {KIND_OPTIONS.map((k) => (
-                  <option key={k.id} value={k.id}>
-                    {k.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1 sm:col-span-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Label (optional)</span>
-              <input
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                placeholder="e.g. Final logo v3 / Left chest"
-                maxLength={140}
-              />
-            </label>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <input
-              type="file"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="text-sm"
-              ref={fileInputRef}
-            />
-            <button
-              type="button"
-              disabled={pending || !file}
-              onClick={onUpload}
-              className="rounded-xl bg-brand-orange px-4 py-2 text-xs font-semibold text-brand-navy transition hover:brightness-95 disabled:opacity-50"
-            >
-              {pending ? "Uploading…" : "Add / Upload"}
-            </button>
-            {file ? <span className="text-xs text-slate-600">{file.name}</span> : null}
-          </div>
-        </div>
-      )}
 
       <div className="mt-6 space-y-6">
         {KIND_OPTIONS.map((k) => {
           const list = grouped.get(k.id) ?? [];
+          const linkValues =
+            k.id === "embroidery_logo"
+              ? logoLinks.embroideryLogoFileLinks
+              : logoLinks.printingLogoFileLinks;
+          const parsedLinks = parseStoreOrderLogoFileLinks(linkValues);
+          const hasLinks = parsedLinks.length > 0;
           return (
             <div key={k.id} className="space-y-2">
               <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-600">{k.label}</h3>
 
-              {list.length === 0 ? (
-                <p className="text-sm text-slate-500">—</p>
-              ) : (
+              {hasLinks ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                  <LogoFileLinksDisplay values={linkValues} />
+                </div>
+              ) : null}
+
+              {!hasLinks && list.length === 0 ? <p className="text-sm text-slate-500">—</p> : null}
+
+              {list.length > 0 ? (
                 <ul className="grid gap-2">
                   {list.map((a) => {
                     const showImg = isImageProductionAsset(a);
@@ -377,7 +346,7 @@ export function ProductionWorkspace({
                     );
                   })}
                 </ul>
-              )}
+              ) : null}
             </div>
           );
         })}

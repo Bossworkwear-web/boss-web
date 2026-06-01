@@ -40,11 +40,18 @@ function sectionTitleHtml(text: string): string {
   )}</h2>`;
 }
 
-/** One large image, centered (master logo / embroidery preview). */
+/** One large image, left-aligned (embroidery preview). */
 function largeImageHtml(url: string, alt: string): string {
-  return `<a href="${escapeHtml(url)}" style="display:block;margin:12px 0;text-align:center"><img src="${escapeHtml(
+  return `<a href="${escapeHtml(url)}" style="display:block;margin:12px 0;text-align:left"><img src="${escapeHtml(
     url,
-  )}" alt="${escapeHtml(alt)}" style="max-width:100%;border:1px solid #e2e8f0;border-radius:8px" /></a>`;
+  )}" alt="${escapeHtml(alt)}" style="max-width:100%;border:1px solid #ffffff;border-radius:8px" /></a>`;
+}
+
+/** Master logo: left-aligned, fixed small size (deterministic across email clients & the A4 preview). */
+function masterLogoHtml(url: string): string {
+  return `<a href="${escapeHtml(url)}" style="display:block;margin:12px 0;text-align:left"><img src="${escapeHtml(
+    url,
+  )}" alt="Master logo" width="190" style="width:190px;max-width:50%;height:auto;border:1px solid #ffffff;border-radius:8px" /></a>`;
 }
 
 /** Caption block (decorate method + MEMO) shown under a mock-up image. */
@@ -54,14 +61,16 @@ function captionHtml(caption: ProofImageCaption | undefined): string {
   const memo = caption.memo?.trim();
   if (!method && !memo) return "";
   const methodHtml = method
-    ? `<div style="margin-top:6px;font-weight:bold;color:#1e3a8a;font-size:13px">${escapeHtml(method)}</div>`
+    ? `<div style="margin-top:6px;font-weight:bold;color:#1e3a8a;font-size:13px;text-align:center">${escapeHtml(method)}</div>`
     : "";
   const memoHtml = memo
-    ? `<div style="margin-top:3px;color:#475569;font-size:12px;line-height:1.45;text-align:left">${escapeHtml(
+    ? `<div style="margin-top:3px;color:#475569;font-size:12px;line-height:1.45;text-align:center">${escapeHtml(
         memo,
       ).replace(/\n/g, "<br/>")}</div>`
     : "";
-  return `<div style="max-width:320px;margin:0 auto">${methodHtml}${memoHtml}</div>`;
+  // Keep the caption within the same 320px width as the image and centre it, so it sits under the artwork
+  // instead of being pushed to the far-left edge of the column.
+  return `<div style="max-width:320px;margin:0;text-align:center">${methodHtml}${memoHtml}</div>`;
 }
 
 /** Table-based 3-up grid of proof images at half size (email-client safe), with captions underneath. */
@@ -77,11 +86,11 @@ function proofImageGridHtml(items: ProofGridItem[]): string {
       const cells = row
         .map(
           (item) =>
-            `<td width="33.33%" valign="top" align="center" style="padding:6px"><a href="${escapeHtml(
+            `<td width="33.33%" valign="top" align="left" style="padding:6px"><a href="${escapeHtml(
               item.url,
             )}" style="display:block;text-decoration:none"><img src="${escapeHtml(
               item.url,
-            )}" alt="Design proof" width="320" style="width:100%;max-width:320px;height:auto;border:1px solid #e2e8f0;border-radius:8px" /></a>${captionHtml(
+            )}" alt="Design proof" width="320" style="width:100%;max-width:320px;height:auto;border:1px solid #ffffff;border-radius:8px" /></a>${captionHtml(
               item.caption,
             )}</td>`,
         )
@@ -98,20 +107,8 @@ export type SendOrderProofEmailResult =
   | { ok: true }
   | { ok: false; error: string; skipped?: boolean };
 
-/** Customer-facing: embroidery/print proof (시안) for approval, with a no-login approve link (Resend). */
-export async function sendOrderProofEmail(
-  args: SendOrderProofEmailArgs,
-): Promise<SendOrderProofEmailResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    return { ok: false, error: "RESEND_API_KEY not set", skipped: true };
-  }
-
-  const to = args.to.trim();
-  if (!to) {
-    return { ok: false, error: "No customer email on this order." };
-  }
-
+/** Build the exact subject + HTML body of the proof email (shared by the sender and the admin preview). */
+export function buildOrderProofEmailHtml(args: SendOrderProofEmailArgs): { subject: string; html: string } {
   const contact = args.contactName.trim() || "there";
   const roundSuffix = args.round > 1 ? ` (revision ${args.round})` : "";
   const subject = `Your design proof for order ${args.orderNumber}${roundSuffix}`;
@@ -120,7 +117,7 @@ export async function sendOrderProofEmail(
   // mock-ups) → "Embroidery Preview" (drag-and-dropped artwork).
   const masterLogoUrl = (args.masterLogoUrl ?? "").trim();
   const masterSection = masterLogoUrl
-    ? `${sectionTitleHtml("Master logo")}${largeImageHtml(masterLogoUrl, "Master logo")}`
+    ? `${sectionTitleHtml("Master logo")}${masterLogoHtml(masterLogoUrl)}`
     : "";
 
   const mockupSection = args.mockups.length
@@ -170,6 +167,25 @@ export async function sendOrderProofEmail(
   `
     .replace(/\n\s+/g, " ")
     .trim();
+
+  return { subject, html };
+}
+
+/** Customer-facing: embroidery/print proof (시안) for approval, with a no-login approve link (Resend). */
+export async function sendOrderProofEmail(
+  args: SendOrderProofEmailArgs,
+): Promise<SendOrderProofEmailResult> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    return { ok: false, error: "RESEND_API_KEY not set", skipped: true };
+  }
+
+  const to = args.to.trim();
+  if (!to) {
+    return { ok: false, error: "No customer email on this order." };
+  }
+
+  const { subject, html } = buildOrderProofEmailHtml(args);
 
   try {
     const res = await fetch("https://api.resend.com/emails", {

@@ -125,9 +125,14 @@ function wrapCaptionForCanvas(ctx: CanvasRenderingContext2D, text: string, maxWi
   return all;
 }
 
-/** "Embroidery · Left chest" style tag shown next to a logo on the proof; empty when there is nothing to say. */
-function logoLabelText(placement: string | undefined, method: string | null): string {
-  return [method, (placement ?? "").trim()].filter((s): s is string => Boolean(s && s.trim())).join(" · ");
+/**
+ * Optional placement tag shown next to a logo on the proof (e.g. "Left chest"); empty when no placement is set.
+ * The decoration method (Embroidery / DTF / Sublimation) is intentionally NOT burned here — it is already shown
+ * as a coloured chip on the mock-up tile and in the customer email, so an on-image method tag is redundant.
+ */
+function logoLabelText(placement: string | undefined, _method: string | null): string {
+  void _method;
+  return (placement ?? "").trim();
 }
 
 /** Draw a small dark pill with white text centred at (cx, topY) on the export canvas. */
@@ -1248,8 +1253,9 @@ export function ClickUpSheetMockupBuilderModal({
                       className="mt-1 block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm placeholder:text-slate-400 focus:border-brand-orange/50 focus:outline-none focus:ring-2 focus:ring-brand-orange/25"
                     />
                     <p className="mt-1 text-[0.65rem] text-slate-500">
-                      Combined with the selected decorate method below as a tag on the logo (e.g.{" "}
-                      <span className="font-semibold">Embroidery · Left chest</span>).
+                      Shown as a small tag under the logo on the proof (e.g.{" "}
+                      <span className="font-semibold">Left chest</span>). Leave blank for no tag. The decorate
+                      method is shown separately as a chip, so it is not added here.
                     </p>
                   </div>
 

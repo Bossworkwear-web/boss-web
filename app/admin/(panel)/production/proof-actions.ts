@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
 import { assertAdminSessionForPathSegment } from "@/lib/admin-auth";
-import { sendOrderProofEmail } from "@/lib/order-proof-email";
+import { buildOrderProofEmailHtml, sendOrderProofEmail } from "@/lib/order-proof-email";
 import {
   normalizeProofStatus,
   parseProofImageUrls,
@@ -417,6 +417,180 @@ export async function sendOrderProofForApproval(args: {
     return { ok: true, round: nextRound };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Send failed";
+    return { ok: false, error: msg };
+  }
+}
+
+export type PreviewOrderProofEmailResult =
+  | { ok: true; subject: string; html: string; to: string; round: number }
+  | { ok: false; error: string };
+
+/**
+ * Build the exact proof email the customer would receive — same layout/HTML as the real send — without
+ * sending or writing anything. Uses the live mock-up/preview URLs (no snapshot) so staff can review first.
+ */
+export async function previewOrderProofEmail(args: {
+  storeOrderId: string;
+  mockups: Array<{ url: string; method: string; memo: string }>;
+  embroideryPreviews: string[];
+  note: string;
+}): Promise<PreviewOrderProofEmailResult> {
+  try {
+    await assertAdminSessionForPathSegment("/admin/production");
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const storeOrderId = (args.storeOrderId ?? "").trim();
+  if (!storeOrderId) {
+    return { ok: false, error: "Missing order id." };
+  }
+
+  const mockupUrls = parseProofImageUrls((args.mockups ?? []).map((m) => m.url));
+  const previewUrls = parseProofImageUrls(args.embroideryPreviews ?? []);
+  const note = (args.note ?? "").trim();
+
+  try {
+    const supabase = createSupabaseAdminClient();
+
+    const { data: order, error: orderErr } = await supabase
+      .from("store_orders")
+      .select("id, order_number, customer_email, customer_name")
+      .eq("id", storeOrderId)
+      .maybeSingle();
+    if (orderErr) {
+      return { ok: false, error: orderErr.message };
+    }
+    if (!order) {
+      return { ok: false, error: "Order not found." };
+    }
+
+    const customerEmail = (order.customer_email ?? "").trim();
+
+    let masterLogoUrl = "";
+    if (customerEmail) {
+      const { data: master } = await supabase
+        .from("customer_master_company_logo")
+        .select("storage_bucket, storage_path")
+        .eq("customer_email", customerEmail.toLowerCase())
+        .maybeSingle();
+      const mBucket = String((master as { storage_bucket?: string | null })?.storage_bucket ?? "").trim();
+      const mPath = String((master as { storage_path?: string | null })?.storage_path ?? "").trim();
+      if (mBucket && mPath) {
+        masterLogoUrl = publicStorageObjectUrl(mBucket, mPath);
+      }
+    }
+
+    const { data: latest } = await supabase
+      .from("order_proofs")
+      .select("round")
+      .eq("store_order_id", storeOrderId)
+      .order("round", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextRound = (latest?.round ?? 0) + 1;
+
+    const captionByUrl = new Map(
+      (args.mockups ?? []).map((m) => [m.url, { method: m.method ?? "", memo: m.memo ?? "" }]),
+    );
+    const mockupItems = mockupUrls.map((url) => ({
+      url,
+      caption: captionByUrl.get(url) ?? { method: "", memo: "" },
+    }));
+
+    const { subject, html } = buildOrderProofEmailHtml({
+      to: customerEmail || "customer@example.com",
+      contactName: order.customer_name ?? "",
+      orderNumber: order.order_number,
+      round: nextRound,
+      masterLogoUrl,
+      mockups: mockupItems,
+      embroideryPreviews: previewUrls,
+      note: note || null,
+      approveUrl: proofApproveUrl(storeOrderId, "preview-token"),
+    });
+
+    return { ok: true, subject, html, to: customerEmail, round: nextRound };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Preview failed";
+    return { ok: false, error: msg };
+  }
+}
+
+const PROOF_OWNED_PREFIXES = ["order-proofs/", "proof-logos/"];
+
+function proofBucketObjectPath(url: string): string | null {
+  const marker = `/storage/v1/object/public/${PROOF_LOGO_BUCKET}/`;
+  const i = url.indexOf(marker);
+  if (i < 0) return null;
+  let path = url.slice(i + marker.length).split("?")[0];
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    // keep as-is
+  }
+  return path || null;
+}
+
+export type DeleteOrderProofResult = { ok: true } | { ok: false; error: string };
+
+/** Remove one proof round (DB row + proof-owned snapshot/logo files). Master logo URLs are never deleted. */
+export async function deleteOrderProofRound(args: {
+  storeOrderId: string;
+  proofId: string;
+}): Promise<DeleteOrderProofResult> {
+  try {
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
+  } catch {
+    try {
+      await assertAdminSessionForPathSegment("/admin/production");
+    } catch {
+      return { ok: false, error: "Unauthorized" };
+    }
+  }
+
+  const storeOrderId = (args.storeOrderId ?? "").trim();
+  const proofId = (args.proofId ?? "").trim();
+  if (!storeOrderId || !proofId) {
+    return { ok: false, error: "Missing order or proof id." };
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { data: row, error: fetchErr } = await supabase
+      .from("order_proofs")
+      .select("id, store_order_id, image_urls, round")
+      .eq("id", proofId)
+      .maybeSingle();
+    if (fetchErr) {
+      return { ok: false, error: fetchErr.message };
+    }
+    if (!row) {
+      return { ok: false, error: "Proof round not found." };
+    }
+    if (String(row.store_order_id) !== storeOrderId) {
+      return { ok: false, error: "This proof does not belong to this order." };
+    }
+
+    const removePaths = parseProofImageUrls(row.image_urls)
+      .map(proofBucketObjectPath)
+      .filter((p): p is string => Boolean(p && PROOF_OWNED_PREFIXES.some((pre) => p.startsWith(pre))));
+
+    if (removePaths.length > 0) {
+      await supabase.storage.from(PROOF_LOGO_BUCKET).remove(removePaths).catch(() => undefined);
+    }
+
+    const { error: delErr } = await supabase.from("order_proofs").delete().eq("id", proofId);
+    if (delErr) {
+      return { ok: false, error: delErr.message };
+    }
+
+    revalidatePath(`/admin/production/${storeOrderId}`);
+    revalidatePath("/admin/click-up-sheet");
+    revalidatePath("/customer");
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Delete failed";
     return { ok: false, error: msg };
   }
 }

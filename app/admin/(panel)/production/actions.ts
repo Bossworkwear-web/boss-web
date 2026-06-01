@@ -7,6 +7,7 @@ import { assertAdminSessionForPathSegment } from "@/lib/admin-auth";
 import { guardStoreOrderNotInCompleteOrdersQueue } from "@/lib/complete-orders-queue-mutation-block";
 import { appendClickUpProductionQueueSetupHint } from "@/lib/supabase-click-up-production-queue-hint";
 import { publicStorageObjectUrl } from "@/lib/supabase-public-storage-url";
+import { parseStoreOrderLogoFileLinks } from "@/lib/store-order-logo-file-links";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 const BUCKET = "production-order-assets";
@@ -97,6 +98,57 @@ export async function listProductionAssets(orderId: string): Promise<{ ok: true;
       public_url: publicStorageObjectUrl(r.storage_bucket ?? BUCKET, r.storage_path),
     }));
     return { ok: true, assets };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Load failed";
+    return { ok: false, error: msg };
+  }
+}
+
+export type ProductionOrderLogoFileLinks = {
+  embroideryLogoFileLinks: string[];
+  printingLogoFileLinks: string[];
+};
+
+export async function loadProductionOrderLogoFileLinks(
+  orderId: string,
+): Promise<
+  | ({ ok: true } & ProductionOrderLogoFileLinks)
+  | { ok: false; error: string }
+> {
+  try {
+    await assertAdminSessionForPathSegment("/admin/production");
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const id = orderId.trim();
+  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    return { ok: true, embroideryLogoFileLinks: [], printingLogoFileLinks: [] };
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("store_orders")
+      .select("embroidery_logo_file_link, printing_logo_file_link")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) {
+      const msg = (error.message ?? "").toLowerCase();
+      if (msg.includes("embroidery_logo_file_link") || msg.includes("printing_logo_file_link")) {
+        return { ok: true, embroideryLogoFileLinks: [], printingLogoFileLinks: [] };
+      }
+      return { ok: false, error: error.message };
+    }
+    const row = data as {
+      embroidery_logo_file_link?: unknown;
+      printing_logo_file_link?: unknown;
+    } | null;
+    return {
+      ok: true,
+      embroideryLogoFileLinks: parseStoreOrderLogoFileLinks(row?.embroidery_logo_file_link),
+      printingLogoFileLinks: parseStoreOrderLogoFileLinks(row?.printing_logo_file_link),
+    };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Load failed";
     return { ok: false, error: msg };

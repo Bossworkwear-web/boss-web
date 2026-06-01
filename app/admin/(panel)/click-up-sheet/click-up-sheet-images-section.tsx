@@ -18,6 +18,7 @@ import {
   type MockupBuilderEditTarget,
   type MockupPngReadyOptions,
 } from "./click-up-sheet-mockup-builder-modal";
+import { MockupApprovalControls, type ApprovalMockup } from "./mockup-approval-controls";
 
 const ACCEPT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 
@@ -101,6 +102,21 @@ export function ClickUpSheetImagesSection({
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragDepthRef = useRef(0);
+  /* Mock-up → customer proof: which mock-ups to send + their send order (single grid, no duplicate list). */
+  const [sendSelected, setSendSelected] = useState<Record<string, boolean>>(() => {
+    const out: Record<string, boolean> = {};
+    if (isMockup) {
+      for (const img of initialImages ?? []) {
+        out[img.id] = true;
+      }
+    }
+    return out;
+  });
+  const [sendOrder, setSendOrder] = useState<string[]>(() =>
+    isMockup ? (initialImages ?? []).map((i) => i.id) : [],
+  );
+  const dragIndexRef = useRef<number | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   useEffect(() => {
     const ld = listDateYmd.trim();
@@ -143,6 +159,46 @@ export function ClickUpSheetImagesSection({
       window.clearTimeout(t);
     };
   }, [listDateYmd, customerOrderId, assetFilter, isMockup]);
+
+  /* Keep the send selection + order in sync as mock-ups are added/removed: new ones are selected & appended. */
+  useEffect(() => {
+    if (!isMockup) {
+      return;
+    }
+    const ids = images.map((i) => i.id);
+    setSendOrder((prev) => {
+      const kept = prev.filter((id) => ids.includes(id));
+      const added = ids.filter((id) => !kept.includes(id));
+      const next = [...kept, ...added];
+      return next.length === prev.length && next.every((v, i) => v === prev[i]) ? prev : next;
+    });
+    setSendSelected((prev) => {
+      const next: Record<string, boolean> = {};
+      for (const id of ids) {
+        next[id] = id in prev ? prev[id] : true;
+      }
+      const sameKeys = Object.keys(prev).length === ids.length && ids.every((id) => id in prev);
+      return sameKeys ? prev : next;
+    });
+  }, [images, isMockup]);
+
+  function moveMockup(fromIdx: number, toIdx: number) {
+    setSendOrder((prev) => {
+      if (
+        fromIdx < 0 ||
+        fromIdx >= prev.length ||
+        toIdx < 0 ||
+        toIdx >= prev.length ||
+        fromIdx === toIdx
+      ) {
+        return prev;
+      }
+      const next = [...prev];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next;
+    });
+  }
 
   function closeMockupBuilder() {
     setMockupBuilderOpen(false);
@@ -363,6 +419,26 @@ export function ClickUpSheetImagesSection({
     /* Mock-up + Order ID: 워크시트 날짜 없이도 재오더 전승 목업 표시(아래 본문 UI). */
   }
 
+  const imagesById = new Map(images.map((i) => [i.id, i] as const));
+  const orderedMockups = isMockup
+    ? sendOrder
+        .map((id) => imagesById.get(id))
+        .filter((v): v is ClickUpSheetImageDto => Boolean(v))
+    : [];
+  const gridImages = isMockup ? orderedMockups : images;
+  const approvalMockups: ApprovalMockup[] = isMockup
+    ? orderedMockups
+        .filter((img) => sendSelected[img.id] && !isPdfUrl(img.public_url))
+        .map((img) => ({
+          id: img.id,
+          url: img.public_url,
+          method: parseMockupDecorateMethodsJson(img.mockup_decorate_methods).join(" / "),
+          memo: (img.mockup_memo ?? "").trim(),
+        }))
+    : [];
+  const selectedPositionById = new Map<string, number>();
+  approvalMockups.forEach((m, i) => selectedPositionById.set(m.id, i + 1));
+
   return (
     <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
@@ -493,16 +569,90 @@ export function ClickUpSheetImagesSection({
               : "mt-4 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
           }
         >
-          {images.map((img) => {
+          {gridImages.map((img, index) => {
             const decorateLabels = isMockup ? parseMockupDecorateMethodsJson(img.mockup_decorate_methods) : [];
             const inheritedFrom = (img.inherited_from_order_number ?? "").trim();
             const isInheritedMockup = isMockup && inheritedFrom.length > 0;
             const isMasterLogo = !isMockup && Boolean(img.is_master_logo);
+            const sendable = isMockup && !readOnly && !isPdfUrl(img.public_url);
+            const isSelectedToSend = sendable && Boolean(sendSelected[img.id]);
+            const sendPosition = selectedPositionById.get(img.id);
+            const isDragOver = sendable && dragOverId === img.id;
             return (
             <li
               key={img.id}
-              className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50 shadow-sm"
+              draggable={sendable}
+              onDragStart={
+                sendable
+                  ? () => {
+                      dragIndexRef.current = index;
+                    }
+                  : undefined
+              }
+              onDragOver={
+                sendable
+                  ? (e) => {
+                      e.preventDefault();
+                      if (dragOverId !== img.id) setDragOverId(img.id);
+                    }
+                  : undefined
+              }
+              onDragLeave={
+                sendable ? () => setDragOverId((cur) => (cur === img.id ? null : cur)) : undefined
+              }
+              onDrop={
+                sendable
+                  ? (e) => {
+                      e.preventDefault();
+                      const from = dragIndexRef.current;
+                      if (from != null) moveMockup(from, index);
+                      dragIndexRef.current = null;
+                      setDragOverId(null);
+                    }
+                  : undefined
+              }
+              onDragEnd={
+                sendable
+                  ? () => {
+                      dragIndexRef.current = null;
+                      setDragOverId(null);
+                    }
+                  : undefined
+              }
+              className={`relative overflow-hidden rounded-lg border bg-slate-50 shadow-sm ${
+                sendable ? "cursor-move" : ""
+              } ${
+                isDragOver
+                  ? "border-brand-orange ring-2 ring-brand-orange"
+                  : isSelectedToSend
+                    ? "border-brand-orange/60 ring-1 ring-brand-orange/30"
+                    : "border-slate-200"
+              }`}
             >
+              {sendable ? (
+                <div className="absolute left-2 top-2 z-10 flex items-center gap-2 print:hidden">
+                  <label
+                    className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[0.7rem] font-semibold text-brand-navy shadow"
+                    title="Include this mock-up when sending the proof"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5"
+                      checked={isSelectedToSend}
+                      onChange={(e) =>
+                        setSendSelected((prev) => ({ ...prev, [img.id]: e.target.checked }))
+                      }
+                    />
+                    Send
+                  </label>
+                  {sendPosition ? (
+                    <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-brand-orange px-1 text-[0.7rem] font-bold text-brand-navy shadow">
+                      {sendPosition}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
               {isMasterLogo ? (
                 <div className="border-b border-emerald-200 bg-emerald-50 px-2 py-1.5 text-center text-[0.65rem] font-semibold uppercase tracking-wide text-emerald-950">
                   Master logo
@@ -536,6 +686,7 @@ export function ClickUpSheetImagesSection({
                     alt=""
                     className="pointer-events-none h-[33rem] min-h-[33rem] w-full bg-white object-contain"
                     loading="lazy"
+                    draggable={false}
                   />
                 </button>
               ) : (
@@ -646,6 +797,13 @@ export function ClickUpSheetImagesSection({
           })}
         </ul>
       )}
+      {isMockup && !readOnly ? (
+        <MockupApprovalControls
+          customerOrderId={customerOrderId}
+          mockups={approvalMockups}
+          orderedMockupIds={orderedMockups.map((img) => img.id)}
+        />
+      ) : null}
       <ImageUrlLightbox
         open={Boolean(lightboxSrc)}
         onClose={() => setLightboxSrc(null)}

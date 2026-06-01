@@ -23,6 +23,10 @@ import {
 } from "@/lib/fetch-click-up-mockups";
 import { appendClickUpProductionQueueSetupHint } from "@/lib/supabase-click-up-production-queue-hint";
 import { createSupabaseAdminClient } from "@/lib/supabase";
+import {
+  parseStoreOrderLogoFileLinks,
+  sanitizeStoreOrderLogoFileLinks,
+} from "@/lib/store-order-logo-file-links";
 
 const CLICK_UP_SHEET_IMAGES_BUCKET = "click-up-sheet-images";
 const MAX_CLICK_UP_IMAGE_BYTES = 12 * 1024 * 1024;
@@ -205,6 +209,129 @@ export async function lookupCustomerByStoreOrderNumber(
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Lookup failed";
     return { ok: false, error: msg };
+  }
+}
+
+export type StoreOrderLogoFileLinksDto = {
+  embroideryLogoFileLinks: string[];
+  printingLogoFileLinks: string[];
+};
+
+export type LoadStoreOrderLogoFileLinksResult =
+  | { ok: true } & StoreOrderLogoFileLinksDto
+  | { ok: false; error: string };
+
+export type SaveStoreOrderLogoFileLinksResult = { ok: true } | { ok: false; error: string };
+
+function logoLinkColumnsMissingMessage(err: { message?: string } | null): string | null {
+  const msg = (err?.message ?? "").toLowerCase();
+  if (
+    msg.includes("embroidery_logo_file_link") ||
+    msg.includes("printing_logo_file_link") ||
+    msg.includes("schema cache")
+  ) {
+    return "Logo file link columns are missing or need upgrading on store_orders. Run supabase/sql-editor/store_orders_logo_file_links.sql.";
+  }
+  return null;
+}
+
+/** Load embroidery / printing logo file links entered on Click up sheet (stored on store_orders). */
+export async function loadStoreOrderLogoFileLinks(orderNumber: string): Promise<LoadStoreOrderLogoFileLinksResult> {
+  try {
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const num = (orderNumber ?? "").trim();
+  if (!num) {
+    return { ok: true, embroideryLogoFileLinks: [], printingLogoFileLinks: [] };
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("store_orders")
+      .select("embroidery_logo_file_link, printing_logo_file_link")
+      .eq("order_number", num)
+      .maybeSingle();
+    if (error) {
+      const hint = logoLinkColumnsMissingMessage(error);
+      return { ok: false, error: hint ?? error.message };
+    }
+    if (!data) {
+      return { ok: false, error: `No order found for "${num}".` };
+    }
+    const row = data as {
+      embroidery_logo_file_link?: unknown;
+      printing_logo_file_link?: unknown;
+    };
+    return {
+      ok: true,
+      embroideryLogoFileLinks: parseStoreOrderLogoFileLinks(row.embroidery_logo_file_link),
+      printingLogoFileLinks: parseStoreOrderLogoFileLinks(row.printing_logo_file_link),
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Load failed" };
+  }
+}
+
+/** Persist embroidery / printing logo file links for this store order (shown on Production pack). */
+export async function saveStoreOrderLogoFileLinks(args: {
+  orderNumber: string;
+  embroideryLogoFileLinks: string[];
+  printingLogoFileLinks: string[];
+}): Promise<SaveStoreOrderLogoFileLinksResult> {
+  try {
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const num = (args.orderNumber ?? "").trim();
+  if (!num) {
+    return { ok: false, error: "Order ID is required." };
+  }
+
+  const embroidery = sanitizeStoreOrderLogoFileLinks(args.embroideryLogoFileLinks ?? []);
+  const printing = sanitizeStoreOrderLogoFileLinks(args.printingLogoFileLinks ?? []);
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const qg = await guardCustomerOrderNumberNotInCompleteOrdersQueue(num);
+    if (!qg.ok) {
+      return { ok: false, error: qg.error };
+    }
+
+    const { data: row, error: fetchErr } = await supabase
+      .from("store_orders")
+      .select("id")
+      .eq("order_number", num)
+      .maybeSingle();
+    if (fetchErr) {
+      return { ok: false, error: fetchErr.message };
+    }
+    if (!row) {
+      return { ok: false, error: `No order found for "${num}".` };
+    }
+
+    const { error: upErr } = await supabase
+      .from("store_orders")
+      .update({
+        embroidery_logo_file_link: embroidery,
+        printing_logo_file_link: printing,
+      })
+      .eq("id", row.id);
+    if (upErr) {
+      const hint = logoLinkColumnsMissingMessage(upErr);
+      return { ok: false, error: hint ?? upErr.message };
+    }
+
+    revalidatePath("/admin/click-up-sheet");
+    revalidatePath(`/admin/production/${row.id}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Save failed" };
   }
 }
 
@@ -1295,6 +1422,68 @@ export async function setClickUpSheetMasterCompanyLogo(
     return { ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Update failed";
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Persist the display/send order of mock-ups (drag-reorder in the Mock-up designs section). Assigns
+ * sequential `sort_order` to the given image ids. Inherited (previous-order) mock-ups are skipped so we never
+ * mutate another order's rows. Best-effort: returns the first DB error if any update fails.
+ */
+export async function reorderClickUpSheetMockups(
+  orderedImageIds: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await assertAdminSessionForPathSegment("/admin/click-up-sheet");
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const ids = (orderedImageIds ?? []).map((s) => (s ?? "").trim()).filter(Boolean);
+  if (ids.length === 0) {
+    return { ok: true };
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { data: rows, error: fetchErr } = await supabase
+      .from("click_up_sheet_images")
+      .select("id, is_mockup, inherited_from_order_number")
+      .in("id", ids);
+    if (fetchErr) {
+      return { ok: false, error: fetchErr.message };
+    }
+
+    const editable = new Set(
+      (rows ?? [])
+        .filter(
+          (r) =>
+            Boolean((r as { is_mockup?: boolean }).is_mockup) &&
+            !String((r as { inherited_from_order_number?: string | null }).inherited_from_order_number ?? "").trim(),
+        )
+        .map((r) => String((r as { id: string }).id)),
+    );
+
+    let sort = 0;
+    for (const id of ids) {
+      if (!editable.has(id)) {
+        continue;
+      }
+      const { error: upErr } = await supabase
+        .from("click_up_sheet_images")
+        .update({ sort_order: sort })
+        .eq("id", id);
+      if (upErr) {
+        return { ok: false, error: upErr.message };
+      }
+      sort += 1;
+    }
+
+    revalidatePath("/admin/click-up-sheet");
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Reorder failed";
     return { ok: false, error: msg };
   }
 }
