@@ -214,7 +214,7 @@ export function MockupApprovalControls({
         return;
       }
       // Persist the Mock-up designs reorder (drag order) at the same time the proof goes out.
-      const saveOrder = await reorderClickUpSheetMockups(orderedMockupIds);
+      const saveOrder = await reorderClickUpSheetMockups(orderedMockupIds, customerOrderId);
       setNote("");
       setLogoUrls([]);
       setStatus({

@@ -1059,6 +1059,8 @@ export type Database = {
           xero_payment_error: string | null;
           xero_credit_notes: Json;
           xero_refund_sync_error: string | null;
+          embroidery_logo_file_link: string[];
+          printing_logo_file_link: string[];
         };
         Insert: {
           id?: string;
@@ -1099,6 +1101,8 @@ export type Database = {
           xero_payment_error?: string | null;
           xero_credit_notes?: Json;
           xero_refund_sync_error?: string | null;
+          embroidery_logo_file_link?: string[];
+          printing_logo_file_link?: string[];
         };
         Update: {
           id?: string;
@@ -1139,6 +1143,8 @@ export type Database = {
           xero_payment_error?: string | null;
           xero_credit_notes?: Json;
           xero_refund_sync_error?: string | null;
+          embroidery_logo_file_link?: string[];
+          printing_logo_file_link?: string[];
         };
         Relationships: [
           {

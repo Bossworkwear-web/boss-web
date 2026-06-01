@@ -1329,7 +1329,7 @@ export async function setClickUpSheetMasterCompanyLogo(
     const supabase = createSupabaseAdminClient();
     const { data: row, error: fetchErr } = await supabase
       .from("click_up_sheet_images")
-      .select("id, list_date, customer_order_id, is_mockup, inherited_from_order_number, storage_path")
+      .select("id, list_date, customer_order_id, is_mockup, storage_path")
       .eq("id", id)
       .maybeSingle();
 
@@ -1340,19 +1340,14 @@ export async function setClickUpSheetMasterCompanyLogo(
       return { ok: false, error: "Image not found." };
     }
 
-    const isMockup = Boolean((row as { is_mockup?: boolean }).is_mockup);
+    const isMockup = Boolean(row.is_mockup);
     if (isMockup) {
       return { ok: false, error: "Master logo can only be set on reference images." };
     }
-    const inheritedFrom = String((row as { inherited_from_order_number?: string | null }).inherited_from_order_number ?? "")
-      .trim();
-    if (inheritedFrom) {
-      return { ok: false, error: "Inherited mock-ups cannot be edited." };
-    }
 
-    const listDate = String((row as { list_date?: string }).list_date ?? "").trim();
-    const customerOrderId = String((row as { customer_order_id?: string | null }).customer_order_id ?? "").trim();
-    const storagePath = String((row as { storage_path?: string | null }).storage_path ?? "").trim();
+    const listDate = String(row.list_date ?? "").trim();
+    const customerOrderId = String(row.customer_order_id ?? "").trim();
+    const storagePath = String(row.storage_path ?? "").trim();
     if (customerOrderId) {
       const qg = await guardCustomerOrderNumberNotInCompleteOrdersQueue(customerOrderId);
       if (!qg.ok) {
@@ -1433,6 +1428,7 @@ export async function setClickUpSheetMasterCompanyLogo(
  */
 export async function reorderClickUpSheetMockups(
   orderedImageIds: string[],
+  customerOrderId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     await assertAdminSessionForPathSegment("/admin/click-up-sheet");
@@ -1441,6 +1437,7 @@ export async function reorderClickUpSheetMockups(
   }
 
   const ids = (orderedImageIds ?? []).map((s) => (s ?? "").trim()).filter(Boolean);
+  const orderNum = (customerOrderId ?? "").trim();
   if (ids.length === 0) {
     return { ok: true };
   }
@@ -1449,7 +1446,7 @@ export async function reorderClickUpSheetMockups(
     const supabase = createSupabaseAdminClient();
     const { data: rows, error: fetchErr } = await supabase
       .from("click_up_sheet_images")
-      .select("id, is_mockup, inherited_from_order_number")
+      .select("id, is_mockup, customer_order_id")
       .in("id", ids);
     if (fetchErr) {
       return { ok: false, error: fetchErr.message };
@@ -1459,10 +1456,10 @@ export async function reorderClickUpSheetMockups(
       (rows ?? [])
         .filter(
           (r) =>
-            Boolean((r as { is_mockup?: boolean }).is_mockup) &&
-            !String((r as { inherited_from_order_number?: string | null }).inherited_from_order_number ?? "").trim(),
+            Boolean(r.is_mockup) &&
+            (!orderNum || String(r.customer_order_id ?? "").trim() === orderNum),
         )
-        .map((r) => String((r as { id: string }).id)),
+        .map((r) => String(r.id)),
     );
 
     let sort = 0;
