@@ -13,6 +13,51 @@ export class XeroApiError extends Error {
   }
 }
 
+/**
+ * Pull the human-readable validation messages out of a Xero error body. Xero echoes the entire submitted
+ * object (Contact, LineItems, …) before the `ValidationErrors`, so naive truncation of the raw body always
+ * hides the real reason. This walks the known locations and returns just the messages.
+ */
+export function xeroValidationMessages(body: string | undefined | null): string[] {
+  if (!body) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  const pushErrors = (errs: unknown) => {
+    if (!Array.isArray(errs)) return;
+    for (const ve of errs) {
+      const m = (ve as { Message?: unknown })?.Message;
+      if (typeof m === "string" && m.trim()) out.push(m.trim());
+    }
+  };
+  const root = parsed as { Elements?: unknown; ValidationErrors?: unknown };
+  pushErrors(root?.ValidationErrors);
+  if (Array.isArray(root?.Elements)) {
+    for (const el of root.Elements as Array<Record<string, unknown>>) {
+      pushErrors(el?.ValidationErrors);
+      if (Array.isArray(el?.LineItems)) {
+        for (const li of el.LineItems as Array<Record<string, unknown>>) {
+          pushErrors(li?.ValidationErrors);
+        }
+      }
+    }
+  }
+  return Array.from(new Set(out));
+}
+
+/** Concise, readable summary of a Xero API failure for storage/UI (validation messages when present). */
+export function summarizeXeroApiError(e: XeroApiError): string {
+  const vmsgs = xeroValidationMessages(e.body);
+  if (vmsgs.length) {
+    return `Xero validation: ${vmsgs.join(" | ")}`;
+  }
+  return `Xero API (${e.status}): ${e.message}`;
+}
+
 export async function xeroAccountingFetch(
   connection: XeroConnectionRow,
   path: string,

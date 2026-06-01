@@ -4,7 +4,7 @@ import { findOrCreateXeroContact } from "@/lib/xero/contacts";
 import { getActiveXeroConnection } from "@/lib/xero/connection-db";
 import { createAuthorisedSalesInvoice, type XeroInvoiceLineInput } from "@/lib/xero/invoices";
 import { recordStoreOrderPaymentInXero } from "@/lib/xero/sync-store-order-payment";
-import { XeroApiError } from "@/lib/xero/api-client";
+import { XeroApiError, summarizeXeroApiError } from "@/lib/xero/api-client";
 
 export type SyncStoreOrderToXeroResult =
   | {
@@ -172,7 +172,7 @@ export async function syncStoreOrderToXero(storeOrderId: string): Promise<SyncSt
   } catch (e) {
     const msg =
       e instanceof XeroApiError
-        ? `Xero API (${e.status}): ${e.message}`
+        ? summarizeXeroApiError(e)
         : e instanceof Error
           ? e.message
           : "Xero sync failed";
