@@ -103,7 +103,12 @@ export async function sendOrderProofEmail(
       )}. Production will begin once you approve.</p>
       ${noteHtml}
       ${imagesHtml}
-      <p style="margin:24px 0">
+      <p style="margin:20px 0 8px;color:#334155">
+        Happy with the design? Click the button below to approve.
+        <strong>Need changes to the logo or mock-up?</strong> Just reply to this email with what you'd like
+        adjusted and we'll send you a revised proof.
+      </p>
+      <p style="margin:8px 0 24px">
         <a href="${escapeHtml(args.approveUrl)}"
            style="background:#f97316;color:#0f172a;font-weight:bold;text-decoration:none;padding:12px 22px;border-radius:10px;display:inline-block">
           Review &amp; approve your proof
