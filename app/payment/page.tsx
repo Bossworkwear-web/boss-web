@@ -431,6 +431,11 @@ export default function PaymentPage() {
         // ignore
       }
     }
+    // Stripe only redirects here after a successful payment, so empty the cart now regardless of how the
+    // order is finalised (client call below or the Stripe webhook). The order payload uses payloadItems /
+    // the sessionStorage snapshot, which are unaffected by clearing the live cart.
+    clearCartItems();
+    setItems([]);
     startPayTransition(async () => {
       let placeOpts: PlaceStoreOrderOptions | undefined;
       try {

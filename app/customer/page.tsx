@@ -21,6 +21,7 @@ import {
   type OrderProofStatus,
 } from "@/lib/order-proof";
 
+import { ClearCartOnPlaced } from "./clear-cart-on-placed";
 import { CustomerDetailPasswordPopovers } from "./customer-detail-password-popovers";
 import { OrderFromQuoteButton } from "./order-from-quote-button";
 import { ReorderOrderButton } from "./reorder-order-button";
@@ -348,6 +349,7 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
               className="rounded-2xl border border-emerald-200/80 bg-emerald-50/60 p-5 text-emerald-900 shadow-sm"
               role="status"
             >
+              <ClearCartOnPlaced />
               <p className="text-[1.1rem] font-semibold">Thanks for your order!</p>
               <p className="mt-1 text-[1rem] text-emerald-900/80">
                 Your order ID <span className="font-mono font-semibold">{params.placed}</span> is confirmed. A receipt
