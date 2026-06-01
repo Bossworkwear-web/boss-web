@@ -44,21 +44,40 @@ export async function sendOrderProofEmail(
   const roundSuffix = args.round > 1 ? ` (revision ${args.round})` : "";
   const subject = `Your design proof for order ${args.orderNumber}${roundSuffix}`;
 
-  const imagesHtml = args.imageUrls
-    .map(
-      (url) =>
-        `<a href="${escapeHtml(url)}" style="display:block;margin:8px 0"><img src="${escapeHtml(
-          url,
-        )}" alt="Design proof" style="max-width:100%;border:1px solid #e2e8f0;border-radius:8px" /></a>`,
-    )
-    .join("");
+  // Grid the proofs 3-per-row at half their previous size so several mock-ups fit on a wide,
+  // professional-looking layout. Table-based for email-client compatibility (Gmail/Outlook).
+  const PROOF_COLS = 3;
+  const proofRows: string[][] = [];
+  for (let i = 0; i < args.imageUrls.length; i += PROOF_COLS) {
+    proofRows.push(args.imageUrls.slice(i, i + PROOF_COLS));
+  }
+  const imagesHtml = proofRows.length
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;margin:16px 0">${proofRows
+        .map((row) => {
+          const cells = row
+            .map(
+              (url) =>
+                `<td width="33.33%" valign="top" align="center" style="padding:6px"><a href="${escapeHtml(
+                  url,
+                )}" style="display:block;text-decoration:none"><img src="${escapeHtml(
+                  url,
+                )}" alt="Design proof" width="320" style="width:100%;max-width:320px;height:auto;border:1px solid #e2e8f0;border-radius:8px" /></a></td>`,
+            )
+            .join("");
+          const fillers = Array.from({ length: PROOF_COLS - row.length })
+            .map(() => `<td width="33.33%" style="padding:6px"></td>`)
+            .join("");
+          return `<tr>${cells}${fillers}</tr>`;
+        })
+        .join("")}</table>`
+    : "";
 
   const noteHtml = args.note?.trim()
     ? `<p style="margin:12px 0;color:#334155">${escapeHtml(args.note.trim()).replace(/\n/g, "<br/>")}</p>`
     : "";
 
   const html = `
-    <div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;color:#0f172a">
+    <div style="font-family:Arial,Helvetica,sans-serif;max-width:1280px;margin:0 auto;color:#0f172a">
       <p>Hi ${escapeHtml(contact)},</p>
       <p>Please review the design proof for your order <strong>${escapeHtml(args.orderNumber)}</strong>${escapeHtml(
         roundSuffix,
