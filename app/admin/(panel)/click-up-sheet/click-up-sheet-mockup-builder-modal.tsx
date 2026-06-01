@@ -620,10 +620,17 @@ export function ClickUpSheetMockupBuilderModal({
       if (!ctx) {
         throw new Error("Canvas not supported");
       }
-      // Paint the chosen CMYK background first, then the template on top so transparent areas take the colour.
-      ctx.fillStyle = bgCss;
-      ctx.fillRect(0, 0, W, H);
       ctx.drawImage(bg, 0, 0);
+      // Lay the CMYK colour ON TOP of the template (multiply), masked to the template's own pixels so only
+      // the garment is recoloured and transparent areas stay clear. White (default) leaves it unchanged.
+      if (bgCmyk.c || bgCmyk.m || bgCmyk.y || bgCmyk.k) {
+        ctx.globalCompositeOperation = "multiply";
+        ctx.fillStyle = bgCss;
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalCompositeOperation = "destination-in";
+        ctx.drawImage(bg, 0, 0);
+        ctx.globalCompositeOperation = "source-over";
+      }
 
       for (const layer of layers) {
         if (layer.kind === "logo") {
@@ -826,7 +833,6 @@ export function ClickUpSheetMockupBuilderModal({
                       src={templateUrl}
                       alt=""
                       className="relative z-0 block h-auto max-h-[min(70vh,560px)] max-w-full object-contain"
-                      style={{ backgroundColor: bgCss }}
                       onLoad={() => {
                         setBaseImageError(false);
                         measure();
@@ -835,6 +841,23 @@ export function ClickUpSheetMockupBuilderModal({
                       onError={() => setBaseImageError(true)}
                       draggable={false}
                     />
+                    {bgCmyk.c || bgCmyk.m || bgCmyk.y || bgCmyk.k ? (
+                      <div
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0"
+                        style={{
+                          backgroundColor: bgCss,
+                          mixBlendMode: "multiply",
+                          WebkitMaskImage: `url("${templateUrl}")`,
+                          maskImage: `url("${templateUrl}")`,
+                          WebkitMaskSize: "100% 100%",
+                          maskSize: "100% 100%",
+                          WebkitMaskRepeat: "no-repeat",
+                          maskRepeat: "no-repeat",
+                          zIndex: 5,
+                        }}
+                      />
+                    ) : null}
                     {layout
                       ? layers.map((layer, i) => {
                           const z = 10 + i;
@@ -921,10 +944,10 @@ export function ClickUpSheetMockupBuilderModal({
               </div>
 
               <fieldset className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-3">
-                <legend className="px-1 text-xs font-semibold text-slate-700">Background colour (CMYK)</legend>
+                <legend className="px-1 text-xs font-semibold text-slate-700">Garment colour (CMYK)</legend>
                 <p className="mt-1 text-[0.65rem] text-slate-500">
-                  옷 종류별로 색상 템플릿을 따로 저장할 필요 없이, 템플릿 하나를 두고 배경색을 CMYK로 조정합니다.
-                  배경이 투명한 템플릿(PNG)에 적용됩니다.
+                  옷 색상별로 템플릿을 따로 저장할 필요 없이, 템플릿 하나에 CMYK 색상을 위에 입혀(곱하기) 옷 색을
+                  바꿉니다. 템플릿의 옷 영역에만 적용되며 로고·텍스트는 색상 위에 표시됩니다.
                 </p>
                 <div className="mt-3 flex items-start gap-3">
                   <span
