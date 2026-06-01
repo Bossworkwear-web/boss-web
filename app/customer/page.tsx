@@ -367,7 +367,7 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
                 <img
                   src={masterLogoUrl}
                   alt="Master logo"
-                  className="h-auto max-h-[10.5rem] w-auto max-w-[45%] shrink-0 rounded-xl border border-brand-navy/10 bg-white object-contain"
+                  className="h-auto max-h-[6.3rem] w-auto max-w-[35%] shrink-0 rounded-xl border border-brand-navy/10 bg-white object-contain"
                   loading="lazy"
                 />
               </>
