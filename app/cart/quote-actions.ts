@@ -185,6 +185,40 @@ export async function createCustomerQuoteFromCart(
   }
 }
 
+export type DeleteCustomerQuoteResult = { ok: true } | { ok: false; error: string };
+
+/** Permanently delete one saved quote owned by the signed-in customer (My account → My Quote). */
+export async function deleteCustomerQuote(quoteId: string): Promise<DeleteCustomerQuoteResult> {
+  const cookieStore = await cookies();
+  const sessionEmail = (cookieStore.get("customer_email")?.value ?? "").trim();
+  if (!sessionEmail) {
+    return { ok: false, error: "Please sign in." };
+  }
+
+  const id = quoteId.trim();
+  if (!id || !UUID_RE.test(id)) {
+    return { ok: false, error: "Invalid quote." };
+  }
+
+  const ilikeExact = sessionEmail.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { error } = await supabase
+      .from("customer_quotes")
+      .delete()
+      .eq("id", id)
+      .ilike("customer_email", ilikeExact);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not delete this quote." };
+  }
+}
+
 export type GetQuoteLinesResult =
   | { ok: true; lines: StoreOrderCartLine[] }
   | { ok: false; error: string };

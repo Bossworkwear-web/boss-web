@@ -14,6 +14,7 @@ import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 import { MY_ACCOUNT_ORDERED_RECORDS_LIMIT } from "@/lib/customer-ordered-records";
 import { getCustomerStoreCreditBalanceCents } from "@/lib/customer-store-credit";
 import { currentProductUnitFromRow, repriceQuoteLines } from "@/lib/customer-quote-pricing";
+import { CUSTOMER_QUOTE_RETENTION_DAYS, customerQuoteRetentionCutoffIso } from "@/lib/customer-quote";
 import {
   normalizeProofStatus,
   proofApproveUrl,
@@ -23,6 +24,7 @@ import {
 
 import { ClearCartOnPlaced } from "./clear-cart-on-placed";
 import { CustomerDetailPasswordPopovers } from "./customer-detail-password-popovers";
+import { DeleteQuoteButton } from "./delete-quote-button";
 import { OrderFromQuoteButton } from "./order-from-quote-button";
 import { ReorderOrderButton } from "./reorder-order-button";
 
@@ -224,12 +226,27 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
     }
 
     try {
+      const quoteCutoffIso = customerQuoteRetentionCutoffIso();
+
+      // Auto-expiry: purge this customer's quotes older than the retention window (best-effort), then
+      // only ever list quotes newer than the cutoff so expired ones never appear even if a purge was missed.
+      try {
+        await supabase
+          .from("customer_quotes")
+          .delete()
+          .ilike("customer_email", ilikeExact)
+          .lt("created_at", quoteCutoffIso);
+      } catch {
+        // Purge is best-effort; the read filter below still hides expired quotes.
+      }
+
       const { data: quoteRows } = await supabase
         .from("customer_quotes")
         .select(
           "id, quote_number, total_cents, total_quantity, currency, created_at, logo_setup_cents, delivery_cents, lines",
         )
         .ilike("customer_email", ilikeExact)
+        .gte("created_at", quoteCutoffIso)
         .order("created_at", { ascending: false })
         .limit(MY_ACCOUNT_ORDERED_RECORDS_LIMIT);
 
@@ -405,11 +422,21 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
                 </span>
                 <span>
                   Totals shown here reflect <span className="font-medium text-brand-navy/80">current</span> product
-                  prices and pricing rules. Saved quotes are indicative only and are not a guaranteed price — see our{" "}
+                  prices and pricing rules. Saved quotes are indicative only and are not a guaranteed price — the price
+                  on the day you place your order may differ from the price on the day the quote was created. See our{" "}
                   <Link href="/terms-and-conditions" className="font-semibold text-brand-orange hover:underline">
                     Terms &amp; Conditions
                   </Link>
                   .
+                </span>
+              </p>
+              <p className="flex gap-2">
+                <span className="shrink-0 select-none font-semibold text-brand-navy/45" aria-hidden>
+                  ·
+                </span>
+                <span>
+                  Quotes are kept for {CUSTOMER_QUOTE_RETENTION_DAYS} days and then removed automatically. You can also{" "}
+                  <span className="font-medium text-brand-navy/80">Delete</span> a quote anytime.
                 </span>
               </p>
             </div>
@@ -428,6 +455,7 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
                       <th className="px-4 py-3">Lines</th>
                       <th className="px-4 py-3">Total</th>
                       <th className="px-4 py-3">Order</th>
+                      <th className="px-4 py-3">Delete</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -452,9 +480,12 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
                           <td className="px-4 py-3 align-top">
                             <OrderFromQuoteButton quoteId={q.id} />
                           </td>
+                          <td className="px-4 py-3 align-top">
+                            <DeleteQuoteButton quoteId={q.id} quoteNumber={q.quote_number} />
+                          </td>
                         </tr>
                         <tr className="border-b border-brand-navy/10 bg-white/40">
-                          <td colSpan={6} className="px-4 py-2">
+                          <td colSpan={7} className="px-4 py-2">
                             <details className="group">
                               <summary className="cursor-pointer list-none text-[1.26rem] font-semibold text-brand-navy/80 marker:content-none [&::-webkit-details-marker]:hidden">
                                 <span className="underline decoration-brand-navy/25 decoration-1 underline-offset-2 group-open:text-brand-orange">

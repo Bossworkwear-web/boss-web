@@ -1,5 +1,13 @@
 import type { StoreOrderCartLine } from "@/lib/store-order-cart-payload";
 
+/** Saved cart quotes are kept for this many days, then auto-expire (hidden + purged). */
+export const CUSTOMER_QUOTE_RETENTION_DAYS = 30;
+
+/** ISO timestamp for the oldest quote still visible (created on/after this point). */
+export function customerQuoteRetentionCutoffIso(now = new Date()): string {
+  return new Date(now.getTime() - CUSTOMER_QUOTE_RETENTION_DAYS * 86_400_000).toISOString();
+}
+
 /** Amounts (AUD cents) for a cart quote, mirroring the Cart Summary breakdown. */
 export type CustomerQuoteTotals = {
   productGrossCents: number;
