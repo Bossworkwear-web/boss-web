@@ -51,12 +51,6 @@ export function OrderTrackMockupsGrid({
               <p className="border-b border-brand-navy/10 px-3 py-2 text-center text-[1.3125rem] font-semibold text-brand-navy">
                 {item.decorateSummary}
               </p>
-              {item.memo ? (
-                <div className="border-b border-brand-navy/10 bg-white/60 px-3 py-2 text-left">
-                  <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-brand-navy/50">Memo</p>
-                  <p className="mt-1 whitespace-pre-wrap text-[1.125rem] text-brand-navy/85">{item.memo}</p>
-                </div>
-              ) : null}
               {pdf ? (
                 <div className="flex h-48 flex-col items-center justify-center gap-2 px-3 sm:h-56">
                   <span className="text-[1.3125rem] font-semibold uppercase tracking-wide text-brand-navy/50">
@@ -100,6 +94,12 @@ export function OrderTrackMockupsGrid({
                   </button>
                 )}
               </div>
+              {item.memo ? (
+                <div className="border-t border-brand-navy/10 bg-white/60 px-3 py-2 text-left">
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-brand-navy/50">Memo</p>
+                  <p className="mt-1 whitespace-pre-wrap text-[1.125rem] text-brand-navy/85">{item.memo}</p>
+                </div>
+              ) : null}
             </li>
           );
         })}
