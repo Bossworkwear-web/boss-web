@@ -22,8 +22,9 @@ import { MensCategoryTopAd } from "@/app/components/mens-category-top-ad";
 import { PpeCategoryTopAd } from "@/app/components/ppe-category-top-ad";
 import { WomensCategoryTopAd } from "@/app/components/womens-category-top-ad";
 import { WorkwearCategoryTopAd } from "@/app/components/workwear-category-top-ad";
-import { getDiscountPercent } from "@/lib/discounts";
 import { categoryBrowseCardImageUrl } from "@/lib/category-browse-card-image";
+import { compareCategoryBrowseDefaultSort, sortCategoryBrowseDefault } from "@/lib/category-browse-sort";
+import { getDiscountPercent } from "@/lib/discounts";
 import { getMainCategory, getSubCategoriesForMain, HEALTH_CARE_MAIN_SLUG, SUB_CATEGORIES } from "@/lib/catalog";
 import {
   CATEGORY_BROWSE_PAGE_SIZE,
@@ -216,8 +217,7 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
     );
   };
 
-  const filteredAllBrands = filterProductsForSubCategoryBrowse(slug, subSlug, allRows)
-    .filter((item) => {
+  const subCategoryRows = filterProductsForSubCategoryBrowse(slug, subSlug, allRows).filter((item) => {
       if (slug === "workwear") {
         if (isBizCollectionListing(item.name, item.slug ?? null, item.category ?? null)) {
           return false;
@@ -250,8 +250,8 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
       }
       const hay = `${item.name} ${item.slug ?? ""}`.toLowerCase();
       return !(hay.includes("bisley") || hay.includes("syzmik"));
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
+    });
+  const filteredAllBrands = sortCategoryBrowseDefault(slug, subCategoryRows, inferredBrandForFilter);
 
   const brandParam = String(brandParamRaw ?? "").trim();
   const sortParam = String(sortParamRaw ?? "").trim();
@@ -296,7 +296,7 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
           if (ap !== bp) {
             return sortEffective === "price-asc" ? ap - bp : bp - ap;
           }
-          return a.name.localeCompare(b.name);
+          return compareCategoryBrowseDefaultSort(slug, a, b, inferredBrandForFilter);
         })
       : filtered;
 

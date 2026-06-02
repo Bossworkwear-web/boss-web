@@ -23,6 +23,7 @@ import { PpeCategoryTopAd } from "@/app/components/ppe-category-top-ad";
 import { WomensCategoryTopAd } from "@/app/components/womens-category-top-ad";
 import { WorkwearCategoryTopAd } from "@/app/components/workwear-category-top-ad";
 import { categoryBrowseCardImageUrl } from "@/lib/category-browse-card-image";
+import { compareCategoryBrowseDefaultSort, sortCategoryBrowseDefault } from "@/lib/category-browse-sort";
 import { getDiscountPercent } from "@/lib/discounts";
 import { getMainCategory, getSubCategoriesForMain, HEALTH_CARE_MAIN_SLUG } from "@/lib/catalog";
 import {
@@ -210,7 +211,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           (item) => !isWorkwearExclusiveBrand(item),
         );
 
-  const filteredAllBrands = baseRows.sort((a, b) => a.name.localeCompare(b.name));
+  const filteredAllBrands = sortCategoryBrowseDefault(slug, baseRows, inferredBrandForFilter);
 
   const brandParam = String(brandParamRaw ?? "").trim();
   const sortParam = String(sortParamRaw ?? "").trim();
@@ -257,7 +258,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           if (ap !== bp) {
             return sortEffective === "price-asc" ? ap - bp : bp - ap;
           }
-          return a.name.localeCompare(b.name);
+          return compareCategoryBrowseDefaultSort(slug, a, b, inferredBrandForFilter);
         })
       : brandFiltered;
 

@@ -126,6 +126,8 @@ const SERVICE_TYPE_BUTTON_SHADOW_IDLE: Record<ServiceType, string> = {
 
 /** Clip radius for §3 Plain / Embroidery / Print artwork buttons (80% of 1rem / 1.175rem). */
 const SERVICE_TYPE_BUTTON_ROUNDED = "rounded-[0.8rem] sm:rounded-[0.94rem]";
+/** §3 Service Type artwork buttons: 40% column width × 1.2 (+20%). */
+const SERVICE_TYPE_BUTTON_WIDTH = "w-[48%]";
 
 /** §4 placement row Emb / Print button label size (80% of 1.08rem / 1.26rem). */
 const PLACEMENT_SELECTOR_BUTTON_TEXT = "text-[0.864rem] sm:text-[1.008rem]";
@@ -3500,7 +3502,7 @@ export function PremiumWorkPoloClient({
                     aria-pressed={isActive}
                     aria-disabled={plainDisabled}
                     onClick={() => handleServiceChange(service)}
-                    className={`relative justify-self-center w-[40%] max-w-full overflow-hidden ${SERVICE_TYPE_BUTTON_ROUNDED} border-0 bg-transparent p-0 transition-shadow duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-orange ${
+                    className={`relative justify-self-center ${SERVICE_TYPE_BUTTON_WIDTH} max-w-full overflow-hidden ${SERVICE_TYPE_BUTTON_ROUNDED} border-0 bg-transparent p-0 transition-shadow duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-orange ${
                       plainDisabled ? "cursor-not-allowed opacity-40" : ""
                     } ${
                       isActive
@@ -3542,7 +3544,7 @@ export function PremiumWorkPoloClient({
                     aria-pressed={isActive}
                     aria-disabled={disabled}
                     onClick={() => handleServiceChange(service)}
-                    className={`relative mx-auto w-[40%] max-w-full overflow-hidden ${SERVICE_TYPE_BUTTON_ROUNDED} border-0 bg-transparent p-0 transition-shadow duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-orange ${
+                    className={`relative mx-auto ${SERVICE_TYPE_BUTTON_WIDTH} max-w-full overflow-hidden ${SERVICE_TYPE_BUTTON_ROUNDED} border-0 bg-transparent p-0 transition-shadow duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-orange ${
                       disabled ? "cursor-not-allowed opacity-45 shadow-none" : "cursor-pointer hover:opacity-[0.97]"
                     } ${
                       disabled
