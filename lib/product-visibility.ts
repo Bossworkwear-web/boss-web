@@ -69,6 +69,7 @@ function isBizCollectionKidsOnlyTShirtExclusiveCategoryBrowseListing(
 }
 const PPE_MAIN_SLUG = "ppe";
 const PPE_MISCELLANEOUS_SUB_SLUG = "miscellaneous";
+const PPE_GLOVE_SUB_SLUG = "glove";
 const PPE_HEAD_WEAR_SUB_SLUG = "head-wear";
 const CHEF_MAIN_SLUG = "chef";
 
@@ -116,9 +117,12 @@ const JB_PPE_MISCELLANEOUS_EXCLUSIVE_STYLE_CODES = new Set(
   ["8M001", "8M050", "9KPI", "8M055", "9EFB", "9KPE", "8P060", "8P085"].map((c) => c.toUpperCase()),
 );
 
-export function isJbPpeMiscellaneousExclusiveListing(
+const JB_PPE_GLOVE_EXCLUSIVE_STYLE_CODES = new Set(["6WWGT", "6WWGF"].map((c) => c.toUpperCase()));
+
+function isJbPpeExclusiveStyleListing(
   productName: string,
-  meta?: WorkwearOnlyBrandMeta,
+  meta: WorkwearOnlyBrandMeta | undefined,
+  codes: Set<string>,
 ): boolean {
   const isJbRow =
     isJbWearSupplierName(meta?.supplier_name ?? null) ||
@@ -127,7 +131,22 @@ export function isJbPpeMiscellaneousExclusiveListing(
     return false;
   }
   const code = jbStyleCodeUpperFromListing(productName, meta);
-  return code != null && JB_PPE_MISCELLANEOUS_EXCLUSIVE_STYLE_CODES.has(code);
+  return code != null && codes.has(code);
+}
+
+export function isJbPpeMiscellaneousExclusiveListing(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  return isJbPpeExclusiveStyleListing(productName, meta, JB_PPE_MISCELLANEOUS_EXCLUSIVE_STYLE_CODES);
+}
+
+/** JB rows that must appear only under PPE → Glove (never Workwear, Miscellaneous, … browse grids). */
+export function isJbPpeGloveExclusiveListing(
+  productName: string,
+  meta?: WorkwearOnlyBrandMeta,
+): boolean {
+  return isJbPpeExclusiveStyleListing(productName, meta, JB_PPE_GLOVE_EXCLUSIVE_STYLE_CODES);
 }
 
 /**
@@ -137,6 +156,9 @@ export function isJbWearSixSeriesListing(
   productName: string,
   meta?: Pick<WorkwearOnlyBrandMeta, "slug" | "supplier_name">,
 ): boolean {
+  if (isJbPpeMiscellaneousExclusiveListing(productName, meta) || isJbPpeGloveExclusiveListing(productName, meta)) {
+    return false;
+  }
   const fromSlug = jbStyleCodeTailFromSlug(String(meta?.slug ?? ""));
   if (fromSlug?.startsWith("6")) {
     return true;
@@ -2475,6 +2497,9 @@ export function isProductVisibleInCategoryBrowse(
   }
   if (isBizCorporatesCatalogProduct(productName, meta)) {
     return false;
+  }
+  if (isJbPpeGloveExclusiveListing(productName, meta)) {
+    return mainSlug === PPE_MAIN_SLUG && subSlug === PPE_GLOVE_SUB_SLUG;
   }
   if (isJbPpeMiscellaneousExclusiveListing(productName, meta)) {
     return mainSlug === PPE_MAIN_SLUG && subSlug === PPE_MISCELLANEOUS_SUB_SLUG;

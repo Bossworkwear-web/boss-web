@@ -46,6 +46,8 @@ function jbStyleCodeFromSlug(slug) {
   return m[1].replace(/-/g, "").toUpperCase();
 }
 
+const JB_SIX_SERIES_PPE_STYLE_CODES = new Set(["6WWGT", "6WWGF"]);
+
 function styleCodeFromRow(row) {
   const fromSlug = jbStyleCodeFromSlug(String(row.slug ?? ""));
   if (fromSlug) return fromSlug;
@@ -113,6 +115,7 @@ async function main() {
   for (const row of rows) {
     const code = styleCodeFromRow(row);
     if (!code || !code.startsWith("6")) continue;
+    if (JB_SIX_SERIES_PPE_STYLE_CODES.has(code)) continue;
     const blob = `${String(row.category ?? "")} ${String(row.name ?? "")} ${String(row.description ?? "").slice(0, 600)}`;
     const nextCat = dbCategoryJbSixWorkwear("", "", blob);
     if (String(row.category ?? "").trim() === nextCat) {

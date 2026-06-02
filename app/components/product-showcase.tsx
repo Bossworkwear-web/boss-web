@@ -15,7 +15,7 @@ import { storefrontRetailFromSupplierBase, STOREFRONT_RETAIL_GST_RATE } from "@/
 import { productCardDisplayLines } from "@/lib/product-card-copy";
 import { PRODUCT_CARD_CODE_PRICE_SEPARATOR, productCardModelPriceRowStyle } from "@/lib/product-card-model-price-layout";
 import { productPathSegment } from "@/lib/product-path-slug";
-import { productMatchesSearchQuery } from "@/lib/product-search";
+import { scoreProductSearchMatch } from "@/lib/product-search";
 import { resolveProductSubSlug } from "@/lib/product-subslug";
 import { inferMainSlugForProduct } from "@/lib/sidebar-nav";
 import { SITE_PAGE_INNER_SHELL_CLASS } from "@/lib/site-layout";
@@ -301,10 +301,20 @@ export function ProductShowcase({
       return [];
     }
     return liveProducts
-      .filter((p) =>
-        productMatchesSearchQuery(p.name, p.storeSlug ?? p.slug, p.category, q, p.description, p.id),
-      )
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .map((p) => ({
+        p,
+        score: scoreProductSearchMatch(
+          p.name,
+          p.storeSlug ?? p.slug,
+          p.category,
+          q,
+          p.description,
+          p.id,
+        ),
+      }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score || a.p.name.localeCompare(b.p.name))
+      .map(({ p }) => p);
   }, [liveProducts, q]);
 
   // Brand dropdown options derived from the current matches.

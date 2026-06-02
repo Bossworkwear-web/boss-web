@@ -15,6 +15,11 @@ export function storefrontQuoteEnquiryMailtoHref(): string {
   return `mailto:${STOREFRONT_QUOTE_EMAIL_RECIPIENT}?subject=${subject}`;
 }
 
+export function storefrontBulkOrderMailtoHref(): string {
+  const subject = encodeURIComponent("Bulk order — better deal enquiry");
+  return `mailto:${STOREFRONT_QUOTE_EMAIL_RECIPIENT}?subject=${subject}`;
+}
+
 export function storefrontPhoneTelHref(): string {
   return `tel:${STOREFRONT_PHONE_E164}`;
 }

@@ -38,6 +38,7 @@ import {
   isWorkwearCoverallOverallExclusiveListing,
   isWorkwearMiscToPantsExclusiveListing,
   isFashionBizChefLineListing,
+  isJbPpeGloveExclusiveListing,
   isJbPpeMiscellaneousExclusiveListing,
   isProductEligibleForSiteSearch,
   isProductVisibleInCategoryBrowse,
@@ -776,9 +777,11 @@ export function filterProductsForMainCategoryBrowse(
       supplier_name: item.supplier_name ?? null,
     };
     const effectiveResolved =
-      mainSlug === "ppe" && isJbPpeMiscellaneousExclusiveListing(item.name, jbPpeMiscMeta)
-        ? "miscellaneous"
-        : workwearResolved;
+      mainSlug === "ppe" && isJbPpeGloveExclusiveListing(item.name, jbPpeMiscMeta)
+        ? "glove"
+        : mainSlug === "ppe" && isJbPpeMiscellaneousExclusiveListing(item.name, jbPpeMiscMeta)
+          ? "miscellaneous"
+          : workwearResolved;
 
     if (effectiveResolved == null) {
       return false;
@@ -851,9 +854,11 @@ export function filterProductsForSubCategoryBrowse(
       supplier_name: item.supplier_name ?? null,
     };
     const effectiveResolvedSub =
-      mainSlug === "ppe" && isJbPpeMiscellaneousExclusiveListing(item.name, jbPpeMiscMetaSub)
-        ? "miscellaneous"
-        : workwearResolved;
+      mainSlug === "ppe" && isJbPpeGloveExclusiveListing(item.name, jbPpeMiscMetaSub)
+        ? "glove"
+        : mainSlug === "ppe" && isJbPpeMiscellaneousExclusiveListing(item.name, jbPpeMiscMetaSub)
+          ? "miscellaneous"
+          : workwearResolved;
     const matches =
       effectiveResolvedSub === subSlug ||
       // Workwear > Shirts: include Work Shirts so Bisley work shirts appear under "Shirts" too.

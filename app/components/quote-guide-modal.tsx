@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { storefrontBulkOrderMailtoHref } from "@/lib/storefront-quote-mailto";
+
 /** Window event other components dispatch to open the quote guide popup in place. */
 export const QUOTE_GUIDE_OPEN_EVENT = "boss-web-open-quote-guide";
 
@@ -164,10 +166,28 @@ export function QuoteGuideModal() {
           }
           @media (prefers-reduced-motion: reduce) {
             .quote-guide-chalk-ring { animation: none; stroke-dashoffset: 0; opacity: 1; }
+            .quote-guide-bulk-link { animation: none; opacity: 1; }
+          }
+          .quote-guide-bulk-link {
+            animation: quoteGuideBulkLinkPulse 1.8s ease-in-out infinite;
+          }
+          @keyframes quoteGuideBulkLinkPulse {
+            0%, 100% { opacity: 1; text-shadow: none; }
+            50% { opacity: 0.45; text-shadow: 0 0 10px rgba(255, 133, 27, 0.55); }
           }
         `}</style>
 
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+        <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <p className="max-w-md text-[1.2075rem] leading-snug text-brand-navy/85">
+            Want a better deal on bulk orders?{" "}
+            <a
+              href={storefrontBulkOrderMailtoHref()}
+              className="quote-guide-bulk-link font-semibold text-brand-orange underline decoration-brand-orange/60 underline-offset-2 hover:brightness-95"
+            >
+              Please Click here
+            </a>
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:shrink-0">
           <button
             type="button"
             onClick={() => setOpen(false)}
@@ -181,6 +201,7 @@ export function QuoteGuideModal() {
           >
             Go to cart
           </Link>
+          </div>
         </div>
       </div>
     </div>

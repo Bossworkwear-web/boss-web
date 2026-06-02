@@ -13,6 +13,8 @@ import {
   isChefCh329msTopsExclusiveCategoryBrowseListing,
   isChefMiscellaneousExclusiveJbStyleListing,
   isHeadWearKeywordProduct,
+  isJbPpeGloveExclusiveListing,
+  isJbPpeMiscellaneousExclusiveListing,
   isJbWearSixSeriesListing,
   isSocksKeywordProduct,
   isSyzmikCatalogProduct,
@@ -49,6 +51,9 @@ export function inferMainSlugForProduct(
     return "ppe";
   }
   if (isBagKeywordProduct(name, meta)) {
+    return "ppe";
+  }
+  if (isJbPpeGloveExclusiveListing(name, meta) || isJbPpeMiscellaneousExclusiveListing(name, meta)) {
     return "ppe";
   }
   if (isJbWearSixSeriesListing(name, meta)) {
@@ -210,6 +215,22 @@ export function syncSidebarNavFromProductIfNeeded(
   }
 
   if (isBagKeywordProduct(productName, { category })) {
+    if (stored?.mainSlug === "ppe" && stored?.subSlug === "miscellaneous") {
+      return;
+    }
+    persistSidebarNavClient("ppe", "miscellaneous");
+    return;
+  }
+
+  if (isJbPpeGloveExclusiveListing(productName, jbSixMeta)) {
+    if (stored?.mainSlug === "ppe" && stored?.subSlug === "glove") {
+      return;
+    }
+    persistSidebarNavClient("ppe", "glove");
+    return;
+  }
+
+  if (isJbPpeMiscellaneousExclusiveListing(productName, jbSixMeta)) {
     if (stored?.mainSlug === "ppe" && stored?.subSlug === "miscellaneous") {
       return;
     }
