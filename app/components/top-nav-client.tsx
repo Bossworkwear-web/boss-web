@@ -9,7 +9,12 @@ import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } f
 import { CartIcon, MenuIcon, SearchIcon, UserIcon } from "@/app/components/icons";
 import { LoadingRingSpinner } from "@/app/components/loading-ring-spinner";
 import { LOGO_SRC } from "@/app/generated/logo";
-import { clearCartItems, subscribeCartUpdates, useCartCount } from "@/lib/cart";
+import {
+  clearCartItems,
+  enforceCartPrivacyOnCustomerSessionEnd,
+  subscribeCartUpdates,
+  useCartCount,
+} from "@/lib/cart";
 import { customerFirstName } from "@/lib/customer-display-name";
 import type { StorefrontNavSub } from "@/lib/catalog";
 import { readSidebarNavClient } from "@/lib/sidebar-nav";
@@ -544,6 +549,7 @@ export function TopNavClient({
 
   useEffect(() => {
     const syncCustomerName = () => {
+      enforceCartPrivacyOnCustomerSessionEnd();
       setCustomerName(getCookieValue("customer_name"));
     };
     syncCustomerName();

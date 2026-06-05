@@ -22,6 +22,7 @@ import {
 } from "@/lib/storefront-cart-checkout-fees";
 import { totalEstimatedShippingWeightKg } from "@/lib/delivery-shipping-weight";
 import {
+  enforceCartPrivacyOnCustomerSessionEnd,
   getCartItems,
   getReorderMockupImageUrls,
   removeCartItem,
@@ -173,6 +174,7 @@ export default function CartPage() {
   const [detailItemId, setDetailItemId] = useState<string | null>(null);
 
   useEffect(() => {
+    enforceCartPrivacyOnCustomerSessionEnd();
     const syncSessionCookies = () => {
       setIsCustomerSignedIn(Boolean(getCookieValue("customer_email").trim()));
       const deliveryAddress = getCookieValue("customer_delivery_address");

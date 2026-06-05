@@ -1,4 +1,5 @@
 import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
+import { jb7pipCategoryBrowseHeroUrl, jbStyleCodeUpperFromListing } from "@/lib/jb-7pip-pdp-colors";
 import { resolveStorefrontImageUrl, resolveStorefrontImageUrlList } from "@/lib/storefront-image-url";
 
 /** Placeholder hero images when a product row has no `image_urls` — aligned with category browse grids. */
@@ -31,6 +32,7 @@ export type BrowseCardImageRow = {
   name: string;
   slug?: string | null;
   image_urls?: string[] | null;
+  available_colors?: string[] | null;
 };
 
 export function heroOverrideCardImageUrl(item: BrowseCardImageRow): string | null {
@@ -46,6 +48,14 @@ export function heroOverrideCardImageUrl(item: BrowseCardImageRow): string | nul
 }
 
 export function categoryBrowseCardImageUrl(item: BrowseCardImageRow, resolvedSubSlug: string): string {
+  const jb7pipHero = jb7pipCategoryBrowseHeroUrl(
+    jbStyleCodeUpperFromListing(item.name, item.slug ?? null),
+    item.image_urls,
+    item.available_colors,
+  );
+  if (jb7pipHero) {
+    return resolveStorefrontImageUrl(jb7pipHero) || jb7pipHero;
+  }
   const resolvedList = resolveStorefrontImageUrlList(item.image_urls);
   const dbUrl = resolvedList[0]?.trim() ? resolvedList[0]!.trim() : null;
   return (

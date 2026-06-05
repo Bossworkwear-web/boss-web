@@ -33,11 +33,62 @@ export type CartItem = {
 };
 
 const CART_STORAGE_KEY = "boss_web_cart_items";
+/** Set when cart lines are added/updated while a customer session cookie is present. */
+const CART_AUTH_SESSION_KEY = "boss_web_cart_auth_session";
 /** Public mockup image URLs from last My account → Reorder (`click_up_sheet_images.is_mockup`). */
 const CART_REORDER_MOCKUPS_KEY = "boss_web_cart_reorder_mockups";
 /** `store_orders.id` of the order used for Reorder — passed through checkout into `store_orders.reordered_from_store_order_id`. */
 const CART_REORDER_SOURCE_ORDER_ID_KEY = "boss_web_cart_reorder_source_order_id";
 const CART_UPDATED_EVENT = "boss-web-cart-updated";
+
+function readCustomerNameCookie(): string {
+  if (typeof document === "undefined") {
+    return "";
+  }
+  const key = "customer_name=";
+  const found = document.cookie
+    .split(";")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(key));
+  return found ? decodeURIComponent(found.slice(key.length)) : "";
+}
+
+function markCartAuthSessionIfCustomerSignedIn() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  if (readCustomerNameCookie().trim()) {
+    window.localStorage.setItem(CART_AUTH_SESSION_KEY, "1");
+  }
+}
+
+function clearCartAuthSessionMarker() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.removeItem(CART_AUTH_SESSION_KEY);
+}
+
+/**
+ * Clear cart lines that belonged to a signed-in customer once their session cookie is gone
+ * (explicit log out, idle timeout, or expired session on a shared device).
+ */
+export function enforceCartPrivacyOnCustomerSessionEnd() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  if (window.localStorage.getItem(CART_AUTH_SESSION_KEY) !== "1") {
+    return;
+  }
+  if (readCustomerNameCookie().trim()) {
+    return;
+  }
+  if (getCartItems().length > 0) {
+    clearCartItems();
+  } else {
+    clearCartAuthSessionMarker();
+  }
+}
 
 function clearReorderMockupsFromStorage() {
   if (typeof window === "undefined") {
@@ -134,6 +185,7 @@ export function addCartItem(item: Omit<CartItem, "id" | "addedAt">) {
   items.push(nextItem);
 
   window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+  markCartAuthSessionIfCustomerSignedIn();
   emitCartUpdated();
 }
 
@@ -155,6 +207,7 @@ export function updateCartItem(itemId: string, updates: Omit<CartItem, "id" | "a
     addedAt: prev.addedAt,
   };
   window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+  markCartAuthSessionIfCustomerSignedIn();
   emitCartUpdated();
   return true;
 }
@@ -174,6 +227,7 @@ export function clearCartItems() {
     return;
   }
   window.localStorage.removeItem(CART_STORAGE_KEY);
+  clearCartAuthSessionMarker();
   clearReorderMetaFromStorage();
   emitCartUpdated();
 }
@@ -206,6 +260,7 @@ export function replaceCartWithLines(
   } else {
     clearReorderSourceOrderIdFromStorage();
   }
+  markCartAuthSessionIfCustomerSignedIn();
   emitCartUpdated();
 }
 

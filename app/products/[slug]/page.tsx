@@ -64,6 +64,7 @@ import {
   urlLooksLikeAp2310BackAsset,
   isStorefrontAp2310Slug,
 } from "@/lib/ap-2310-gallery-back";
+import { applyJb7pipBlackRedFirstPdp } from "@/lib/jb-7pip-pdp-colors";
 
 import { TopNav } from "@/app/components/top-nav";
 import { JsonLd } from "@/app/components/json-ld";
@@ -1698,6 +1699,21 @@ async function getDetailDataInternal(
       );
       normalizedImageUrls = apGallery.imageUrls;
       apColorImageCounts = apGallery.apColorImageCounts;
+    }
+
+    if (isJbWearCatalog) {
+      const styleFromName = product.name.trim().match(/\s*\(([A-Za-z0-9][A-Za-z0-9/_-]*)\)\s*$/)?.[1];
+      const styleUpper =
+        jbStyleCodeUpperFromProductSlug(productSlugLower) ??
+        (styleFromName ? styleFromName.toUpperCase().replace(/-CLEARANCE$/i, "") : null);
+      const jb7pip = applyJb7pipBlackRedFirstPdp(
+        styleUpper,
+        colorOptionsEffective,
+        normalizedImageUrls,
+        jbPrefixCount,
+      );
+      colorOptionsEffective = jb7pip.colors;
+      normalizedImageUrls = jb7pip.imageUrls;
     }
 
     const mappedProduct: ProductDetailData = {
