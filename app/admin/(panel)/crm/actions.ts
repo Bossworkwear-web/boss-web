@@ -6,11 +6,7 @@ import { revalidatePath } from "next/cache";
 
 import { assertAdminSession } from "@/lib/admin-auth";
 import { applyCustomerPasswordChange } from "@/lib/customer-password-update";
-import {
-  buildQuoteCustomerEmailBody,
-  computeTotalCentsFromProductLines,
-  DEFAULT_QUOTE_EMAIL_LEAD_TIME,
-} from "@/lib/crm/quote-email-draft";
+import { buildQuoteSentEmailPreviewFromFields } from "@/lib/crm/quote-sent-customer-email";
 import { isPipelineStage } from "@/lib/crm/pipeline";
 import { sendCustomerQuoteSentEmail } from "@/lib/crm/notifications";
 import { storefrontRetailFromSupplierBase } from "@/lib/product-price";
@@ -200,28 +196,23 @@ export async function sendQuoteEmailToCustomerAndMarkQuoteSent(quoteId: string):
     return { ok: false, error: "Customer email is missing on this quote." };
   }
 
-  const computedTotal = computeTotalCentsFromProductLines(quote.quote_email_products);
-  const savedCents = quote.quote_email_total_cents;
-  const totalLineOverride =
-    savedCents !== null && Number.isFinite(savedCents) && Number.isInteger(savedCents)
-      ? `${formatMoneyFromCents(savedCents, "AUD")} (GST included)`
-      : null;
-
-  const plainBody = buildQuoteCustomerEmailBody({
-    contactName: quote.contact_name,
-    companyName: quote.company_name,
-    products: quote.quote_email_products,
-    totalCents: computedTotal,
-    leadTime: quote.quote_email_lead_time?.trim() || DEFAULT_QUOTE_EMAIL_LEAD_TIME,
-    deliveryAddress: {
-      address1: quote.quote_email_delivery_address_1?.trim() ?? "",
-      address2: quote.quote_email_delivery_address_2?.trim() ?? "",
-      suburb: quote.quote_email_delivery_suburb?.trim() ?? "",
-      state: quote.quote_email_delivery_state?.trim() ?? "",
-      country: quote.quote_email_delivery_country?.trim() ?? "",
-    },
-    totalLineOverride,
+  const emailPreview = buildQuoteSentEmailPreviewFromFields({
+    email: quote.email,
+    contact_name: quote.contact_name,
+    company_name: quote.company_name,
+    quote_email_products: quote.quote_email_products,
+    quote_email_total_cents: quote.quote_email_total_cents,
+    quote_email_lead_time: quote.quote_email_lead_time,
+    quote_email_delivery_address_1: quote.quote_email_delivery_address_1,
+    quote_email_delivery_address_2: quote.quote_email_delivery_address_2,
+    quote_email_delivery_suburb: quote.quote_email_delivery_suburb,
+    quote_email_delivery_state: quote.quote_email_delivery_state,
+    quote_email_delivery_country: quote.quote_email_delivery_country,
   });
+  if (!emailPreview) {
+    return { ok: false, error: "Customer email is missing on this quote." };
+  }
+  const plainBody = emailPreview.plainTextBody;
 
   const token = randomBytes(24).toString("hex");
   const base = siteBaseUrl().replace(/\/$/, "");

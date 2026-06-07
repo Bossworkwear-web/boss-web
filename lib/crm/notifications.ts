@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/database.types";
+import {
+  buildQuoteSentCustomerEmailHtml,
+  quoteSentCustomerEmailSubject,
+} from "@/lib/crm/quote-sent-customer-email";
 import { resendFromSales } from "@/lib/resend-from";
 import {
   STOREFRONT_PHONE_DISPLAY,
@@ -139,20 +143,12 @@ export async function sendCustomerQuoteSentEmail(
     return { ok: false, error: "Email is not configured (RESEND_API_KEY).", skipped: true };
   }
 
-  const subject = `Your quote — ${args.companyName}`;
-  const bodyHtml = escapeHtml(args.plainTextBody);
-  const acceptHtml = escapeHtml(args.acceptUrl);
-  const html = `
-    <p>Hi ${escapeHtml(args.contactName)},</p>
-    <p>Please find your quote below. To confirm details, complete any empty fields and accept online:</p>
-    <p><a href="${acceptHtml}">Review and accept your quote</a></p>
-    <p style="font-size:12px;color:#64748b">If the button does not work, copy this link:<br/><code style="word-break:break-all">${acceptHtml}</code></p>
-    <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0" />
-    <pre style="white-space:pre-wrap;font-family:ui-sans-serif,system-ui,sans-serif;font-size:14px;line-height:1.5;color:#0f172a;margin:0">${bodyHtml}</pre>
-    <p style="margin-top:20px;font-size:13px;color:#64748b">Questions? Reply to this email.</p>
-  `
-    .replace(/\n\s+/g, " ")
-    .trim();
+  const subject = quoteSentCustomerEmailSubject(args.companyName);
+  const html = buildQuoteSentCustomerEmailHtml({
+    contactName: args.contactName,
+    plainTextBody: args.plainTextBody,
+    acceptUrl: args.acceptUrl,
+  });
 
   try {
     const res = await fetch("https://api.resend.com/emails", {

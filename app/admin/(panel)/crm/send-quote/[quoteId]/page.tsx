@@ -4,13 +4,15 @@ import { notFound } from "next/navigation";
 
 import { PIPELINE_LABELS, isPipelineStage, type PipelineStage } from "@/lib/crm/pipeline";
 
+import { buildQuoteSentEmailPreviewFromFields } from "@/lib/crm/quote-sent-customer-email";
+
 import { ensureQuotePortalToken } from "../../actions";
 import { loadCrmQuoteRowById } from "../../load-crm-quote-row";
 import { CustomerEmailDraftForm } from "./customer-email-draft-form";
 import { CustomerQuotePortalLink } from "./customer-quote-portal-link";
-import { MarkQuoteSentButton } from "./mark-quote-sent-button";
 import { EmbroideryPrintServiceBox } from "./embroidery-print-service-box";
 import { QuoteMockupUploader } from "./quote-mockup-uploader";
+import { SendQuoteFooterActions } from "./send-quote-footer-actions";
 
 function formatWhen(iso: string) {
   return new Date(iso).toLocaleString("en-AU", {
@@ -66,6 +68,21 @@ export default async function CrmSendQuotePage({ params }: PageProps) {
       : "—";
   const qty =
     quote.quantity === null || quote.quantity === undefined ? "—" : String(quote.quantity);
+
+  const quoteSentEmailPreview = buildQuoteSentEmailPreviewFromFields({
+    email: quote.email,
+    contact_name: quote.contact_name,
+    company_name: quote.company_name,
+    quote_email_products: quote.quote_email_products,
+    quote_email_total_cents: quote.quote_email_total_cents,
+    quote_email_lead_time: quote.quote_email_lead_time,
+    quote_email_delivery_address_1: quote.quote_email_delivery_address_1,
+    quote_email_delivery_address_2: quote.quote_email_delivery_address_2,
+    quote_email_delivery_suburb: quote.quote_email_delivery_suburb,
+    quote_email_delivery_state: quote.quote_email_delivery_state,
+    quote_email_delivery_country: quote.quote_email_delivery_country,
+    acceptUrl: customerAcceptAbsoluteUrl,
+  });
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
@@ -267,7 +284,11 @@ export default async function CrmSendQuotePage({ params }: PageProps) {
           ) : null}
 
           <div className="border-t border-slate-100 pt-6">
-            <MarkQuoteSentButton quoteId={quote.id} disabled={!canAdvanceFromEnquiry} />
+            <SendQuoteFooterActions
+              quoteId={quote.id}
+              preview={quoteSentEmailPreview}
+              canSend={canAdvanceFromEnquiry}
+            />
           </div>
         </div>
       </section>

@@ -36,11 +36,6 @@ export function MarkQuoteSentButton({ quoteId, disabled }: { quoteId: string; di
       >
         {pending ? "Sending email…" : "Mark as quote sent"}
       </button>
-      <p className="text-xs text-slate-500">
-        Sends the <strong>customer email draft</strong> (and online accept link) to the customer via email. The deal
-        moves to <strong>Quote sent</strong> only after the message is accepted by the email provider. Requires{" "}
-        <code className="rounded bg-slate-100 px-1">RESEND_API_KEY</code> and a valid customer email.
-      </p>
     </div>
   );
 }
