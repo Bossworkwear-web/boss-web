@@ -591,7 +591,11 @@ export default async function QuotePage({ searchParams }: QuotePageProps) {
             quantity: index === 0 && prefilledQuantity ? prefilledQuantity : 1,
           };
         })
-      : [{ productId: null, spec: "", color: "", quantity: prefilledQuantity ?? 1 }];
+      : [
+          { productId: null, spec: "", color: "", quantity: prefilledQuantity ?? 1 },
+          { productId: null, spec: "", color: "", quantity: 1 },
+          { productId: null, spec: "", color: "", quantity: 1 },
+        ];
 
   const prefilledNotes = [
     prefilledServiceType ? `Service: ${prefilledServiceType}` : "",

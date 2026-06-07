@@ -29,6 +29,12 @@ function normalizeLineQuantity(raw: number): number {
   return Math.trunc(raw);
 }
 
+const DEFAULT_EMPTY_PRODUCT_LINES: QuoteProductLine[] = [
+  { productId: null, spec: "", color: "", quantity: 1 },
+  { productId: null, spec: "", color: "", quantity: 1 },
+  { productId: null, spec: "", color: "", quantity: 1 },
+];
+
 function quoteFieldLabelClassName(extra = "") {
   return `text-center text-sm font-semibold text-brand-navy ${extra}`.trim();
 }
@@ -47,9 +53,10 @@ const quoteProductRowQuantityClassName = [
 export function QuoteProductOptionsFields({ catalog, initialLines }: Props) {
   const { setTotalQuantity } = useQuoteQuantity();
   const rowIdPrefix = useId();
-  const nextRowIdRef = useRef(initialLines?.length ? initialLines.length : 1);
+  const defaultLines = initialLines?.length ? initialLines : DEFAULT_EMPTY_PRODUCT_LINES;
+  const nextRowIdRef = useRef(defaultLines.length);
   const [rows, setRows] = useState<RowState[]>(() =>
-    (initialLines?.length ? initialLines : [{ productId: null, spec: "", color: "", quantity: 1 }]).map(
+    defaultLines.map(
       (line, index) => ({
         id: `${rowIdPrefix}-${index}`,
         productId: line.productId ?? null,
@@ -209,7 +216,7 @@ export function QuoteProductOptionsFields({ catalog, initialLines }: Props) {
       <button
         type="button"
         onClick={addRow}
-        className="inline-flex w-fit items-center gap-2 rounded-lg border border-dashed border-brand-navy/30 px-4 py-2 text-sm font-semibold text-brand-navy hover:border-brand-orange hover:bg-brand-orange/5"
+        className="inline-flex w-fit items-center gap-2 rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-semibold text-brand-navy shadow-md transition hover:brightness-95"
       >
         + Add Product
       </button>
