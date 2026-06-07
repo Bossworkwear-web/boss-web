@@ -1,5 +1,7 @@
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
+import { BULK_ENQUIRY_LEAD_SOURCE, WEBSITE_QUOTE_LEAD_SOURCE, type QuoteLeadSource } from "@/lib/crm/lead-sources";
+
 import { sendInternalNewLeadEmail, sendQuoteReceivedEmail, sendSmsNotification } from "./notifications";
 
 function addDays(d: Date, days: number) {
@@ -18,7 +20,9 @@ export async function runAfterQuoteSubmit(args: {
   contactName: string;
   companyName: string;
   phone: string | null;
+  leadSource?: QuoteLeadSource;
 }) {
+  const leadSource = args.leadSource ?? WEBSITE_QUOTE_LEAD_SOURCE;
   const supabase = createSupabaseAdminClient();
   const emailNorm = args.email.trim();
 
@@ -40,16 +44,20 @@ export async function runAfterQuoteSubmit(args: {
     .update({
       customer_profile_id: customerProfileId,
       next_follow_up_at: nextFollowUp,
-      lead_source: "website",
+      lead_source: leadSource,
     })
     .eq("id", args.quoteId);
 
   if (!upErr) {
+    const activityBody =
+      leadSource === BULK_ENQUIRY_LEAD_SOURCE
+        ? "Bulk deal enquiry submitted from quote guide. Follow-up scheduled in 3 days (adjust in CRM)."
+        : "Quote submitted from website. Follow-up scheduled in 3 days (adjust in CRM).";
     const { error: actErr } = await supabase.from("crm_activities").insert({
       quote_request_id: args.quoteId,
       kind: "system",
-      body: "Quote submitted from website. Follow-up scheduled in 3 days (adjust in CRM).",
-      metadata: { customer_linked: Boolean(customerProfileId) },
+      body: activityBody,
+      metadata: { customer_linked: Boolean(customerProfileId), lead_source: leadSource },
     });
     if (actErr) {
       console.warn("[crm] crm_activities insert skipped:", actErr.message);

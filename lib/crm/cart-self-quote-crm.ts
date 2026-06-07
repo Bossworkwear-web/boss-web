@@ -1,4 +1,6 @@
-export const CART_SELF_QUOTE_LEAD_SOURCE = "cart_self_quote" as const;
+import { CART_SELF_QUOTE_LEAD_SOURCE } from "@/lib/crm/lead-sources";
+
+export { CART_SELF_QUOTE_LEAD_SOURCE };
 
 type CartSelfQuoteCrmRow = {
   lead_source: string;

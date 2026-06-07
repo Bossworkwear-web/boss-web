@@ -1,6 +1,7 @@
 import type { CustomerQuoteTotals } from "@/lib/customer-quote";
 import type { QuoteLineSnapshot } from "@/lib/customer-quote-pricing";
 import { insertWebsiteQuoteRequest } from "@/lib/crm/insert-website-quote-request";
+import { CART_SELF_QUOTE_LEAD_SOURCE } from "@/lib/crm/lead-sources";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -85,7 +86,7 @@ export async function recordCartSelfQuoteLead(args: {
       phone,
       quantity: args.totals.totalQuantity,
       notes,
-      lead_source: "cart_self_quote",
+      lead_source: CART_SELF_QUOTE_LEAD_SOURCE,
       pipeline_stage: "enquiry",
       customer_profile_id: customerProfileId,
       website_quote_submission: websiteQuoteSubmission,

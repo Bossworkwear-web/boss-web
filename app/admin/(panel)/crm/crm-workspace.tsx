@@ -932,9 +932,11 @@ function QuoteLeadDetailDialog({ quote, onClose }: { quote: CrmQuoteRow; onClose
               <span className="font-semibold">
                 {quote.lead_source === "cart_self_quote"
                   ? "Cart self-quote"
-                  : quote.lead_source === "website"
-                    ? "Website form"
-                    : quote.lead_source}
+                  : quote.lead_source === "bulk_enquiry"
+                    ? "Bulk enquiry"
+                    : quote.lead_source === "website"
+                      ? "Website form"
+                      : quote.lead_source}
               </span>
             </p>
             {quote.internal_notes?.trim() ? (

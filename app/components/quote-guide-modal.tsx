@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { storefrontBulkOrderMailtoHref } from "@/lib/storefront-quote-mailto";
 
 /** Window event other components dispatch to open the quote guide popup in place. */
 export const QUOTE_GUIDE_OPEN_EVENT = "boss-web-open-quote-guide";
@@ -180,12 +179,13 @@ export function QuoteGuideModal() {
         <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <p className="max-w-md text-[1.2075rem] leading-snug text-brand-navy/85">
             Want a better deal on bulk orders?{" "}
-            <a
-              href={storefrontBulkOrderMailtoHref()}
+            <Link
+              href="/quote?bulk=1"
               className="quote-guide-bulk-link font-semibold text-brand-orange underline decoration-brand-orange/60 underline-offset-2 hover:brightness-95"
+              onClick={() => setOpen(false)}
             >
               Please Click here
-            </a>
+            </Link>
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:shrink-0">
           <button

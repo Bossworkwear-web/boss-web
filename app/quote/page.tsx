@@ -22,6 +22,7 @@ import { QuoteSubmitButton } from "@/app/components/quote-submit-button";
 import { QuoteServicePlacementFields } from "@/app/components/quote-service-placement-fields";
 import { ImeFriendlyNameInput } from "@/app/components/ime-friendly-name-input";
 import { runAfterQuoteSubmit } from "@/lib/crm/after-quote-submit";
+import { BULK_ENQUIRY_LEAD_SOURCE, isBulkEnquirySearchParam, quoteLeadSourceFromForm } from "@/lib/crm/lead-sources";
 import {
   buildWebsiteQuoteCustomerSheet,
   type WebsiteQuoteProductRow,
@@ -45,6 +46,7 @@ type QuotePageProps = {
     placements?: string;
     color?: string;
     quantity?: string;
+    bulk?: string;
   }>;
 };
 
@@ -379,6 +381,8 @@ async function submitQuote(formData: FormData) {
         .filter(Boolean)
     : null;
 
+  const leadSource = quoteLeadSourceFromForm(formData);
+
   try {
     const supabase = createSupabaseAdminClient();
     let logoFileUrl: string | null = null;
@@ -488,6 +492,7 @@ async function submitQuote(formData: FormData) {
       contact_name: contactName,
       email,
       phone: phone || null,
+      lead_source: leadSource,
       product_id: resolvedProductIds[0] ?? null,
       embroidery_position_id: embroideryPositionIds[0] ?? null,
       embroidery_position_ids: embroideryPositionIds.length > 0 ? embroideryPositionIds : null,
@@ -515,6 +520,7 @@ async function submitQuote(formData: FormData) {
         contactName,
         companyName,
         phone: phone || null,
+        leadSource,
       });
     } catch (crmError) {
       console.error("[crm] post-submit automation", crmError);
@@ -527,7 +533,8 @@ async function submitQuote(formData: FormData) {
     redirect("/quote?status=error");
   }
 
-  redirect("/quote?status=success");
+  const successQuery = leadSource === BULK_ENQUIRY_LEAD_SOURCE ? "?status=success&bulk=1" : "?status=success";
+  redirect(`/quote${successQuery}`);
 }
 
 export default async function QuotePage({ searchParams }: QuotePageProps) {
@@ -547,6 +554,7 @@ export default async function QuotePage({ searchParams }: QuotePageProps) {
     .filter(Boolean);
   const prefilledQuantity =
     params.quantity && Number.isFinite(Number(params.quantity)) ? Number(params.quantity) : undefined;
+  const isBulkEnquiry = isBulkEnquirySearchParam(params.bulk);
 
   let catalog: QuoteCatalogProduct[] = [];
   let positions: { id: string; name: string }[] = [];
@@ -604,13 +612,22 @@ export default async function QuotePage({ searchParams }: QuotePageProps) {
         >
         <header className="flex flex-col gap-3">
           <QuoteBackNav />
-          <QuoteAnalyticsTracker status={status} />
+          <QuoteAnalyticsTracker status={status} bulkEnquiry={isBulkEnquiry} />
         <QuoteSubmitSuccessPopup show={status === "success"} />
           <h1 className="text-4xl font-medium">Get a Quote</h1>
           <p className="max-w-2xl text-sm text-brand-navy/75">
             Shop online for small team orders, or use this form for tailored bulk pricing (+50 Units) with logo
             embroidery or printing.
           </p>
+          {isBulkEnquiry ? (
+            <div className="rounded-xl border border-brand-orange/35 bg-brand-orange/10 px-4 py-3 text-sm text-brand-navy">
+              <p className="font-semibold">Bulk order — better deal enquiry</p>
+              <p className="mt-1 text-brand-navy/75">
+                Tell us what you need (50+ units). We&apos;ll reply with tailored pricing — your request goes straight
+                into our sales pipeline.
+              </p>
+            </div>
+          ) : null}
         </header>
 
         {(prefilledProductIds.length > 0 ||
@@ -645,6 +662,9 @@ export default async function QuotePage({ searchParams }: QuotePageProps) {
 
         <QuoteQuantityProvider>
         <form action={submitQuote} className="grid gap-6 rounded-2xl border border-brand-navy/15 p-6">
+          {isBulkEnquiry ? (
+            <input type="hidden" name="lead_source" value={BULK_ENQUIRY_LEAD_SOURCE} />
+          ) : null}
           <p className="inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.1em] text-brand-navy/75">
             <BuildingIcon className="h-4 w-4" />
             Contact Information

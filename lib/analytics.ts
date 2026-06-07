@@ -46,11 +46,16 @@ export function trackEventWhenReady(
 }
 
 /** Bulk / team quote form submitted successfully. */
-export function trackQuoteRequest(params?: { quantity?: number; waitForGtag?: boolean }) {
+export function trackQuoteRequest(params?: {
+  quantity?: number;
+  waitForGtag?: boolean;
+  lead_type?: string;
+}) {
   const emit = params?.waitForGtag ? trackEventWhenReady : trackEvent;
+  const leadType = params?.lead_type?.trim() || "bulk_quote";
   emit("generate_lead", {
     event_category: "quote",
-    lead_type: "bulk_quote",
+    lead_type: leadType,
     ...(params?.quantity != null && params.quantity > 0 ? { value: params.quantity } : {}),
   });
   emit("quote_request", {
