@@ -51,6 +51,7 @@ export type CrmQuoteRow = {
   quote_customer_accepted_at: string | null;
   quote_customer_accept_payload: unknown | null;
   quote_customer_accept_comment: string | null;
+  website_quote_submission: unknown | null;
 };
 
 export type CrmCustomerRow = {
@@ -113,6 +114,7 @@ type QuoteRequestListRow = {
   placement_labels: string[] | null;
   logo_file_url: string | null;
   notes: string | null;
+  website_quote_submission: unknown | null;
   product_id: string | null;
   quote_email_product_id: string | null;
   quote_email_product_name: string | null;
@@ -258,6 +260,7 @@ export default async function AdminCrmPage() {
         placement_labels,
         logo_file_url,
         notes,
+        website_quote_submission,
         products ( name ),
         emb_pos:embroidery_positions!embroidery_position_id ( name ),
         print_position:embroidery_positions!printing_position_id ( name ),
@@ -315,6 +318,7 @@ export default async function AdminCrmPage() {
         placement_labels: row.placement_labels ?? null,
         logo_file_url: row.logo_file_url ?? null,
         notes: row.notes ?? null,
+        website_quote_submission: row.website_quote_submission ?? null,
         product_id: row.product_id ?? null,
         quote_email_product_id: row.quote_email_product_id ?? null,
         quote_email_product_name: row.quote_email_product_name ?? null,

@@ -4,6 +4,14 @@ import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
+import {
+  CART_SELF_QUOTE_COLUMN_LABELS,
+  cartSelfQuoteNumberFromRow,
+  cartSelfQuotePipelineColumn,
+  cartSelfQuoteTotalCentsFromRow,
+  isCartSelfQuoteLead,
+  type CartSelfQuotePipelineColumn,
+} from "@/lib/crm/cart-self-quote-crm";
 import { formatPerthDateTime } from "@/lib/perth-calendar";
 import { PIPELINE_LABELS, PIPELINE_STAGES, type PipelineStage } from "@/lib/crm/pipeline";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
@@ -21,7 +29,7 @@ import {
 } from "./actions";
 import type { CrmActivityRow, CrmCustomerRow, CrmNotificationRow, CrmQuoteRow } from "./page";
 
-type Tab = "pipeline" | "leads" | "customers" | "notifications";
+type Tab = "pipeline" | "self_quotes" | "leads" | "customers" | "notifications";
 
 function formatWhen(iso: string) {
   return formatPerthDateTime(iso);
@@ -77,12 +85,20 @@ export function CrmWorkspace({
 
   const dueFollowUps = useMemo(() => {
     return quotes.filter((q) => {
+      if (isCartSelfQuoteLead(q)) return false;
       if (!q.next_follow_up_at) return false;
       if (q.pipeline_stage === "completion") return false;
       if (q.automation_paused) return false;
       return new Date(q.next_follow_up_at).getTime() <= serverNowMs;
     });
   }, [quotes, serverNowMs]);
+
+  const salesPipelineQuotes = useMemo(
+    () => quotes.filter((q) => !isCartSelfQuoteLead(q)),
+    [quotes],
+  );
+
+  const selfQuoteLeads = useMemo(() => quotes.filter((q) => isCartSelfQuoteLead(q)), [quotes]);
 
   const byStage = useMemo(() => {
     const m: Record<PipelineStage, CrmQuoteRow[]> = {
@@ -91,14 +107,26 @@ export function CrmWorkspace({
       approval: [],
       completion: [],
     };
-    for (const q of quotes) {
+    for (const q of salesPipelineQuotes) {
       const s = (PIPELINE_STAGES as readonly string[]).includes(q.pipeline_stage)
         ? (q.pipeline_stage as PipelineStage)
         : "enquiry";
       m[s].push(q);
     }
     return m;
-  }, [quotes]);
+  }, [salesPipelineQuotes]);
+
+  const selfQuotesByColumn = useMemo(() => {
+    const m: Record<CartSelfQuotePipelineColumn, CrmQuoteRow[]> = {
+      emailed: [],
+      in_progress: [],
+      ordered: [],
+    };
+    for (const q of selfQuoteLeads) {
+      m[cartSelfQuotePipelineColumn(q)].push(q);
+    }
+    return m;
+  }, [selfQuoteLeads]);
 
   function run(action: () => Promise<{ ok: boolean; error?: string }>) {
     setMessage(null);
@@ -137,6 +165,7 @@ export function CrmWorkspace({
           {(
             [
               ["pipeline", "Pipeline"],
+              ["self_quotes", `Self quotes (${selfQuoteLeads.length})`],
               ["leads", "All leads"],
               ["customers", "Customers"],
               ["notifications", "Notifications"],
@@ -166,6 +195,78 @@ export function CrmWorkspace({
         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
           {message}
         </p>
+      )}
+
+      {tab === "self_quotes" && (
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Customers who used <strong>Cart → Send email to you as a Quote</strong>. These are separate from the
+            website bulk-quote form pipeline. Move to <strong>Ordered</strong> when they complete checkout.
+          </p>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {(["emailed", "in_progress", "ordered"] as const).map((column) => (
+              <div key={column} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-600">
+                  {CART_SELF_QUOTE_COLUMN_LABELS[column]}
+                </p>
+                <p className="text-2xl font-medium text-brand-navy">{selfQuotesByColumn[column].length}</p>
+                <ul className="mt-3 space-y-2">
+                  {selfQuotesByColumn[column].map((q) => {
+                    const cqNo = cartSelfQuoteNumberFromRow(q);
+                    const totalCents = cartSelfQuoteTotalCentsFromRow(q);
+                    return (
+                      <li key={q.id} className="space-y-1.5">
+                        <button
+                          type="button"
+                          className="w-full rounded-lg border border-slate-200 bg-white p-2 text-left text-xs shadow-sm transition hover:border-brand-orange/50 hover:bg-slate-50/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-orange"
+                          onClick={() => setPipelineQuoteDetail(q)}
+                        >
+                          <p className="font-medium text-brand-navy">{q.company_name}</p>
+                          <p className="text-slate-600">{q.contact_name}</p>
+                          {cqNo ? (
+                            <p className="mt-1 font-mono text-[11px] text-brand-orange">{cqNo}</p>
+                          ) : null}
+                          {totalCents != null ? (
+                            <p className="text-slate-700">{formatMoneyFromCents(totalCents, "AUD")}</p>
+                          ) : null}
+                          <p className="mt-1 text-[10px] text-slate-500">{formatWhen(q.created_at)}</p>
+                        </button>
+                        {column === "emailed" ? (
+                          <button
+                            type="button"
+                            disabled={pending}
+                            className="block w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-center text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
+                            onClick={() =>
+                              run(async () => {
+                                const contacted = await markQuoteContactedNow(q.id);
+                                if (!contacted.ok) {
+                                  return contacted;
+                                }
+                                return updateQuotePipelineStage(q.id, "quote");
+                              })
+                            }
+                          >
+                            Mark contacted
+                          </button>
+                        ) : null}
+                        {column !== "ordered" ? (
+                          <button
+                            type="button"
+                            disabled={pending}
+                            className="block w-full rounded-lg border border-emerald-700/30 bg-emerald-50 px-2 py-1.5 text-center text-[11px] font-semibold text-emerald-900 transition hover:bg-emerald-100/80 disabled:opacity-50"
+                            onClick={() => run(() => updateQuotePipelineStage(q.id, "completion"))}
+                          >
+                            Mark ordered
+                          </button>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {tab === "pipeline" && (
@@ -827,7 +928,14 @@ function QuoteLeadDetailDialog({ quote, onClose }: { quote: CrmQuoteRow; onClose
             <p className="mt-2 text-xs text-slate-700">
               Stage: <span className="font-semibold capitalize">{quote.pipeline_stage}</span>
               {" · "}
-              Lead source: <span className="font-semibold">{quote.lead_source}</span>
+              Lead source:{" "}
+              <span className="font-semibold">
+                {quote.lead_source === "cart_self_quote"
+                  ? "Cart self-quote"
+                  : quote.lead_source === "website"
+                    ? "Website form"
+                    : quote.lead_source}
+              </span>
             </p>
             {quote.internal_notes?.trim() ? (
               <div className="mt-2">

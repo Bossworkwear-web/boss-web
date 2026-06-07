@@ -8,6 +8,7 @@ import {
   type CreateCustomerQuotePayload,
   type CustomerQuoteRecord,
 } from "@/lib/customer-quote";
+import { recordCartSelfQuoteLead } from "@/lib/crm/record-cart-self-quote-lead";
 import { sendCustomerCartQuoteEmail } from "@/lib/customer-quote-email";
 import { currentProductUnitFromRow, repriceQuoteLines, type QuoteLineSnapshot } from "@/lib/customer-quote-pricing";
 import type { StoreOrderCartLine } from "@/lib/store-order-cart-payload";
@@ -174,6 +175,16 @@ export async function createCustomerQuoteFromCart(
     };
 
     const emailResult = await sendCustomerCartQuoteEmail(record);
+
+    await recordCartSelfQuoteLead({
+      customerQuoteId: record.id,
+      quoteNumber: record.quoteNumber,
+      customerEmail: sessionEmail,
+      customerName: sessionName || null,
+      totals,
+      lines,
+    });
+
     return {
       ok: true,
       quoteNumber: record.quoteNumber,

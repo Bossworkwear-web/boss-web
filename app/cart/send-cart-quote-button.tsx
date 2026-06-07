@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 
 import { createCustomerQuoteFromCart } from "@/app/cart/quote-actions";
+import { trackCartQuoteSaved } from "@/lib/analytics";
 import type { CreateCustomerQuotePayload } from "@/lib/customer-quote";
 
 type SendCartQuoteButtonProps = {
@@ -41,6 +42,13 @@ export function SendCartQuoteButton({ isSignedIn, payload }: SendCartQuoteButton
           setMessage({ ok: false, text: result.error });
           return;
         }
+        trackCartQuoteSaved({
+          quote_number: result.quoteNumber,
+          value_aud: payload.totalCents / 100,
+          line_count: payload.lines.length,
+          quantity: payload.totalQuantity,
+        });
+
         if (result.emailSent) {
           setMessage({ ok: true, text: `Quote ${result.quoteNumber} sent to your email and saved to My account.` });
         } else {

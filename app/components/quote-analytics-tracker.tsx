@@ -15,7 +15,7 @@ export function QuoteAnalyticsTracker({ status }: QuoteAnalyticsTrackerProps) {
   useEffect(() => {
     if (status !== "success" || fired.current) return;
     fired.current = true;
-    trackQuoteRequest();
+    trackQuoteRequest({ waitForGtag: true });
   }, [status]);
 
   return null;
