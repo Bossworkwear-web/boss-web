@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/database.types";
+import { resolveInternalAlertEmail } from "@/lib/internal-alert-email";
 import {
   buildQuoteSentCustomerEmailHtml,
   quoteSentCustomerEmailSubject,
@@ -211,15 +212,15 @@ export async function sendInternalNewLeadEmail(
 ) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = resendFromSales();
-  const internalTo = process.env.CRM_INTERNAL_NOTIFY_EMAIL?.trim();
+  const internalTo = resolveInternalAlertEmail(process.env.CRM_INTERNAL_NOTIFY_EMAIL);
 
-  if (!apiKey || !internalTo) {
+  if (!apiKey) {
     await logNotification(supabase, {
       quoteRequestId: args.quoteId,
       channel: "email",
       templateKey: "new_lead_internal",
       status: "skipped",
-      error: !apiKey ? "RESEND_API_KEY not set" : "CRM_INTERNAL_NOTIFY_EMAIL not set",
+      error: "RESEND_API_KEY not set",
     });
     return { ok: false as const, skipped: true };
   }

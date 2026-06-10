@@ -1,3 +1,4 @@
+import { resolveInternalAlertEmail } from "@/lib/internal-alert-email";
 import { resendFromAccount } from "@/lib/resend-from";
 import { siteBaseUrl } from "@/lib/store-order-utils";
 
@@ -9,13 +10,9 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Who receives Xero failure alerts. Falls back to the CRM internal inbox, then the account address. */
+/** Who receives Xero failure alerts. Falls back to the shared staff alert inbox. */
 function alertRecipient(): string {
-  return (
-    process.env.XERO_ALERT_EMAIL?.trim() ||
-    process.env.CRM_INTERNAL_NOTIFY_EMAIL?.trim() ||
-    "account@bossworkwear.au"
-  );
+  return resolveInternalAlertEmail(process.env.XERO_ALERT_EMAIL);
 }
 
 /**

@@ -1,3 +1,4 @@
+import { resolveInternalAlertEmail } from "@/lib/internal-alert-email";
 import { resendFromAccount } from "@/lib/resend-from";
 import type { StorefrontCatalogHealth } from "@/lib/storefront-catalog-health";
 import { siteBaseUrl } from "@/lib/store-order-utils";
@@ -11,11 +12,9 @@ function escapeHtml(s: string): string {
 }
 
 function alertRecipient(): string {
-  return (
-    process.env.STOREFRONT_CATALOG_ALERT_EMAIL?.trim() ||
-    process.env.CRM_INTERNAL_NOTIFY_EMAIL?.trim() ||
-    process.env.XERO_ALERT_EMAIL?.trim() ||
-    "account@bossworkwear.au"
+  return resolveInternalAlertEmail(
+    process.env.STOREFRONT_CATALOG_ALERT_EMAIL,
+    process.env.XERO_ALERT_EMAIL,
   );
 }
 
