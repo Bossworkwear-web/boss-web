@@ -118,7 +118,7 @@ async function fetchActiveProductsBrowseRows(): Promise<CategoryBrowseProductRow
 
 const cachedFetchActiveProductsBrowseRowsProd = unstable_cache(
   fetchActiveProductsBrowseRows,
-  ["storefront-active-products-browse-v15"],
+  ["storefront-active-products-browse-v16"],
   {
     revalidate: 60,
     tags: ["storefront-products-browse"],
