@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
 import { notFound } from "next/navigation";
 
+import { buildDncProductDescription } from "@/lib/dnc-product-description";
 import { getDiscountPercent } from "@/lib/discounts";
 import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
 import { FASHION_BIZ_STYLE_GENDER } from "@/lib/fashion-biz-gender.generated";
@@ -1716,25 +1717,57 @@ async function getDetailDataInternal(
       normalizedImageUrls = jb7pip.imageUrls;
     }
 
+    const sizeOptionsEffective = normalizeProductSizeOptions(
+      product.available_sizes,
+      product.name,
+      "slug" in product ? product.slug : null,
+      "category" in product ? product.category : null,
+    );
+    const productSlugForMeta = product.slug?.trim() ? product.slug : slug;
+    const supplierLowerEarly = supplierNameRaw.toLowerCase();
+    const isDncProduct =
+      supplierLowerEarly === "dnc workwear" ||
+      supplierLowerEarly === "dnc" ||
+      slugLowerEarly.startsWith("dnc-");
+    const dncDisplayPreview = isDncProduct
+      ? productCardDisplayLines(
+          product.name,
+          dbDescription,
+          productSlugForMeta,
+          supplierNameRaw || null,
+          colorOptionsEffective,
+          false,
+          sizeOptionsEffective,
+        )
+      : null;
+    const dncDescriptionFallback =
+      isDncProduct && !effectivePdpDescription && !dbDescription
+        ? buildDncProductDescription({
+            productName: dncDisplayPreview?.productName ?? product.name,
+            styleCode: dncDisplayPreview?.productCode ?? null,
+            category: product.category ?? inferCategoryFromName(product.name),
+            colors: colorOptionsEffective,
+            sizes: sizeOptionsEffective,
+          })
+        : null;
+
     const mappedProduct: ProductDetailData = {
       id: product.id,
       name: product.name,
-      slug: product.slug?.trim() ? product.slug : slug,
+      slug: productSlugForMeta,
       category: product.category ?? inferCategoryFromName(product.name),
       ...(supplierNameRaw ? { supplierName: supplierNameRaw } : {}),
       description:
-        effectivePdpDescription ?? dbDescription ?? "Reliable workwear configured for your branding needs.",
+        effectivePdpDescription ??
+        dbDescription ??
+        dncDescriptionFallback ??
+        "Reliable workwear configured for your branding needs.",
       basePrice: Math.round(basePrice * 100) / 100,
       ...((manualSale != null || discountPercent > 0) && { originalPrice: listRetail }),
       imageUrls: normalizedImageUrls,
       colorOptions: colorOptionsEffective,
       ...(apColorImageCounts ? { apColorImageCounts } : {}),
-      sizeOptions: normalizeProductSizeOptions(
-        product.available_sizes,
-        product.name,
-        "slug" in product ? product.slug : null,
-        "category" in product ? product.category : null,
-      ),
+      sizeOptions: sizeOptionsEffective,
       ...(googleRating ? { googleRating } : {}),
       ...(dbFeatures ? { features: dbFeatures } : {}),
       ...(dbSpecifications ? { specifications: dbSpecifications } : {}),
@@ -1762,7 +1795,9 @@ async function getDetailDataInternal(
           ? "Bisley"
           : slugLower.startsWith("jb-") || slugLower.includes("jbswear")
             ? "JB's Wear"
-            : null;
+            : slugLower.startsWith("dnc-")
+              ? "DNC Workwear"
+              : null;
     const brand = fromName ?? fromSupplierName ?? inferredFromSlug;
     const displayBrandSkuLine =
       supplierLower === "aussie pacific" || slugLower.startsWith("ap-")
@@ -1816,7 +1851,7 @@ export async function getDetailData(
   return unstable_cache(
     async () => getDetailDataInternal(slug),
     /** Bump segment when PDP payload must refresh immediately after catalog imports (see `import:jbswear`, etc.). */
-    ["storefront-pdp-v27", slug],
+    ["storefront-pdp-v32", slug],
     { revalidate: 120, tags: ["storefront-pdp"] },
   )();
 }

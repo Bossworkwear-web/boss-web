@@ -2119,7 +2119,9 @@ export function PremiumWorkPoloClient({
           ? "Bisley"
           : slug.startsWith("jb-") || slug.includes("jbswear")
             ? "JB's Wear"
-            : null;
+            : slug.startsWith("dnc-")
+              ? "DNC Workwear"
+              : null;
     const brand = fromName ?? fromSupplierName ?? inferredFromSlug;
     if (supplierLower === "aussie pacific" || slug.startsWith("ap-")) {
       return `Aussie Pacific / ${productCode}`;

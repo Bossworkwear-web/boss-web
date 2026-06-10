@@ -76,6 +76,58 @@ function bisleySupplierNameMatch(s: string | null | undefined): boolean {
   return String(s ?? "").trim().toLowerCase().includes("bisley");
 }
 
+function dncSupplierNameMatch(s: string | null | undefined): boolean {
+  const t = String(s ?? "").trim().toLowerCase();
+  return t === "dnc" || t === "dnc workwear" || /\bdnc\s*workwear\b/i.test(t);
+}
+
+function isDncListingContext(
+  storeSlug?: string | null,
+  supplierName?: string | null,
+  listingName?: string | null,
+): boolean {
+  const sl = String(storeSlug ?? "").trim().toLowerCase();
+  if (sl.startsWith("dnc-")) {
+    return true;
+  }
+  if (dncSupplierNameMatch(supplierName)) {
+    return true;
+  }
+  return /^\s*dnc\s+/i.test(String(listingName ?? "").trim());
+}
+
+/** DNC import: style code from trailing `(3718)` or slug `dnc-3718` — storefront shows digits when possible. */
+function dncStyleCodeFromListing(
+  name: string,
+  storeSlug?: string | null,
+  supplierName?: string | null,
+): string | null {
+  if (!isDncListingContext(storeSlug, supplierName, name)) {
+    return null;
+  }
+  const trimmed = String(name ?? "").trim();
+  const parenM = trimmed.match(TRAILING_STYLE_PAREN_RE);
+  if (parenM?.[1]) {
+    const token = parenM[1].trim();
+    if (/^\d+$/.test(token)) {
+      return token;
+    }
+    const digits = token.replace(/\D/g, "");
+    return digits.length > 0 ? digits : token.toUpperCase();
+  }
+  const slug = String(storeSlug ?? "").trim().toLowerCase();
+  const slugM = /^dnc-([a-z0-9]+)$/i.exec(slug);
+  if (slugM?.[1]) {
+    const token = slugM[1];
+    if (/^\d+$/.test(token)) {
+      return token;
+    }
+    const digits = token.replace(/\D/g, "");
+    return digits.length > 0 ? digits : token.toUpperCase();
+  }
+  return null;
+}
+
 function isBisleyListingContext(
   storeSlug?: string | null,
   supplierName?: string | null,
@@ -757,6 +809,10 @@ function cardProductCode(
       return m[1].toUpperCase();
     }
   }
+  const dncCode = dncStyleCodeFromListing(name, storeSlug, supplierName);
+  if (dncCode) {
+    return dncCode;
+  }
   if (isAussiePacific) {
     // API names end with ` - W3307` / ` - W1907L` / etc.
     const m = name.trim().match(/\s-\s*([A-Za-z0-9]{2,14})\s*$/);
@@ -818,6 +874,9 @@ function cardMarketingTitleFromDescription(
       continue;
     }
     if (/^style\s*:/i.test(normalizedLine)) {
+      continue;
+    }
+    if (/^supplier:\s*https?:\/\//i.test(normalizedLine)) {
       continue;
     }
     if (normalizedLine === name.trim() || isCatalogBoilerplate(normalizedLine) || isSupplierCatalogTemplateLine(normalizedLine)) {
@@ -964,6 +1023,7 @@ export function productCardDisplayLines(
   const sup = String(supplierName ?? "").trim().toLowerCase();
   const slugLower = String(storeSlug ?? "").trim().toLowerCase();
   const isBlueWhale = sup === "blue whale" || /^\s*blue\s*whale\b/i.test(name.trim());
+  const isDnc = isDncListingContext(storeSlug, supplierName, name);
   const isAussiePacific = sup === "aussie pacific" || slugLower.startsWith("ap-");
 
   const raw = (description ?? "").trim();
@@ -991,6 +1051,18 @@ export function productCardDisplayLines(
     productName = browseListingTitleFromName(name, productCode);
     if (!productName) {
       // Hard fallback: strip supplier branding + trailing style parens from the stored name.
+      const rawLine = String(name ?? "").trim().split(/\r?\n/)[0]?.trim() ?? "";
+      const m = rawLine.match(TRAILING_STYLE_PAREN_RE);
+      const withoutParens = m ? rawLine.slice(0, m.index).trim() : rawLine;
+      const stripped = storefrontStripSupplierBranding(withoutParens).trim();
+      productName = stripped.length > 0 ? stripped : null;
+    }
+    return { productName, productCode };
+  }
+  // DNC: `description` may only hold a supplier URL — headline always comes from `products.name`.
+  if (isDnc) {
+    productName = browseListingTitleFromName(name, productCode);
+    if (!productName) {
       const rawLine = String(name ?? "").trim().split(/\r?\n/)[0]?.trim() ?? "";
       const m = rawLine.match(TRAILING_STYLE_PAREN_RE);
       const withoutParens = m ? rawLine.slice(0, m.index).trim() : rawLine;
@@ -1297,7 +1369,17 @@ export function productDetailDescriptionBody(
   const sl = normalizeStoreSlugForCatalogPrefix(storeSlug);
   const isJbContext =
     jbSupplierNameMatch(supplierName) || sl.startsWith("jb-") || sl.includes("jbswear");
+  const isDncContext = isDncListingContext(storeSlug, supplierName, listing);
   const finish = (s: string) => (isJbContext ? jbWearFormatDescriptionPipesToBullets(s) : s);
+
+  if (isDncContext && /^supplier:\s*https?:\/\//im.test(cleaned)) {
+    cleaned = cleaned
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !/^supplier:\s*https?:\/\//i.test(line))
+      .join("\n")
+      .trim();
+  }
 
   let out = "";
   if (!rawBody) {

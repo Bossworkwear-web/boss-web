@@ -7,6 +7,7 @@
  * Usage:
  *   node scripts/hide-products-without-images.mjs --dry-run
  *   node scripts/hide-products-without-images.mjs --apply
+ *   node scripts/hide-products-without-images.mjs --apply --supplier="DNC Workwear"
  *
  * Env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (see `.env.local`).
  */
@@ -21,7 +22,9 @@ function parseArgs(argv) {
   const limitArg = argv.find((a) => a.startsWith("--limit="));
   const limit = limitArg ? Math.max(1, Math.floor(Number(limitArg.split("=")[1]) || 0)) : 0;
   const includeInactive = argv.includes("--include-inactive");
-  return { dryRun, limit, includeInactive };
+  const supplierArg = argv.find((a) => a.startsWith("--supplier="));
+  const supplier = supplierArg ? supplierArg.slice("--supplier=".length).trim() || null : null;
+  return { dryRun, limit, includeInactive, supplier };
 }
 
 function normalizedImageUrls(imageUrls) {
@@ -61,6 +64,9 @@ async function main() {
     if (!args.includeInactive) {
       q = q.eq("is_active", true);
     }
+    if (args.supplier) {
+      q = q.eq("supplier_name", args.supplier);
+    }
     const { data, error } = await q;
     if (error) {
       console.error(error.message);
@@ -81,7 +87,7 @@ async function main() {
     if (args.limit > 0 && scanned >= args.limit) break;
   }
 
-  console.log(`Scanned ${scanned} product(s).`);
+  console.log(`Scanned ${scanned} product(s).${args.supplier ? ` Supplier filter: ${args.supplier}` : ""}`);
   console.log(`Found ${targets.length} product(s) with no images and not currently hidden.`);
 
   if (targets.length) {
@@ -101,7 +107,11 @@ async function main() {
   for (let i = 0; i < targets.length; i += chunkSize) {
     const chunk = targets.slice(i, i + chunkSize);
     const ids = chunk.map((t) => t.id);
-    const { error } = await supabase.from("products").update({ storefront_hidden: true }).in("id", ids);
+    const hiddenAt = new Date().toISOString();
+    const { error } = await supabase
+      .from("products")
+      .update({ storefront_hidden: true, storefront_hidden_at: hiddenAt })
+      .in("id", ids);
     if (error) {
       console.error("Update failed:", error.message);
       process.exit(1);
