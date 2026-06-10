@@ -526,7 +526,13 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
               className="space-y-2 rounded-xl border border-brand-navy/10 bg-brand-surface px-4 py-4 text-sm text-brand-navy/80"
               role="status"
             >
-              {matchAnySub.length === 0 ? (
+              {allRows.length === 0 ? (
+                <p>
+                  <span className="font-semibold text-brand-navy">Catalog unavailable.</span> The site could not
+                  load products from the database. If this persists, Supabase API keys on Vercel may need syncing —
+                  see <code className="rounded bg-white px-1">docs/SUPABASE_VERCEL_ENV.md</code>.
+                </p>
+              ) : matchAnySub.length === 0 ? (
                 <p>
                   <span className="font-semibold text-brand-navy">Nothing mapped here.</span> No active
                   products are mapped into this category. Check catalog data or style-to-category rules.

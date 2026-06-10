@@ -47,6 +47,7 @@
     "migrate:customer-passwords": "node scripts/hash-legacy-customer-passwords.mjs",
     "migrate:customer-passwords:dry": "node scripts/hash-legacy-customer-passwords.mjs --dry-run",
     "backup:db": "bash scripts/backup-supabase-db.sh",
+    "sync:vercel-supabase-env": "bash scripts/sync-vercel-supabase-env.sh",
     "check:product-images": "node scripts/check-product-images.mjs",
     "generate:biz-care-misc-skus": "node scripts/generate-biz-care-misc-skus.mjs",
     "generate:fashion-biz-gender": "node scripts/generate-fashion-biz-gender.mjs",

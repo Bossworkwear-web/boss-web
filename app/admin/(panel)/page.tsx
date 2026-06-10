@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AdminGoogleMarketingLinks } from "@/app/admin/(panel)/analytics/admin-google-marketing-links";
+import { StorefrontCatalogHealthBanner } from "@/app/admin/(panel)/storefront-catalog-health-banner";
 import { loadDashboardStoreOrderPeriodStats } from "@/lib/admin-dashboard-store-order-stats";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
@@ -54,6 +55,8 @@ export default async function AdminDashboardPage() {
           Overview and quick links. Stock levels use the <strong>stock_quantity</strong> column (see migration).
         </p>
       </header>
+
+      <StorefrontCatalogHealthBanner />
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-medium text-brand-navy">Store orders received</h2>
