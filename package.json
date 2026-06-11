@@ -30,6 +30,7 @@
     "import:jbswear": "node scripts/import-jbswear-xlsx.mjs",
     "import:dnc": "node scripts/import-dnc-csv.mjs",
     "backfill:dnc-descriptions": "node scripts/import-dnc-csv.mjs --descriptions-only",
+    "backfill:dnc-color-images": "node scripts/backfill-dnc-color-images.mjs",
     "scrape:dnc-descriptions": "node scripts/scrape-dnc-descriptions.mjs",
     "migrate:dnc-images": "node scripts/migrate-dnc-images-to-storage.mjs",
     "upgrade:dnc-images": "node scripts/migrate-dnc-images-to-storage.mjs --upgrade --source=zoom",

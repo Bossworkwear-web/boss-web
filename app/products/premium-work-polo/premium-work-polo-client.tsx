@@ -35,6 +35,13 @@ import {
   apHeroIndexForColor,
   stripApGalleryColorCountsHash,
 } from "@/lib/ap-gallery-color-counts";
+import {
+  DNC_GALLERY_PREFIX_HASH_RE,
+  dncInferPrefixCountFromGallery,
+  dncStyleCodeFromSlug,
+  isDncWorkwearStorefrontProduct,
+  stripDncGalleryPrefixHash,
+} from "@/lib/dnc-color-images";
 import { isPpeStorefrontProduct } from "@/lib/catalog";
 import { STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { storefrontLeadingSupplierBrand } from "@/lib/product-display-name";
@@ -1044,6 +1051,19 @@ function pickPrimaryImageForColor(color: string, urls: string[], opts?: GalleryC
     }
   }
 
+  const dncPc = opts?.dncPrefixCount ?? 0;
+  if (
+    opts?.isDncWorkwear &&
+    dncPc > 0 &&
+    colOpts &&
+    list.length >= dncPc
+  ) {
+    const i = indexOfColorOption(colOpts, trimmed);
+    if (i >= 0 && i < dncPc) {
+      return list[i] ?? list[0]!;
+    }
+  }
+
   const pc = opts?.jbPrefixCount ?? 0;
   /** Aussie Pacific: never use filename heuristics — always gallery index × stride vs colour chips. */
   if (opts?.forceOpaqueColorIndex) {
@@ -1414,6 +1434,18 @@ function inferBestColorForGalleryImage(
     }
   }
 
+  const dncPc = pickOpts?.dncPrefixCount ?? 0;
+  if (
+    pickOpts?.isDncWorkwear &&
+    dncPc > 0 &&
+    galleryUrls.length >= dncPc
+  ) {
+    const idx = galleryUrls.indexOf(imageUrl);
+    if (idx >= 0 && idx < dncPc) {
+      return colors[idx] ?? null;
+    }
+  }
+
   const pc = pickOpts?.jbPrefixCount ?? 0;
   if (
     pickOpts?.isJbWear &&
@@ -1558,6 +1590,9 @@ export type GalleryColorPickOpts = {
   opaqueProportionalBuckets?: boolean;
   /** From `#apcc=` on first gallery URL — hero index per sorted colour chip. */
   apColorImageCounts?: readonly number[] | null;
+  /** DNC Workwear: first N gallery images align with colour chips (`#dncc=N` from import). */
+  dncPrefixCount?: number;
+  isDncWorkwear?: boolean;
   /** For product-specific gallery ↔ chip fixes (e.g. `ap-1111`). */
   productSlug?: string | null;
   /**
@@ -1570,10 +1605,11 @@ export type GalleryColorPickOpts = {
 function parseJbGalleryUrls(raw: readonly string[]): {
   urls: string[];
   prefixCount: number;
+  dncPrefixCount: number;
   apColorImageCounts: number[] | null;
 } {
   if (!raw.length) {
-    return { urls: [], prefixCount: 0, apColorImageCounts: null };
+    return { urls: [], prefixCount: 0, dncPrefixCount: 0, apColorImageCounts: null };
   }
   let apColorImageCounts: number[] | null = null;
   const withApccStripped = raw.map((u, i) => {
@@ -1585,9 +1621,19 @@ function parseJbGalleryUrls(raw: readonly string[]): {
     return stripped.url;
   });
   let prefixCount = 0;
+  let dncPrefixCount = 0;
   const urls = withApccStripped
-    .map((u) => {
+    .map((u, i) => {
       const s = typeof u === "string" ? u : "";
+      if (i === 0) {
+        const dncM = DNC_GALLERY_PREFIX_HASH_RE.exec(s);
+        if (dncM) {
+          const n = parseInt(dncM[1] ?? "", 10);
+          if (Number.isFinite(n) && n > 0) {
+            dncPrefixCount = n;
+          }
+        }
+      }
       const m = JB_GALLERY_PREFIX_HASH_RE.exec(s);
       if (m) {
         const n = parseInt(m[1] ?? "", 10);
@@ -1596,11 +1642,14 @@ function parseJbGalleryUrls(raw: readonly string[]): {
         }
         return s.slice(0, m.index);
       }
+      if (i === 0 && dncPrefixCount > 0) {
+        return stripDncGalleryPrefixHash(s);
+      }
       return s;
     })
     .map((u) => u.trim())
     .filter((u) => u.length > 0);
-  return { urls, prefixCount, apColorImageCounts };
+  return { urls, prefixCount, dncPrefixCount, apColorImageCounts };
 }
 
 function isJbWearStorefrontProduct(slug: string | null | undefined, supplierName: string | undefined): boolean {
@@ -2182,10 +2231,16 @@ export function PremiumWorkPoloClient({
       const sortedFull = ap2311ColorsSortedFullForGalleryCounts(colorOptions, apColorImageCounts);
       apColorImageCounts = filterAp2311ColorImageCounts(sortedFull, apColorImageCounts);
     }
-    return { urls, prefixCount: galleryParsed.prefixCount, apColorImageCounts };
+    return {
+      urls,
+      prefixCount: galleryParsed.prefixCount,
+      dncPrefixCount: galleryParsed.dncPrefixCount,
+      apColorImageCounts,
+    };
   }, [
     colorOptions,
     galleryParsed.apColorImageCounts,
+    galleryParsed.dncPrefixCount,
     galleryParsed.prefixCount,
     galleryParsed.urls,
     product.apColorImageCounts,
@@ -2199,12 +2254,23 @@ export function PremiumWorkPoloClient({
 
   const galleryPickOpts = useMemo((): GalleryColorPickOpts => {
     const isJb = isJbWearStorefrontProduct(product.slug, product.supplierName);
+    const isDnc = isDncWorkwearStorefrontProduct(product.slug, product.supplierName);
     const slugLower = (product.slug ?? "").trim().toLowerCase();
     const supLower = (product.supplierName ?? "").trim().toLowerCase();
     const isAussiePacific =
       supLower === "aussie pacific" || slugLower.startsWith("ap-") || /\baussie\s+pacific\b/i.test(product.supplierName ?? "");
     const forceOpaqueColorIndex =
       isAussiePacific || bisleySlugUsesPositionalColorGallery(slugLower);
+    const dncPrefixCount =
+      resolvedApGallery.dncPrefixCount > 0
+        ? resolvedApGallery.dncPrefixCount
+        : isDnc
+          ? dncInferPrefixCountFromGallery(
+              resolvedApGallery.urls,
+              dncStyleCodeFromSlug(product.slug),
+              colorOptions.length,
+            )
+          : 0;
     return {
       colorOptions,
       jbPrefixCount: resolvedApGallery.prefixCount,
@@ -2213,6 +2279,8 @@ export function PremiumWorkPoloClient({
       forceOpaqueColorIndex,
       opaqueProportionalBuckets: isAussiePacific,
       apColorImageCounts: resolvedApGallery.apColorImageCounts,
+      dncPrefixCount,
+      isDncWorkwear: isDnc,
       productSlug: product.slug ?? null,
       isAp2310Listing: isAp2310StorefrontProduct(product),
     };
@@ -2224,7 +2292,9 @@ export function PremiumWorkPoloClient({
     product.slug,
     product.supplierName,
     resolvedApGallery.apColorImageCounts,
+    resolvedApGallery.dncPrefixCount,
     resolvedApGallery.prefixCount,
+    resolvedApGallery.urls,
   ]);
 
   const ppePlainOnly = useMemo(
@@ -2335,7 +2405,8 @@ export function PremiumWorkPoloClient({
       bisleySlugUsesPositionalColorGallery(slugLower) && rawUrls.length >= 4
         ? (bisleySortedPositionalImageUrlsIfComplete(rawUrls) ?? rawUrls)
         : rawUrls;
-    const { urls, prefixCount, apColorImageCounts: rawApcc } = parseJbGalleryUrls(urlsForPick);
+    const { urls, prefixCount, dncPrefixCount: rawDncPc, apColorImageCounts: rawApcc } =
+      parseJbGalleryUrls(urlsForPick);
     let pickUrls = urls;
     let apColorImageCounts = product.apColorImageCounts ?? rawApcc;
     if (!product.apColorImageCounts && isStorefrontAp2211Slug(product.slug ?? null) && apColorImageCounts) {
@@ -2348,10 +2419,17 @@ export function PremiumWorkPoloClient({
     }
     const g = galleryForUrls(pickUrls);
     const supLower = (product.supplierName ?? "").trim().toLowerCase();
+    const isDnc = isDncWorkwearStorefrontProduct(product.slug, product.supplierName);
     const isAussiePacific =
       supLower === "aussie pacific" || slugLower.startsWith("ap-") || /\baussie\s+pacific\b/i.test(product.supplierName ?? "");
     const forceOpaqueColorIndex =
       isAussiePacific || bisleySlugUsesPositionalColorGallery(slugLower);
+    const dncPrefixCount =
+      rawDncPc > 0
+        ? rawDncPc
+        : isDnc
+          ? dncInferPrefixCountFromGallery(pickUrls, dncStyleCodeFromSlug(product.slug), initialColors.length)
+          : 0;
     return pickPrimaryImageForColor(initialColors[0] ?? "", g, {
       colorOptions: initialColors,
       jbPrefixCount: prefixCount,
@@ -2359,6 +2437,8 @@ export function PremiumWorkPoloClient({
       forceOpaqueColorIndex,
       opaqueProportionalBuckets: isAussiePacific,
       apColorImageCounts,
+      dncPrefixCount,
+      isDncWorkwear: isDnc,
       productSlug: product.slug ?? null,
       isAp2310Listing: isAp2310StorefrontProduct(product),
     });

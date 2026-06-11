@@ -1011,6 +1011,10 @@ async function getDetailDataInternal(
       supplierNameRaw.trim().toLowerCase() === "jbswear" ||
       productSlugLower.startsWith("jb-") ||
       productSlugLower.includes("jbswear");
+    const isDncCatalog =
+      supplierNameRaw.trim().toLowerCase() === "dnc workwear" ||
+      supplierNameRaw.trim().toLowerCase() === "dnc" ||
+      productSlugLower.startsWith("dnc-");
     const jbPrefixCount = isJbWearCatalog ? parseJbPrefixCountFromFirstImageUrl(normalizedImageUrls) : 0;
     const jbDerivedColors =
       isJbWearCatalog && jbPrefixCount === 0
@@ -1047,6 +1051,10 @@ async function getDetailDataInternal(
       if (isJbWearCatalog && jbPrefixCount > 0) {
         return normalizedColorOptions.length > 0 ? normalizedColorOptions : fallbackColors;
       }
+      // DNC Workwear: `import-dnc-csv.mjs` orders colours and heroes by variant colour code (`#dncc=N`).
+      if (isDncCatalog && normalizedColorOptions.length > 0) {
+        return normalizedColorOptions;
+      }
       // JB's Wear: if DB colours don't align with JB filename colour codes, prefer derived colours so chips
       // always map to an existing image.
       if (isJbWearCatalog && jbDerivedColors.length >= 2) {
@@ -1074,6 +1082,7 @@ async function getDetailDataInternal(
       !isAussiePacificCatalog &&
       !isFashionBizFolderCatalog &&
       !isJbWearCatalog &&
+      !isDncCatalog &&
       // Bisley PDP: DB colours are the source of truth when present; filename tokens often add bogus chips.
       !(isBisleyCatalog && normalizedColorOptions.length > 0) &&
       imageUrlsLookDerivable &&
@@ -1725,10 +1734,7 @@ async function getDetailDataInternal(
     );
     const productSlugForMeta = product.slug?.trim() ? product.slug : slug;
     const supplierLowerEarly = supplierNameRaw.toLowerCase();
-    const isDncProduct =
-      supplierLowerEarly === "dnc workwear" ||
-      supplierLowerEarly === "dnc" ||
-      slugLowerEarly.startsWith("dnc-");
+    const isDncProduct = isDncCatalog;
     const dncDisplayPreview = isDncProduct
       ? productCardDisplayLines(
           product.name,
@@ -1851,7 +1857,7 @@ export async function getDetailData(
   return unstable_cache(
     async () => getDetailDataInternal(slug),
     /** Bump segment when PDP payload must refresh immediately after catalog imports (see `import:jbswear`, etc.). */
-    ["storefront-pdp-v34", slug],
+    ["storefront-pdp-v35", slug],
     { revalidate: 120, tags: ["storefront-pdp"] },
   )();
 }

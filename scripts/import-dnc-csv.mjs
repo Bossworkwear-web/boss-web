@@ -12,8 +12,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { buildDncColorGallery, dncExtractColorCodeFromVariant } from "./lib/dnc-color-images.mjs";
 import { buildDncProductDescription } from "./lib/dnc-product-description.mjs";
 import { getBossWebRoot, loadEnvLocal } from "./lib/load-env.mjs";
 
@@ -367,7 +368,7 @@ function isDncNonProductStyleRow(styleCode, productName, colorField) {
   return false;
 }
 
-function buildGroupedProducts(rows) {
+export function buildGroupedProducts(rows) {
   const idx = (header, name) => header.findIndex((h) => String(h).trim().toLowerCase() === name.toLowerCase());
 
   const header = rows[0].map((h) => String(h ?? "").trim());
@@ -473,6 +474,8 @@ function buildGroupedProducts(rows) {
       productUrl: s.url,
       colors: new Set(),
       sizes: new Set(),
+      colorToUrls: new Map(),
+      colorCodes: new Map(),
       imageUrls: new Set(collectImageUrls(s.image, s.pic1, s.pic2, s.pic3)),
       prices: typeof s.price === "number" ? [s.price] : [],
       hasDiscontinuedVariants: /^discontinued$/i.test(s.condition),
@@ -495,6 +498,8 @@ function buildGroupedProducts(rows) {
         productUrl: parentRow?.url || v.url,
         colors: new Set(),
         sizes: new Set(),
+        colorToUrls: new Map(),
+        colorCodes: new Map(),
         imageUrls: new Set(
           parentRow ? collectImageUrls(parentRow.image, parentRow.pic1, parentRow.pic2, parentRow.pic3) : [],
         ),
@@ -508,12 +513,24 @@ function buildGroupedProducts(rows) {
     }
     if (v.color) {
       g.colors.add(v.color);
+      const colorCode = dncExtractColorCodeFromVariant(parentCode, v.code);
+      if (colorCode && !g.colorCodes.has(v.color)) {
+        g.colorCodes.set(v.color, colorCode);
+      }
+      if (!g.colorToUrls.has(v.color)) {
+        g.colorToUrls.set(v.color, new Set());
+      }
+      for (const url of collectImageUrls(v.image, v.pic1, v.pic2, v.pic3)) {
+        g.colorToUrls.get(v.color).add(url);
+        g.imageUrls.add(url);
+      }
+    } else if (v.size) {
+      for (const url of collectImageUrls(v.image, v.pic1, v.pic2, v.pic3)) {
+        g.imageUrls.add(url);
+      }
     }
     if (v.size) {
       g.sizes.add(v.size);
-    }
-    for (const url of collectImageUrls(v.image, v.pic1, v.pic2, v.pic3)) {
-      g.imageUrls.add(url);
     }
     if (typeof v.price === "number") {
       g.prices.push(v.price);
@@ -533,6 +550,8 @@ function buildGroupedProducts(rows) {
       productUrl: s.url,
       colors: new Set(s.color ? [s.color] : []),
       sizes: new Set(["One Size"]),
+      colorToUrls: new Map(),
+      colorCodes: new Map(),
       imageUrls: new Set(collectImageUrls(s.image, s.pic1, s.pic2, s.pic3)),
       prices: typeof s.price === "number" ? [s.price] : [],
       hasDiscontinuedVariants: /^discontinued$/i.test(s.condition),
@@ -542,9 +561,8 @@ function buildGroupedProducts(rows) {
   const productRows = [...grouped.values()].map((g) => {
     const title = `${g.productName} (${g.styleCode})`;
     const slug = dncSlug(g.styleCode);
-    const colors = [...g.colors].sort((a, b) => a.localeCompare(b));
+    const { colors, image_urls } = buildDncColorGallery(g);
     const sizes = sortSizesUnique([...g.sizes]);
-    const image_urls = [...g.imageUrls];
     const base_price = g.prices.length ? Math.min(...g.prices) : null;
     const category = inferDncDbCategory(g.productName);
     const audience = audienceFromProductName(g.productName);
@@ -669,7 +687,10 @@ async function main() {
   console.log("\nDone.");
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+const isCliEntry = import.meta.url === pathToFileURL(process.argv[1] ?? "").href;
+if (isCliEntry) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}
