@@ -3,6 +3,7 @@ import {
   isBlueWhaleF81F82WorkwearJumperExclusiveListing,
 } from "@/lib/blue-whale-category-browse";
 import { getSubCategoriesForMain, HEALTH_CARE_MAIN_SLUG } from "@/lib/catalog";
+import { isDncPpeGloveExclusiveListing } from "@/lib/dnc-glove-routing";
 import { getDiscountPercent } from "@/lib/discounts";
 import {
   hasStorefrontListNameAndPrice,
@@ -777,7 +778,9 @@ export function filterProductsForMainCategoryBrowse(
       supplier_name: item.supplier_name ?? null,
     };
     const effectiveResolved =
-      mainSlug === "ppe" && isJbPpeGloveExclusiveListing(item.name, jbPpeMiscMeta)
+      mainSlug === "ppe" &&
+      (isJbPpeGloveExclusiveListing(item.name, jbPpeMiscMeta) ||
+        isDncPpeGloveExclusiveListing(item.name, jbPpeMiscMeta))
         ? "glove"
         : mainSlug === "ppe" && isJbPpeMiscellaneousExclusiveListing(item.name, jbPpeMiscMeta)
           ? "miscellaneous"
@@ -854,7 +857,9 @@ export function filterProductsForSubCategoryBrowse(
       supplier_name: item.supplier_name ?? null,
     };
     const effectiveResolvedSub =
-      mainSlug === "ppe" && isJbPpeGloveExclusiveListing(item.name, jbPpeMiscMetaSub)
+      mainSlug === "ppe" &&
+      (isJbPpeGloveExclusiveListing(item.name, jbPpeMiscMetaSub) ||
+        isDncPpeGloveExclusiveListing(item.name, jbPpeMiscMetaSub))
         ? "glove"
         : mainSlug === "ppe" && isJbPpeMiscellaneousExclusiveListing(item.name, jbPpeMiscMetaSub)
           ? "miscellaneous"

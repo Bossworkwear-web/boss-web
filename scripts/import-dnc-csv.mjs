@@ -15,6 +15,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { buildDncColorGallery, dncExtractColorCodeFromVariant } from "./lib/dnc-color-images.mjs";
+import { isDncGloveStyleCode } from "./lib/dnc-glove-routing.mjs";
 import { buildDncProductDescription } from "./lib/dnc-product-description.mjs";
 import { getBossWebRoot, loadEnvLocal } from "./lib/load-env.mjs";
 
@@ -193,10 +194,16 @@ function audienceFromProductName(productName) {
   return null;
 }
 
-function inferDncDbCategory(productName) {
+function inferDncDbCategory(productName, styleCode) {
+  if (isDncGloveStyleCode(styleCode)) {
+    return "Glove";
+  }
   const n = String(productName ?? "").toLowerCase();
   if (!n.trim()) {
     return "Work Shirts";
+  }
+  if (n.includes("glove")) {
+    return "Glove";
   }
   if (/\b(apron|bib\s*apron)\b/.test(n)) {
     return "Apron";
@@ -564,7 +571,7 @@ export function buildGroupedProducts(rows) {
     const { colors, image_urls } = buildDncColorGallery(g);
     const sizes = sortSizesUnique([...g.sizes]);
     const base_price = g.prices.length ? Math.min(...g.prices) : null;
-    const category = inferDncDbCategory(g.productName);
+    const category = inferDncDbCategory(g.productName, g.styleCode);
     const audience = audienceFromProductName(g.productName);
     const description = buildDncProductDescription({
       productName: g.productName,

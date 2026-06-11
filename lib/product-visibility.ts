@@ -14,6 +14,7 @@ import { FASHION_BIZ_STYLE_GENDER } from "@/lib/fashion-biz-gender.generated";
 import { FASHION_BIZ_LISTING_SUBSLUG } from "@/lib/fashion-biz-listing-subslug.generated";
 import { blueWhaleWorkwearExclusiveExpectedSubSlug } from "@/lib/blue-whale-category-browse";
 import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
+import { isDncPpeGloveExclusiveListing } from "@/lib/dnc-glove-routing";
 import { resolveHealthCareBrowseSubSlug } from "@/lib/health-care-browse";
 
 const WORKWEAR_MAIN_SLUG = "workwear";
@@ -2499,6 +2500,9 @@ export function isProductVisibleInCategoryBrowse(
     return false;
   }
   if (isJbPpeGloveExclusiveListing(productName, meta)) {
+    return mainSlug === PPE_MAIN_SLUG && subSlug === PPE_GLOVE_SUB_SLUG;
+  }
+  if (isDncPpeGloveExclusiveListing(productName, meta)) {
     return mainSlug === PPE_MAIN_SLUG && subSlug === PPE_GLOVE_SUB_SLUG;
   }
   if (isJbPpeMiscellaneousExclusiveListing(productName, meta)) {

@@ -5,6 +5,7 @@ import {
   isHealthCareCatalogListing,
   resolveHealthCareBrowseSubSlug,
 } from "@/lib/health-care-browse";
+import { isDncPpeGloveExclusiveListing } from "@/lib/dnc-glove-routing";
 import { inferSubSlugFromProductName, resolveProductSubSlug } from "@/lib/product-subslug";
 import {
   isBagKeywordProduct,
@@ -53,7 +54,11 @@ export function inferMainSlugForProduct(
   if (isBagKeywordProduct(name, meta)) {
     return "ppe";
   }
-  if (isJbPpeGloveExclusiveListing(name, meta) || isJbPpeMiscellaneousExclusiveListing(name, meta)) {
+  if (
+    isJbPpeGloveExclusiveListing(name, meta) ||
+    isJbPpeMiscellaneousExclusiveListing(name, meta) ||
+    isDncPpeGloveExclusiveListing(name, meta)
+  ) {
     return "ppe";
   }
   if (isJbWearSixSeriesListing(name, meta)) {

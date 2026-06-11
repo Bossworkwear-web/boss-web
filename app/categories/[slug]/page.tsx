@@ -33,6 +33,7 @@ import {
   type CategoryBrowseProductRow,
 } from "@/lib/main-category-browse";
 import { isBizCollectionListing } from "@/lib/fashion-biz-gender-route";
+import { isDncPpeGloveExclusiveListing } from "@/lib/dnc-glove-routing";
 import {
   hasStorefrontListNameAndPrice,
   isAussiePacificCatalogListing,
@@ -168,6 +169,16 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   };
 
   const isWorkwearExclusiveBrand = (item: CategoryBrowseProductRow): boolean => {
+    if (
+      isDncPpeGloveExclusiveListing(item.name, {
+        slug: item.slug ?? null,
+        category: item.category ?? null,
+        description: item.description ?? null,
+        supplier_name: item.supplier_name ?? null,
+      })
+    ) {
+      return false;
+    }
     if (isBizCollectionListing(item.name, item.slug ?? null, item.category ?? null)) {
       return false;
     }
