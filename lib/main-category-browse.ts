@@ -4,6 +4,7 @@ import {
 } from "@/lib/blue-whale-category-browse";
 import { getSubCategoriesForMain, HEALTH_CARE_MAIN_SLUG } from "@/lib/catalog";
 import { isDncPpeGloveExclusiveListing } from "@/lib/dnc-glove-routing";
+import { isDncPpeSafetyGlassesExclusiveListing } from "@/lib/dnc-safety-glasses-routing";
 import { getDiscountPercent } from "@/lib/discounts";
 import {
   hasStorefrontListNameAndPrice,
@@ -782,9 +783,11 @@ export function filterProductsForMainCategoryBrowse(
       (isJbPpeGloveExclusiveListing(item.name, jbPpeMiscMeta) ||
         isDncPpeGloveExclusiveListing(item.name, jbPpeMiscMeta))
         ? "glove"
-        : mainSlug === "ppe" && isJbPpeMiscellaneousExclusiveListing(item.name, jbPpeMiscMeta)
-          ? "miscellaneous"
-          : workwearResolved;
+        : mainSlug === "ppe" && isDncPpeSafetyGlassesExclusiveListing(item.name, jbPpeMiscMeta)
+          ? "safty-glasses"
+          : mainSlug === "ppe" && isJbPpeMiscellaneousExclusiveListing(item.name, jbPpeMiscMeta)
+            ? "miscellaneous"
+            : workwearResolved;
 
     if (effectiveResolved == null) {
       return false;
@@ -861,9 +864,11 @@ export function filterProductsForSubCategoryBrowse(
       (isJbPpeGloveExclusiveListing(item.name, jbPpeMiscMetaSub) ||
         isDncPpeGloveExclusiveListing(item.name, jbPpeMiscMetaSub))
         ? "glove"
-        : mainSlug === "ppe" && isJbPpeMiscellaneousExclusiveListing(item.name, jbPpeMiscMetaSub)
-          ? "miscellaneous"
-          : workwearResolved;
+        : mainSlug === "ppe" && isDncPpeSafetyGlassesExclusiveListing(item.name, jbPpeMiscMetaSub)
+          ? "safty-glasses"
+          : mainSlug === "ppe" && isJbPpeMiscellaneousExclusiveListing(item.name, jbPpeMiscMetaSub)
+            ? "miscellaneous"
+            : workwearResolved;
     const matches =
       effectiveResolvedSub === subSlug ||
       // Workwear > Shirts: include Work Shirts so Bisley work shirts appear under "Shirts" too.

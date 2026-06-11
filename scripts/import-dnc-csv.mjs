@@ -16,6 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { buildDncColorGallery, dncExtractColorCodeFromVariant } from "./lib/dnc-color-images.mjs";
 import { isDncGloveStyleCode } from "./lib/dnc-glove-routing.mjs";
+import { isDncSafetySpecStyleCode } from "./lib/dnc-safety-glasses-routing.mjs";
 import { buildDncProductDescription } from "./lib/dnc-product-description.mjs";
 import { getBossWebRoot, loadEnvLocal } from "./lib/load-env.mjs";
 
@@ -198,12 +199,23 @@ function inferDncDbCategory(productName, styleCode) {
   if (isDncGloveStyleCode(styleCode)) {
     return "Glove";
   }
+  if (isDncSafetySpecStyleCode(styleCode)) {
+    return "Safty Glasses";
+  }
   const n = String(productName ?? "").toLowerCase();
   if (!n.trim()) {
     return "Work Shirts";
   }
   if (n.includes("glove")) {
     return "Glove";
+  }
+  if (
+    /\bsafety\s*spec\b/.test(n) ||
+    /\bvisitor\s*spec\b/.test(n) ||
+    /\bvistors\s*spec\b/.test(n) ||
+    n.includes("spectacle")
+  ) {
+    return "Safty Glasses";
   }
   if (/\b(apron|bib\s*apron)\b/.test(n)) {
     return "Apron";

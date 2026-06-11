@@ -15,6 +15,7 @@ import { FASHION_BIZ_LISTING_SUBSLUG } from "@/lib/fashion-biz-listing-subslug.g
 import { blueWhaleWorkwearExclusiveExpectedSubSlug } from "@/lib/blue-whale-category-browse";
 import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
 import { isDncPpeGloveExclusiveListing } from "@/lib/dnc-glove-routing";
+import { isDncPpeSafetyGlassesExclusiveListing } from "@/lib/dnc-safety-glasses-routing";
 import { resolveHealthCareBrowseSubSlug } from "@/lib/health-care-browse";
 
 const WORKWEAR_MAIN_SLUG = "workwear";
@@ -71,6 +72,7 @@ function isBizCollectionKidsOnlyTShirtExclusiveCategoryBrowseListing(
 const PPE_MAIN_SLUG = "ppe";
 const PPE_MISCELLANEOUS_SUB_SLUG = "miscellaneous";
 const PPE_GLOVE_SUB_SLUG = "glove";
+const PPE_SAFTY_GLASSES_SUB_SLUG = "safty-glasses";
 const PPE_HEAD_WEAR_SUB_SLUG = "head-wear";
 const CHEF_MAIN_SLUG = "chef";
 
@@ -2504,6 +2506,9 @@ export function isProductVisibleInCategoryBrowse(
   }
   if (isDncPpeGloveExclusiveListing(productName, meta)) {
     return mainSlug === PPE_MAIN_SLUG && subSlug === PPE_GLOVE_SUB_SLUG;
+  }
+  if (isDncPpeSafetyGlassesExclusiveListing(productName, meta)) {
+    return mainSlug === PPE_MAIN_SLUG && subSlug === PPE_SAFTY_GLASSES_SUB_SLUG;
   }
   if (isJbPpeMiscellaneousExclusiveListing(productName, meta)) {
     return mainSlug === PPE_MAIN_SLUG && subSlug === PPE_MISCELLANEOUS_SUB_SLUG;

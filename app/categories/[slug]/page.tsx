@@ -34,6 +34,7 @@ import {
 } from "@/lib/main-category-browse";
 import { isBizCollectionListing } from "@/lib/fashion-biz-gender-route";
 import { isDncPpeGloveExclusiveListing } from "@/lib/dnc-glove-routing";
+import { isDncPpeSafetyGlassesExclusiveListing } from "@/lib/dnc-safety-glasses-routing";
 import {
   hasStorefrontListNameAndPrice,
   isAussiePacificCatalogListing,
@@ -169,14 +170,16 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   };
 
   const isWorkwearExclusiveBrand = (item: CategoryBrowseProductRow): boolean => {
-    if (
-      isDncPpeGloveExclusiveListing(item.name, {
-        slug: item.slug ?? null,
-        category: item.category ?? null,
-        description: item.description ?? null,
-        supplier_name: item.supplier_name ?? null,
-      })
-    ) {
+    const dncPpeMeta = {
+      slug: item.slug ?? null,
+      category: item.category ?? null,
+      description: item.description ?? null,
+      supplier_name: item.supplier_name ?? null,
+    };
+    if (isDncPpeGloveExclusiveListing(item.name, dncPpeMeta)) {
+      return false;
+    }
+    if (isDncPpeSafetyGlassesExclusiveListing(item.name, dncPpeMeta)) {
       return false;
     }
     if (isBizCollectionListing(item.name, item.slug ?? null, item.category ?? null)) {

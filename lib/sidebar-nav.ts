@@ -6,6 +6,7 @@ import {
   resolveHealthCareBrowseSubSlug,
 } from "@/lib/health-care-browse";
 import { isDncPpeGloveExclusiveListing } from "@/lib/dnc-glove-routing";
+import { isDncPpeSafetyGlassesExclusiveListing } from "@/lib/dnc-safety-glasses-routing";
 import { inferSubSlugFromProductName, resolveProductSubSlug } from "@/lib/product-subslug";
 import {
   isBagKeywordProduct,
@@ -57,7 +58,8 @@ export function inferMainSlugForProduct(
   if (
     isJbPpeGloveExclusiveListing(name, meta) ||
     isJbPpeMiscellaneousExclusiveListing(name, meta) ||
-    isDncPpeGloveExclusiveListing(name, meta)
+    isDncPpeGloveExclusiveListing(name, meta) ||
+    isDncPpeSafetyGlassesExclusiveListing(name, meta)
   ) {
     return "ppe";
   }
@@ -232,6 +234,14 @@ export function syncSidebarNavFromProductIfNeeded(
       return;
     }
     persistSidebarNavClient("ppe", "glove");
+    return;
+  }
+
+  if (isDncPpeSafetyGlassesExclusiveListing(productName, jbSixMeta)) {
+    if (stored?.mainSlug === "ppe" && stored?.subSlug === "safty-glasses") {
+      return;
+    }
+    persistSidebarNavClient("ppe", "safty-glasses");
     return;
   }
 
