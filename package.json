@@ -32,6 +32,7 @@
     "backfill:dnc-descriptions": "node scripts/import-dnc-csv.mjs --descriptions-only",
     "scrape:dnc-descriptions": "node scripts/scrape-dnc-descriptions.mjs",
     "migrate:dnc-images": "node scripts/migrate-dnc-images-to-storage.mjs",
+    "upgrade:dnc-images": "node scripts/migrate-dnc-images-to-storage.mjs --upgrade --source=zoom",
     "import:blue-whale": "node scripts/import-blue-whale-csv.mjs",
     "import:blue-whale:legacy-numbers": "node scripts/import-blue-whale-numbers.mjs",
     "set:bj6976": "node scripts/set-bisley-bj6976-retail.mjs --target=101.4",

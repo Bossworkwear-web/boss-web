@@ -178,7 +178,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ path?: string[]
     const res = await fetch(triedUrl, {
       method: "GET",
       redirect: "follow",
-      headers: { Accept: "image/*,*/*;q=0.8" },
+      cache: "no-store",
+      headers: {
+        Accept: "image/*,*/*;q=0.8",
+        "Cache-Control": "no-cache",
+      },
     });
     if (res.ok) {
       upstream = res;
@@ -205,13 +209,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ path?: string[]
   }
 
   const outType = effectiveContentType(rawCt, filename);
-  const cache = upstream.headers.get("cache-control")?.trim();
   return new Response(upstream.body, {
     status: 200,
     headers: {
       "Content-Type": outType,
-      "Cache-Control":
-        cache && cache.length > 0 ? cache : "public, max-age=86400, stale-while-revalidate=604800",
+      "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
     },
   });
 }
@@ -248,6 +250,11 @@ export async function HEAD(req: Request, ctx: { params: Promise<{ path?: string[
     const res = await fetch(triedUrl, {
       method: "HEAD",
       redirect: "follow",
+      cache: "no-store",
+      headers: {
+        Accept: "image/*,*/*;q=0.8",
+        "Cache-Control": "no-cache",
+      },
     });
     if (res.ok) {
       upstream = res;

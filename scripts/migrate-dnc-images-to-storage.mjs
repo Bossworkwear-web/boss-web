@@ -1,15 +1,17 @@
 /**
  * Mirror DNC hotlinked images into Supabase Storage and rewrite `products.image_urls`.
  *
- * Default source is DNC `productimages` (~40KB) not `hires` (~2–6MB) for faster PDP loads.
- * Storefront URLs become `/api/supplier-media/dnc/product/<file>` (same-origin proxy + CDN).
+ * Image tiers on dncworkwear.com.au (same filename):
+ *   productimages ~35KB (thumbnail) | zoom ~900KB (PDP) | hires ~2–6MB (download)
+ *
+ * Default first import used `product` for speed. Use `--upgrade --source=zoom` to replace
+ * stored files in place (DB URLs unchanged, sharper PDP/slider images).
  *
  * Usage:
  *   node scripts/migrate-dnc-images-to-storage.mjs --dry-run
- *   node scripts/migrate-dnc-images-to-storage.mjs --limit=20
+ *   node scripts/migrate-dnc-images-to-storage.mjs --upgrade --source=zoom --visible-only
  *   node scripts/migrate-dnc-images-to-storage.mjs --source=hires
  *   node scripts/migrate-dnc-images-to-storage.mjs --only-failed
- *   node scripts/migrate-dnc-images-to-storage.mjs --visible-only
  *
  * Env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  *      SUPPLIER_IMAGES_BUCKET (default: supplier-product-images)
@@ -20,9 +22,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  collectUniqueDncProductMediaFilenames,
   dncDownloadUrlForSource,
   dncStorageObjectPath,
   dncSupplierMediaUrl,
+  dncUpgradeObjectPath,
   filenameFromDncUrl,
   isDncExternalImageUrl,
   isDncMigratedMediaUrl,
@@ -48,6 +52,7 @@ function parseArgs(argv) {
     delayMs: DEFAULT_DELAY_MS,
     visibleOnly: false,
     onlyFailed: false,
+    upgrade: false,
     skipUploaded: true,
     bucket: process.env.SUPPLIER_IMAGES_BUCKET ?? "supplier-product-images",
   };
@@ -58,6 +63,9 @@ function parseArgs(argv) {
       out.visibleOnly = true;
     } else if (a === "--only-failed") {
       out.onlyFailed = true;
+    } else if (a === "--upgrade") {
+      out.upgrade = true;
+      out.skipUploaded = false;
     } else if (a === "--force-download") {
       out.skipUploaded = false;
     } else if (a.startsWith("--limit=")) {
@@ -65,7 +73,7 @@ function parseArgs(argv) {
       out.limit = Number.isFinite(n) && n > 0 ? Math.floor(n) : Infinity;
     } else if (a.startsWith("--source=")) {
       const s = a.slice("--source=".length).trim().toLowerCase();
-      out.source = s === "hires" ? "hires" : "product";
+      out.source = s === "hires" || s === "zoom" ? s : "product";
     } else if (a.startsWith("--delay=")) {
       const n = Number(a.slice("--delay=".length));
       out.delayMs = Number.isFinite(n) && n >= 0 ? Math.floor(n) : DEFAULT_DELAY_MS;
@@ -173,6 +181,11 @@ async function downloadWithFallback(originalUrl, source) {
     if (hires && hires !== primary) {
       attempts.push(hires);
     }
+  } else if (source === "zoom") {
+    const hires = dncDownloadUrlForSource(originalUrl, "hires");
+    if (hires && hires !== primary) {
+      attempts.push(hires);
+    }
   }
 
   let lastErr = null;
@@ -237,6 +250,74 @@ async function main() {
   });
 
   const products = await fetchAllDncProducts(supabase, { visibleOnly: args.visibleOnly });
+
+  if (args.upgrade) {
+    let filenames = collectUniqueDncProductMediaFilenames(products);
+    if (args.onlyFailed) {
+      const failed = loadFailedSet(root);
+      filenames = filenames.filter((fn) =>
+        [...failed].some((line) => line.includes(fn) || filenameFromDncUrl(line) === fn),
+      );
+    }
+    filenames = filenames.slice(0, args.limit);
+
+    console.log(
+      `DNC image upgrade: ${filenames.length} stored file(s) → source=${args.source} (overwrite dnc/product/)` +
+        (args.visibleOnly ? ", visible products only" : "") +
+        (args.dryRun ? " [dry-run]" : ""),
+    );
+
+    if (args.dryRun) {
+      for (const fn of filenames.slice(0, 5)) {
+        const pseudo = `https://www.dncworkwear.com.au/images/hires/${fn}`;
+        console.log(`  ${fn}`);
+        console.log(`    → download ${dncDownloadUrlForSource(pseudo, args.source)}`);
+        console.log(`    → overwrite ${dncUpgradeObjectPath(fn)}`);
+      }
+      return;
+    }
+
+    const failures = [];
+    let uploaded = 0;
+    for (let i = 0; i < filenames.length; i += 1) {
+      const filename = filenames[i];
+      const objectPath = dncUpgradeObjectPath(filename);
+      const pseudoHires = `https://www.dncworkwear.com.au/images/hires/${filename}`;
+      try {
+        const { buf, contentType, downloadedFrom } = await downloadWithFallback(pseudoHires, args.source);
+        await uploadWithRetry(supabase, args.bucket, objectPath, buf, contentType);
+        uploaded += 1;
+        mapObj[`upgrade:${filename}`] = {
+          objectPath,
+          source: args.source,
+          downloadedFrom,
+          bytes: buf.length,
+          upgradedAt: new Date().toISOString(),
+        };
+        if (uploaded % 25 === 0) {
+          saveMap(root, mapObj);
+        }
+        if (args.delayMs > 0) {
+          await sleep(args.delayMs);
+        }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        failures.push({ key: filename, error: message });
+        console.error(`\nFailed ${filename}: ${message}`);
+      }
+      if ((i + 1) % 25 === 0 || i + 1 === filenames.length) {
+        process.stdout.write(`\rUpgraded ${uploaded}/${filenames.length} (failed ${failures.length})`);
+      }
+    }
+    saveMap(root, mapObj);
+    saveFailedList(root, failures);
+    console.log(`\nDone. upgraded=${uploaded} failed=${failures.length} (DB URLs unchanged)`);
+    if (failures.length) {
+      process.exitCode = 1;
+    }
+    return;
+  }
+
   let uniqueUrls = collectUniqueExternalUrls(products);
 
   if (args.onlyFailed) {
