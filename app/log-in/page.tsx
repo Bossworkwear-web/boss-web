@@ -225,6 +225,12 @@ export default async function LogInPage({ searchParams }: LogInPageProps) {
             Please complete the &ldquo;I&apos;m not a robot&rdquo; check and try again.
           </p>
         )}
+        {isSignup && status === "recaptcha_expired" && (
+          <p className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+            <AlertTriangleIcon className="h-4 w-4" />
+            Verification timed out. Tick &ldquo;I&apos;m not a robot&rdquo; again, then tap Sign up right away.
+          </p>
+        )}
         {isSignup && status === "recaptcha_config" && (
           <p className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
             <AlertTriangleIcon className="h-4 w-4" />

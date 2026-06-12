@@ -40,49 +40,64 @@ export type SignupRecaptchaHandle = {
 };
 
 type Props = {
-  hiddenInputId?: string;
   onCompleted?: () => void;
   onExpired?: () => void;
 };
 
+function readTokenFromWidget(
+  widgetId: number | null,
+  tokenRef: React.MutableRefObject<string>,
+  form: HTMLFormElement | null | undefined,
+): string {
+  let token = tokenRef.current.trim();
+  if (!token && widgetId !== null && window.grecaptcha?.getResponse) {
+    token = String(window.grecaptcha.getResponse(widgetId) ?? "").trim();
+  }
+  if (!token) {
+    const scopes: ParentNode[] = [];
+    if (form) scopes.push(form);
+    if (typeof document !== "undefined") scopes.push(document);
+    for (const scope of scopes) {
+      for (const field of scope.querySelectorAll<HTMLTextAreaElement>(
+        'textarea[name="g-recaptcha-response"]',
+      )) {
+        const value = field.value.trim();
+        if (value) {
+          token = value;
+          break;
+        }
+      }
+      if (token) break;
+    }
+  }
+  tokenRef.current = token;
+  return token;
+}
+
 /** reCAPTCHA v2 checkbox for email sign-up only. */
 export const SignupRecaptcha = forwardRef<SignupRecaptchaHandle, Props>(function SignupRecaptcha(
-  { hiddenInputId = "boss-recaptcha-response", onCompleted, onExpired },
+  { onCompleted, onExpired },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const hiddenRef = useRef<HTMLInputElement | null>(null);
   const widgetIdRef = useRef<number | null>(null);
+  const tokenRef = useRef("");
   const [scriptReady, setScriptReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
-
-  const syncHiddenField = useCallback(() => {
-    const widgetId = widgetIdRef.current;
-    const token =
-      widgetId !== null && window.grecaptcha?.getResponse
-        ? String(window.grecaptcha.getResponse(widgetId) ?? "").trim()
-        : "";
-    const hidden = hiddenRef.current;
-    if (hidden) {
-      hidden.value = token;
-    }
-    const googleField = document.querySelector<HTMLTextAreaElement>('textarea[name="g-recaptcha-response"]');
-    if (googleField && token) {
-      googleField.value = token;
-    }
-    return token;
-  }, []);
 
   const resetWidget = useCallback(() => {
     const widgetId = widgetIdRef.current;
     if (widgetId !== null && window.grecaptcha?.reset) {
       window.grecaptcha.reset(widgetId);
     }
-    if (hiddenRef.current) {
-      hiddenRef.current.value = "";
-    }
+    tokenRef.current = "";
     setExpired(false);
+  }, []);
+
+  const syncHiddenField = useCallback(() => {
+    const form = containerRef.current?.closest("form");
+    return readTokenFromWidget(widgetIdRef.current, tokenRef, form);
   }, []);
 
   useImperativeHandle(
@@ -116,13 +131,12 @@ export const SignupRecaptcha = forwardRef<SignupRecaptchaHandle, Props>(function
           onCompleted?.();
         },
         "expired-callback": () => {
+          tokenRef.current = "";
           setExpired(true);
-          if (hiddenRef.current) {
-            hiddenRef.current.value = "";
-          }
           onExpired?.();
         },
         "error-callback": () => {
+          tokenRef.current = "";
           setLoadError(
             "reCAPTCHA rejected this page. Refresh and try again, or contact us if the problem continues.",
           );
@@ -175,15 +189,6 @@ export const SignupRecaptcha = forwardRef<SignupRecaptchaHandle, Props>(function
 
   return (
     <div className="space-y-2">
-      <input
-        ref={hiddenRef}
-        type="hidden"
-        id={hiddenInputId}
-        name="g-recaptcha-response"
-        defaultValue=""
-        aria-hidden
-        tabIndex={-1}
-      />
       <Script
         id="boss-recaptcha-v2"
         src="https://www.google.com/recaptcha/api.js?render=explicit"

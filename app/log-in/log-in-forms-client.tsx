@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { OAuthSignInButtons } from "./oauth-sign-in-buttons";
 import { SignupRecaptcha, type SignupRecaptchaHandle } from "./signup-recaptcha";
@@ -14,6 +14,7 @@ type Props = {
 
 const SIGNUP_STATUSES_RESET_RECAPTCHA = new Set([
   "recaptcha_failed",
+  "recaptcha_expired",
   "invalid",
   "password_mismatch",
   "weak_password",
@@ -49,7 +50,9 @@ export function LogInFormsClient({ isSignup, signupStatus }: Props) {
   const loginRef = useRef<HTMLFormElement | null>(null);
   const signupRef = useRef<HTMLFormElement | null>(null);
   const recaptchaRef = useRef<SignupRecaptchaHandle | null>(null);
+  const submittingRef = useRef(false);
   const [recaptchaClientError, setRecaptchaClientError] = useState(false);
+  const [isSubmitting, startSignupTransition] = useTransition();
 
   const resetRecaptcha = useCallback(() => {
     recaptchaRef.current?.reset();
@@ -67,15 +70,46 @@ export function LogInFormsClient({ isSignup, signupStatus }: Props) {
     }
   }, [isSignup, signupStatus, resetRecaptcha]);
 
+  const readRecaptchaToken = useCallback(
+    () =>
+      new Promise<string>((resolve) => {
+        const read = () => resolve(recaptchaRef.current?.syncHiddenField() ?? "");
+        if (typeof window !== "undefined" && window.grecaptcha?.ready) {
+          window.grecaptcha.ready(read);
+          return;
+        }
+        read();
+      }),
+    [],
+  );
+
   const handleSignupSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    const token = recaptchaRef.current?.syncHiddenField() ?? "";
-    if (!token) {
-      event.preventDefault();
-      setRecaptchaClientError(true);
-      recaptchaRef.current?.reset();
+    event.preventDefault();
+    if (submittingRef.current || isSubmitting) {
       return;
     }
-    setRecaptchaClientError(false);
+
+    const form = event.currentTarget;
+    submittingRef.current = true;
+
+    void readRecaptchaToken().then((token) => {
+      if (!token) {
+        submittingRef.current = false;
+        setRecaptchaClientError(true);
+        return;
+      }
+
+      setRecaptchaClientError(false);
+      const formData = new FormData(form);
+      formData.set("recaptcha_token", token);
+      formData.set("g-recaptcha-response", token);
+
+      startSignupTransition(() => {
+        void submitSignUp(formData).finally(() => {
+          submittingRef.current = false;
+        });
+      });
+    });
   };
 
   // Force a remount when switching tabs to drop any retained DOM state.
@@ -92,7 +126,6 @@ export function LogInFormsClient({ isSignup, signupStatus }: Props) {
     <form
       key={key}
       ref={signupRef}
-      action={submitSignUp}
       autoComplete="off"
       className="grid gap-4 rounded-2xl p-6"
       onSubmit={handleSignupSubmit}
@@ -175,9 +208,10 @@ export function LogInFormsClient({ isSignup, signupStatus }: Props) {
       ) : null}
       <button
         type="submit"
-        className="mt-2 rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-medium text-brand-navy transition hover:brightness-95"
+        disabled={isSubmitting}
+        className="mt-2 rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-medium text-brand-navy transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        Sign up
+        {isSubmitting ? "Signing up…" : "Sign up"}
       </button>
     </form>
     </>

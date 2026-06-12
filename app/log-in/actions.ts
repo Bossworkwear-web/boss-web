@@ -1,7 +1,7 @@
 "use server";
 
 import crypto from "crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import {
@@ -13,7 +13,12 @@ import {
   migrateLegacyPasswordToAuth,
   sendSupabasePasswordResetEmail,
 } from "@/lib/customer-auth";
-import { isRecaptchaConfigured, isRecaptchaDevBypass, verifyRecaptchaToken } from "@/lib/recaptcha";
+import {
+  isRecaptchaConfigured,
+  isRecaptchaDevBypass,
+  recaptchaFailureRedirectStatus,
+  verifyRecaptchaToken,
+} from "@/lib/recaptcha";
 import { sendCustomerPasswordResetEmail } from "@/lib/customer-password-reset-email";
 import { combineCustomerName } from "@/lib/customer-name";
 import { getSiteUrl } from "@/lib/site-url";
@@ -112,10 +117,15 @@ export async function submitSignUp(formData: FormData) {
   }
 
   if (isRecaptchaConfigured() && !isRecaptchaDevBypass()) {
-    const token = String(formData.get("g-recaptcha-response") ?? "").trim();
-    const ok = await verifyRecaptchaToken(token);
-    if (!ok) {
-      signupErrorRedirect("recaptcha_failed");
+    const token = String(
+      formData.get("recaptcha_token") ?? formData.get("g-recaptcha-response") ?? "",
+    ).trim();
+    const headerStore = await headers();
+    const forwardedFor = headerStore.get("x-forwarded-for");
+    const remoteIp = forwardedFor?.split(",")[0]?.trim() || headerStore.get("x-real-ip") || undefined;
+    const verify = await verifyRecaptchaToken(token, remoteIp);
+    if (!verify.ok) {
+      signupErrorRedirect(recaptchaFailureRedirectStatus(verify.errorCodes));
     }
   } else if (process.env.NODE_ENV === "production" && !isRecaptchaConfigured()) {
     signupErrorRedirect("recaptcha_config");
