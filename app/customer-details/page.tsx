@@ -7,6 +7,13 @@ import { CustomerDetailsForm } from "@/app/customer-details/customer-details-for
 import { ArrowLeftIcon, BuildingIcon, NotesIcon, XCircleIcon } from "@/app/components/icons";
 import { getAuthenticatedCustomerUser, linkProfileToAuthUser } from "@/lib/customer-auth";
 import { combineCustomerName, splitCustomerName } from "@/lib/customer-name";
+import {
+  clearCustomerDetailsDraft,
+  readCustomerDetailsDraft,
+  saveCustomerDetailsDraft,
+  shouldRepopulateCustomerDetailsDraft,
+  type CustomerDetailsDraft,
+} from "@/lib/customer-details-draft";
 import { applyCustomerPasswordChange } from "@/lib/customer-password-update";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
@@ -74,6 +81,53 @@ function composeAddress(parts: AddressParts) {
     .join(", ");
 }
 
+function buildCustomerDetailsDraft(formData: FormData): CustomerDetailsDraft {
+  const billingSameAsDelivery = formData.get("billing_same_as_delivery") === "on";
+  const deliveryAddressParts: AddressParts = {
+    address1: String(formData.get("delivery_address1") ?? "").trim(),
+    address2: String(formData.get("delivery_address2") ?? "").trim(),
+    suburb: String(formData.get("delivery_suburb") ?? "").trim(),
+    postcode: String(formData.get("delivery_postcode") ?? "").trim(),
+    state: String(formData.get("delivery_state") ?? "").trim(),
+    country: String(formData.get("delivery_country") ?? "").trim(),
+  };
+  const billingAddressParts: AddressParts = {
+    address1: String(formData.get("billing_address1") ?? "").trim(),
+    address2: String(formData.get("billing_address2") ?? "").trim(),
+    suburb: String(formData.get("billing_suburb") ?? "").trim(),
+    postcode: String(formData.get("billing_postcode") ?? "").trim(),
+    state: String(formData.get("billing_state") ?? "").trim(),
+    country: String(formData.get("billing_country") ?? "").trim(),
+  };
+
+  return {
+    profileId: String(formData.get("profile_id") ?? "").trim(),
+    firstName: String(formData.get("first_name") ?? "").trim(),
+    surname: String(formData.get("surname") ?? "").trim(),
+    organisation: String(formData.get("organisation") ?? "").trim(),
+    contactNumber: String(formData.get("contact_number") ?? "").trim(),
+    emailAddress: String(formData.get("email_address") ?? "").trim(),
+    deliveryAddressParts,
+    billingAddressParts: billingSameAsDelivery ? deliveryAddressParts : billingAddressParts,
+    billingSameAsDelivery,
+    from: String(formData.get("from") ?? "").trim(),
+  };
+}
+
+function customerDetailsErrorRedirect(
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+  status: string,
+  draft: CustomerDetailsDraft,
+  extraParams?: Record<string, string>,
+) {
+  saveCustomerDetailsDraft(cookieStore, draft);
+  const qs = new URLSearchParams({ status, ...extraParams });
+  if (draft.from) {
+    qs.set("from", draft.from);
+  }
+  redirect(`/customer-details?${qs.toString()}`);
+}
+
 async function submitCustomerDetails(formData: FormData) {
   "use server";
 
@@ -106,6 +160,7 @@ async function submitCustomerDetails(formData: FormData) {
   const deliveryAddress = composeAddress(deliveryAddressParts);
   const billingAddress = composeAddress(finalBillingAddressParts);
   const cookieStore = await cookies();
+  const draft = buildCustomerDetailsDraft(formData);
   const pendingPassword = cookieStore.get("pending_signup_password")?.value ?? "";
   const oauthPending = cookieStore.get("customer_oauth_pending")?.value === "1";
   const oauthEmailCookie = (cookieStore.get("customer_oauth_email")?.value ?? "").trim().toLowerCase();
@@ -131,7 +186,7 @@ async function submitCustomerDetails(formData: FormData) {
     !deliveryAddress ||
     !billingAddress
   ) {
-    redirect("/customer-details?status=invalid");
+    customerDetailsErrorRedirect(cookieStore, "invalid", draft);
   }
 
   const hasRequiredDeliveryFields =
@@ -147,12 +202,12 @@ async function submitCustomerDetails(formData: FormData) {
     finalBillingAddressParts.state &&
     finalBillingAddressParts.country;
   if (!hasRequiredDeliveryFields || !hasRequiredBillingFields) {
-    redirect("/customer-details?status=invalid");
+    customerDetailsErrorRedirect(cookieStore, "invalid", draft);
   }
 
   const postcodeRegex = /^\d{4}$/;
   if (!postcodeRegex.test(deliveryAddressParts.postcode) || !postcodeRegex.test(finalBillingAddressParts.postcode)) {
-    redirect("/customer-details?status=invalid_postcode");
+    customerDetailsErrorRedirect(cookieStore, "invalid_postcode", draft);
   }
 
   try {
@@ -167,13 +222,14 @@ async function submitCustomerDetails(formData: FormData) {
         .maybeSingle();
 
       if (duplicateProfileError) {
-        redirect("/customer-details?status=error");
+        customerDetailsErrorRedirect(cookieStore, "error", draft);
       }
 
       if (duplicateProfile) {
-        redirect(
-          `/customer-details?status=email_exists&full_name=${encodeURIComponent(customerName)}&email=${encodeURIComponent(emailAddress)}`
-        );
+        customerDetailsErrorRedirect(cookieStore, "email_exists", draft, {
+          full_name: customerName,
+          email: emailAddress,
+        });
       }
 
       const { data: currentRow, error: currentRowError } = await supabase
@@ -183,7 +239,7 @@ async function submitCustomerDetails(formData: FormData) {
         .maybeSingle();
 
       if (currentRowError) {
-        redirect("/customer-details?status=error");
+        customerDetailsErrorRedirect(cookieStore, "error", draft);
       }
 
       const rowAuthUserId = currentRow?.auth_user_id ?? authUserId;
@@ -193,7 +249,7 @@ async function submitCustomerDetails(formData: FormData) {
         currentRow?.login_password === "";
 
       if (!isOauthOnlyRow && !passwordCandidate) {
-        redirect("/customer-details?status=invalid");
+        customerDetailsErrorRedirect(cookieStore, "invalid", draft);
       }
 
       const { error: updateError } = await supabase
@@ -211,7 +267,7 @@ async function submitCustomerDetails(formData: FormData) {
         .eq("id", profileId);
 
       if (updateError) {
-        redirect("/customer-details?status=error");
+        customerDetailsErrorRedirect(cookieStore, "error", draft);
       }
 
       if (passwordCandidate) {
@@ -224,7 +280,7 @@ async function submitCustomerDetails(formData: FormData) {
           passwordCandidate,
         );
         if (!pwRes.ok) {
-          redirect("/customer-details?status=error");
+          customerDetailsErrorRedirect(cookieStore, "error", draft);
         }
       }
     } else {
@@ -235,17 +291,18 @@ async function submitCustomerDetails(formData: FormData) {
         .maybeSingle();
 
       if (existingProfileError) {
-        redirect("/customer-details?status=error");
+        customerDetailsErrorRedirect(cookieStore, "error", draft);
       }
 
       if (existingByEmail) {
-        redirect(
-          `/customer-details?status=email_exists&full_name=${encodeURIComponent(customerName)}&email=${encodeURIComponent(emailAddress)}`
-        );
+        customerDetailsErrorRedirect(cookieStore, "email_exists", draft, {
+          full_name: customerName,
+          email: emailAddress,
+        });
       }
 
       if (!isOauthNewSignup && !authUserId && !passwordCandidate) {
-        redirect("/customer-details?status=invalid");
+        customerDetailsErrorRedirect(cookieStore, "invalid", draft);
       }
 
       const insertPassword: string | null = null;
@@ -279,18 +336,19 @@ async function submitCustomerDetails(formData: FormData) {
           passwordCandidate,
         );
         if (!pwRes.ok) {
-          redirect("/customer-details?status=error");
+          customerDetailsErrorRedirect(cookieStore, "error", draft);
         }
       }
 
       if (error?.code === "23505") {
-        redirect(
-          `/customer-details?status=email_exists&full_name=${encodeURIComponent(customerName)}&email=${encodeURIComponent(emailAddress)}`
-        );
+        customerDetailsErrorRedirect(cookieStore, "email_exists", draft, {
+          full_name: customerName,
+          email: emailAddress,
+        });
       }
 
       if (error) {
-        redirect("/customer-details?status=error");
+        customerDetailsErrorRedirect(cookieStore, "error", draft);
       }
     }
 
@@ -330,11 +388,12 @@ async function submitCustomerDetails(formData: FormData) {
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
     });
+    clearCustomerDetailsDraft(cookieStore);
   } catch (error) {
     if (isNextRedirectError(error)) {
       throw error;
     }
-    redirect("/customer-details?status=error");
+    customerDetailsErrorRedirect(cookieStore, "error", draft);
   }
 
   redirect("/?details_saved=1");
@@ -380,9 +439,21 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
   const authUser = await getAuthenticatedCustomerUser();
   const authEmailNorm = authUser?.email?.trim().toLowerCase() ?? "";
 
-  const prefilledName = existingProfile?.customer_name ?? params.full_name ?? "";
-  const { firstName: prefilledFirstName, surname: prefilledSurname } = splitCustomerName(prefilledName);
-  const prefilledEmail = existingProfile?.email_address ?? params.email ?? "";
+  const draft = readCustomerDetailsDraft(cookieStore);
+  const repopulateFromDraft = Boolean(draft && shouldRepopulateCustomerDetailsDraft(status));
+  if (!status && draft) {
+    clearCustomerDetailsDraft(cookieStore);
+  }
+
+  const prefilledName = repopulateFromDraft
+    ? combineCustomerName(draft!.firstName, draft!.surname)
+    : existingProfile?.customer_name ?? params.full_name ?? "";
+  const { firstName: prefilledFirstName, surname: prefilledSurname } = repopulateFromDraft
+    ? { firstName: draft!.firstName, surname: draft!.surname }
+    : splitCustomerName(prefilledName);
+  const prefilledEmail = repopulateFromDraft
+    ? draft!.emailAddress
+    : existingProfile?.email_address ?? params.email ?? "";
   const prefilledEmailNorm = prefilledEmail.trim().toLowerCase();
   const oauthFlowCompleting =
     oauthPending && Boolean(oauthEmailCookie) && prefilledEmailNorm === oauthEmailCookie && !existingProfile;
@@ -396,18 +467,29 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
     (Boolean(existingProfile.auth_user_id) ||
       existingProfile.login_password === null ||
       existingProfile.login_password === "");
-  const prefilledOrganisation = existingProfile?.organisation ?? "";
-  const prefilledContact = existingProfile?.contact_number ?? "";
-  const prefilledDeliveryAddress = existingProfile?.delivery_address ?? "";
-  const prefilledBillingAddress = existingProfile?.billing_address ?? "";
-  const deliveryParts = toAddressParts(prefilledDeliveryAddress);
-  const billingParts = toAddressParts(prefilledBillingAddress);
-  const defaultSameAsDelivery =
-    !!prefilledDeliveryAddress &&
-    (!!prefilledBillingAddress ? prefilledDeliveryAddress === prefilledBillingAddress : true);
+  const prefilledOrganisation = repopulateFromDraft
+    ? draft!.organisation
+    : existingProfile?.organisation ?? "";
+  const prefilledContact = repopulateFromDraft
+    ? draft!.contactNumber
+    : existingProfile?.contact_number ?? "";
+  const deliveryParts = repopulateFromDraft
+    ? draft!.deliveryAddressParts
+    : toAddressParts(existingProfile?.delivery_address ?? "");
+  const billingParts = repopulateFromDraft
+    ? draft!.billingAddressParts
+    : toAddressParts(existingProfile?.billing_address ?? "");
+  const defaultSameAsDelivery = repopulateFromDraft
+    ? draft!.billingSameAsDelivery
+    : !!existingProfile?.delivery_address &&
+      (!!existingProfile?.billing_address
+        ? existingProfile.delivery_address === existingProfile.billing_address
+        : true);
 
   const signedInCustomer = Boolean(loggedInEmail.trim());
-  const backToMyAccount = params.from === "my-account" || signedInCustomer;
+  const formFrom = repopulateFromDraft ? draft!.from : params.from ?? "";
+  const backToMyAccount = formFrom === "my-account" || signedInCustomer;
+  const profileIdValue = repopulateFromDraft ? draft!.profileId : existingProfile?.id ?? "";
 
   return (
     <main className="min-h-screen bg-white py-10 text-brand-navy">
@@ -456,7 +538,8 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
         )}
 
         <CustomerDetailsForm action={submitCustomerDetails} cancelHref="/">
-          <input type="hidden" name="profile_id" value={existingProfile?.id ?? ""} />
+          <input type="hidden" name="profile_id" value={profileIdValue} />
+          <input type="hidden" name="from" value={formFrom} />
 
           <p className="inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.1em] text-brand-navy/75">
             <BuildingIcon className="h-4 w-4" />
@@ -571,6 +654,7 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
           </div>
 
           <AddressSections
+            key={repopulateFromDraft ? `draft-${status ?? "saved"}` : "initial"}
             deliveryParts={deliveryParts}
             billingParts={billingParts}
             defaultSameAsDelivery={defaultSameAsDelivery}
