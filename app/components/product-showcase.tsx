@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRightIcon } from "@/app/components/icons";
 import { ProductGridPriceCells } from "@/app/components/product-grid-price";
 import { ProductNavLink } from "@/app/components/product-nav-link";
@@ -15,6 +16,7 @@ import { storefrontRetailFromSupplierBase, STOREFRONT_RETAIL_GST_RATE } from "@/
 import { productCardDisplayLines } from "@/lib/product-card-copy";
 import { PRODUCT_CARD_CODE_PRICE_SEPARATOR, productCardModelPriceRowStyle } from "@/lib/product-card-model-price-layout";
 import { productPathSegment } from "@/lib/product-path-slug";
+import { notifyProductSearchLoadingStart } from "@/lib/route-loading";
 import { scoreProductSearchMatch } from "@/lib/product-search";
 import { resolveProductSubSlug } from "@/lib/product-subslug";
 import { inferMainSlugForProduct } from "@/lib/sidebar-nav";
@@ -177,6 +179,8 @@ export function ProductShowcase({
 }: ProductShowcaseProps) {
   const layout = layoutProp;
   const [liveProducts, setLiveProducts] = useState<StoreProduct[]>(products);
+  const router = useRouter();
+  const inlineSearchRef = useRef<HTMLInputElement>(null);
   const [q, setQ] = useState(() => initialSearchQuery.trim());
   const [brandFilter, setBrandFilter] = useState<string>("");
   const [sortOrder, setSortOrder] = useState<"" | "price-asc" | "price-desc">("");
@@ -369,11 +373,19 @@ export function ProductShowcase({
               </p>
             </div>
             <form
-              action="/search"
-              method="get"
               className="flex w-full max-w-md flex-col gap-3 sm:flex-row sm:items-stretch"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const value = (inlineSearchRef.current?.value ?? "").trim();
+                if (!value) {
+                  return;
+                }
+                notifyProductSearchLoadingStart();
+                router.push(`/search?q=${encodeURIComponent(value)}`);
+              }}
             >
               <input
+                ref={inlineSearchRef}
                 type="search"
                 name="q"
                 required

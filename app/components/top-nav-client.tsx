@@ -18,7 +18,7 @@ import {
 import { customerFirstName } from "@/lib/customer-display-name";
 import type { StorefrontNavSub } from "@/lib/catalog";
 import { readSidebarNavClient } from "@/lib/sidebar-nav";
-import { notifyRouteLoadingStart } from "@/lib/route-loading";
+import { notifyProductSearchLoadingStart } from "@/lib/route-loading";
 import { SITE_PAGE_INSET_X_CLASS } from "@/lib/site-layout";
 
 /** Sign signed-in customers out after this much inactivity. */
@@ -378,7 +378,7 @@ function HeaderSearchFormInner({ onClose }: { onClose?: () => void }) {
         e.preventDefault();
         const v = (inputRef.current?.value ?? "").trim();
         onClose?.();
-        notifyRouteLoadingStart();
+        notifyProductSearchLoadingStart();
         router.push(v.length > 0 ? `/search?q=${encodeURIComponent(v)}` : "/search");
       }}
     >

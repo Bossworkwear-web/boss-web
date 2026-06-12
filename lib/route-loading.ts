@@ -8,10 +8,40 @@ export const ROUTE_LOADING_START_EVENT = "boss:route-loading-start";
 
 const MIN_BAR_MS = 380;
 
+export type RouteLoadingOverlayOptions = {
+  title: string;
+  description?: string;
+};
+
+type RouteLoadingStartOptions = {
+  overlay?: RouteLoadingOverlayOptions;
+};
+
 let loading = false;
+let overlayOptions: RouteLoadingOverlayOptions | null = null;
 let timeoutId: ReturnType<typeof setTimeout> | null = null;
 let stopDelayId: ReturnType<typeof setTimeout> | null = null;
 let loadingStartedAt = 0;
+const listeners = new Set<() => void>();
+
+function emitRouteLoadingChange() {
+  listeners.forEach((listener) => listener());
+}
+
+export function subscribeRouteLoading(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+export function getRouteLoadingSnapshot() {
+  return loading;
+}
+
+export function getRouteLoadingOverlayOptions() {
+  return overlayOptions;
+}
 
 function runAfterCommit(fn: () => void) {
   setTimeout(fn, 0);
@@ -19,16 +49,18 @@ function runAfterCommit(fn: () => void) {
 
 function stopRouteLoadingNow() {
   loading = false;
+  overlayOptions = null;
   if (timeoutId) {
     clearTimeout(timeoutId);
     timeoutId = null;
   }
+  emitRouteLoadingChange();
   runAfterCommit(() => {
     hideRouteProgressBar();
   });
 }
 
-export function startRouteLoading() {
+export function startRouteLoading(options?: RouteLoadingStartOptions) {
   if (typeof document === "undefined") {
     return;
   }
@@ -37,7 +69,13 @@ export function startRouteLoading() {
     stopDelayId = null;
   }
   loadingStartedAt = Date.now();
+  if (options?.overlay) {
+    overlayOptions = options.overlay;
+  } else if (!loading) {
+    overlayOptions = null;
+  }
   loading = true;
+  emitRouteLoadingChange();
   runAfterCommit(() => {
     showRouteProgressBar();
   });
@@ -69,13 +107,22 @@ export function stopRouteLoading() {
   stopRouteLoadingNow();
 }
 
+const SEARCH_LOADING_OVERLAY: RouteLoadingOverlayOptions = {
+  title: "Searching...",
+  description: "Please wait while we find matching products.",
+};
+
 /** Call before client-side navigation that does not originate from a link click. */
-export function notifyRouteLoadingStart() {
+export function notifyRouteLoadingStart(options?: RouteLoadingStartOptions) {
   if (typeof window === "undefined") {
     return;
   }
-  startRouteLoading();
+  startRouteLoading(options);
   window.dispatchEvent(new Event(ROUTE_LOADING_START_EVENT));
+}
+
+export function notifyProductSearchLoadingStart() {
+  notifyRouteLoadingStart({ overlay: SEARCH_LOADING_OVERLAY });
 }
 
 export function shouldStartRouteLoadingForAnchor(
