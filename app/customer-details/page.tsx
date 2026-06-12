@@ -390,6 +390,7 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
   const emailSignupCompleting =
     !existingProfile && Boolean(authEmailNorm) && prefilledEmailNorm === authEmailNorm && !oauthPending;
   const skipLoginPasswordField = oauthFlowCompleting || emailSignupCompleting || Boolean(pendingPassword);
+  const usingSignupPassword = Boolean(pendingPassword) || emailSignupCompleting;
   const isOauthOnlyAccount =
     existingProfile !== null &&
     (Boolean(existingProfile.auth_user_id) ||
@@ -532,8 +533,10 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
               />
             </div>
             {skipLoginPasswordField ? (
-              pendingPassword ? (
-                <input type="hidden" id="login_password" name="login_password" value={pendingPassword} />
+              usingSignupPassword ? (
+                <p className="text-xs text-brand-navy/60 sm:col-span-2">
+                  Your sign-up password will be used automatically — no need to enter it again.
+                </p>
               ) : null
             ) : existingProfile ? (
               <div className="grid gap-2 sm:col-span-2">

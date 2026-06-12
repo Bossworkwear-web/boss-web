@@ -150,26 +150,13 @@ export async function submitSignUp(formData: FormData) {
         break;
       case "redirect_details": {
         const cookieStore = await cookies();
-        const supabase = await createSupabaseServerClient();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (!session) {
-          cookieStore.set("pending_signup_password", password, {
-            path: "/",
-            maxAge: 60 * 20,
-            sameSite: "lax",
-            secure: process.env.NODE_ENV === "production",
-          });
-        } else {
-          cookieStore.set("pending_signup_password", "", {
-            path: "/",
-            maxAge: 0,
-            sameSite: "lax",
-            secure: process.env.NODE_ENV === "production",
-          });
-        }
+        cookieStore.set("pending_signup_password", password, {
+          path: "/",
+          maxAge: 60 * 20,
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+          httpOnly: true,
+        });
 
         redirect(
           `/customer-details?full_name=${encodeURIComponent(result.fullName)}&email=${encodeURIComponent(result.email)}`,
