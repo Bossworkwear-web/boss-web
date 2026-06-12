@@ -51,5 +51,9 @@ export async function verifyRecaptchaToken(token: string): Promise<boolean> {
   }
 
   const data = (await res.json()) as SiteVerifyResponse;
+  if (data.success !== true) {
+    const codes = data["error-codes"]?.join(", ") ?? "unknown";
+    console.error(`[recaptcha] siteverify failed: ${codes}`);
+  }
   return data.success === true;
 }

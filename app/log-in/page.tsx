@@ -232,7 +232,7 @@ export default async function LogInPage({ searchParams }: LogInPageProps) {
           </p>
         )}
 
-        <LogInFormsClient isSignup={isSignup} />
+        <LogInFormsClient isSignup={isSignup} signupStatus={isSignup ? status : undefined} />
         </div>
       </div>
     </main>

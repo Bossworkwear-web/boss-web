@@ -1,37 +1,82 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { OAuthSignInButtons } from "./oauth-sign-in-buttons";
-import { SignupRecaptcha } from "./signup-recaptcha";
+import { SignupRecaptcha, type SignupRecaptchaHandle } from "./signup-recaptcha";
 import { requestTemporaryPassword, submitLogIn, submitSignUp } from "./actions";
 
 type Props = {
   isSignup: boolean;
+  signupStatus?: string | null;
 };
 
-function useAlwaysResetForm(formRef: React.RefObject<HTMLFormElement | null>) {
+const SIGNUP_STATUSES_RESET_RECAPTCHA = new Set([
+  "recaptcha_failed",
+  "invalid",
+  "password_mismatch",
+  "weak_password",
+  "email_exists",
+  "legacy_exists",
+  "auth_exists",
+  "signup_failed",
+  "error",
+]);
+
+function useAlwaysResetForm(
+  formRef: React.RefObject<HTMLFormElement | null>,
+  onReset?: () => void,
+) {
   useEffect(() => {
     const form = formRef.current;
     if (!form) return;
     // Run on mount to clear browser-restored values.
     form.reset();
+    onReset?.();
 
     const onPageShow = () => {
       // BFCache restore (back/forward) can repopulate inputs; wipe again.
       form.reset();
+      onReset?.();
     };
     window.addEventListener("pageshow", onPageShow);
     return () => window.removeEventListener("pageshow", onPageShow);
-  }, [formRef]);
+  }, [formRef, onReset]);
 }
 
-export function LogInFormsClient({ isSignup }: Props) {
+export function LogInFormsClient({ isSignup, signupStatus }: Props) {
   const loginRef = useRef<HTMLFormElement | null>(null);
   const signupRef = useRef<HTMLFormElement | null>(null);
+  const recaptchaRef = useRef<SignupRecaptchaHandle | null>(null);
+  const [recaptchaClientError, setRecaptchaClientError] = useState(false);
 
-  useAlwaysResetForm(isSignup ? signupRef : loginRef);
+  const resetRecaptcha = useCallback(() => {
+    recaptchaRef.current?.reset();
+    setRecaptchaClientError(false);
+  }, []);
+
+  useAlwaysResetForm(isSignup ? signupRef : loginRef, isSignup ? resetRecaptcha : undefined);
+
+  useEffect(() => {
+    if (!isSignup || !signupStatus) {
+      return;
+    }
+    if (SIGNUP_STATUSES_RESET_RECAPTCHA.has(signupStatus)) {
+      resetRecaptcha();
+    }
+  }, [isSignup, signupStatus, resetRecaptcha]);
+
+  const handleSignupSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    const token = recaptchaRef.current?.syncHiddenField() ?? "";
+    if (!token) {
+      event.preventDefault();
+      setRecaptchaClientError(true);
+      recaptchaRef.current?.reset();
+      return;
+    }
+    setRecaptchaClientError(false);
+  };
 
   // Force a remount when switching tabs to drop any retained DOM state.
   const key = useMemo(() => (isSignup ? "signup" : "login"), [isSignup]);
@@ -50,6 +95,7 @@ export function LogInFormsClient({ isSignup }: Props) {
       action={submitSignUp}
       autoComplete="off"
       className="grid gap-4 rounded-2xl p-6"
+      onSubmit={handleSignupSubmit}
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
@@ -117,7 +163,16 @@ export function LogInFormsClient({ isSignup }: Props) {
           className="rounded-md border border-brand-navy/20 px-3 py-2"
         />
       </div>
-      <SignupRecaptcha />
+      <SignupRecaptcha
+        ref={recaptchaRef}
+        onCompleted={() => setRecaptchaClientError(false)}
+        onExpired={() => setRecaptchaClientError(true)}
+      />
+      {recaptchaClientError ? (
+        <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+          Please complete the &ldquo;I&apos;m not a robot&rdquo; check, then tap Sign up again.
+        </p>
+      ) : null}
       <button
         type="submit"
         className="mt-2 rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-medium text-brand-navy transition hover:brightness-95"

@@ -1,7 +1,14 @@
 "use client";
 
 import Script from "next/script";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 
 const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY?.trim() ?? "";
 
@@ -14,19 +21,79 @@ declare global {
         parameters: {
           sitekey: string;
           theme?: "light" | "dark";
+          size?: "normal" | "compact";
+          callback?: () => void;
+          "expired-callback"?: () => void;
           "error-callback"?: () => void;
         },
       ) => number;
+      getResponse: (widgetId?: number) => string;
+      reset: (widgetId?: number) => void;
     };
   }
 }
 
+export type SignupRecaptchaHandle = {
+  getResponse: () => string;
+  reset: () => void;
+  syncHiddenField: () => string;
+};
+
+type Props = {
+  hiddenInputId?: string;
+  onCompleted?: () => void;
+  onExpired?: () => void;
+};
+
 /** reCAPTCHA v2 checkbox for email sign-up only. */
-export function SignupRecaptcha() {
+export const SignupRecaptcha = forwardRef<SignupRecaptchaHandle, Props>(function SignupRecaptcha(
+  { hiddenInputId = "boss-recaptcha-response", onCompleted, onExpired },
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const hiddenRef = useRef<HTMLInputElement | null>(null);
   const widgetIdRef = useRef<number | null>(null);
   const [scriptReady, setScriptReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [expired, setExpired] = useState(false);
+
+  const syncHiddenField = useCallback(() => {
+    const widgetId = widgetIdRef.current;
+    const token =
+      widgetId !== null && window.grecaptcha?.getResponse
+        ? String(window.grecaptcha.getResponse(widgetId) ?? "").trim()
+        : "";
+    const hidden = hiddenRef.current;
+    if (hidden) {
+      hidden.value = token;
+    }
+    const googleField = document.querySelector<HTMLTextAreaElement>('textarea[name="g-recaptcha-response"]');
+    if (googleField && token) {
+      googleField.value = token;
+    }
+    return token;
+  }, []);
+
+  const resetWidget = useCallback(() => {
+    const widgetId = widgetIdRef.current;
+    if (widgetId !== null && window.grecaptcha?.reset) {
+      window.grecaptcha.reset(widgetId);
+    }
+    if (hiddenRef.current) {
+      hiddenRef.current.value = "";
+    }
+    setExpired(false);
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      getResponse: () => syncHiddenField(),
+      reset: resetWidget,
+      syncHiddenField,
+    }),
+    [resetWidget, syncHiddenField],
+  );
 
   const renderWidget = useCallback(() => {
     const el = containerRef.current;
@@ -41,17 +108,33 @@ export function SignupRecaptcha() {
       widgetIdRef.current = window.grecaptcha.render(el, {
         sitekey: siteKey,
         theme: "light",
+        size: "normal",
+        callback: () => {
+          setExpired(false);
+          setLoadError(null);
+          syncHiddenField();
+          onCompleted?.();
+        },
+        "expired-callback": () => {
+          setExpired(true);
+          if (hiddenRef.current) {
+            hiddenRef.current.value = "";
+          }
+          onExpired?.();
+        },
         "error-callback": () => {
-          setLoadError("reCAPTCHA rejected this page. Confirm the site key in .env.local matches this reCAPTCHA key.");
+          setLoadError(
+            "reCAPTCHA rejected this page. Refresh and try again, or contact us if the problem continues.",
+          );
         },
       });
       setLoadError(null);
       return true;
     } catch {
-      setLoadError("reCAPTCHA could not render. Hard-refresh the page (Cmd+Shift+R).");
+      setLoadError("reCAPTCHA could not render. Please refresh the page and try again.");
       return false;
     }
-  }, []);
+  }, [onCompleted, onExpired, syncHiddenField]);
 
   useEffect(() => {
     if (!scriptReady) {
@@ -69,7 +152,7 @@ export function SignupRecaptcha() {
       if (!el?.querySelector("iframe") && !el?.querySelector(".g-recaptcha-bubble-arrow")) {
         setLoadError(
           process.env.NODE_ENV === "development"
-            ? "reCAPTCHA still not visible. Try a private window, disable ad blockers, or use RECAPTCHA_DEV_BYPASS=1 in .env.local (already set — restart npm run dev)."
+            ? "reCAPTCHA still not visible. Try a private window, disable ad blockers, or use RECAPTCHA_DEV_BYPASS=1 in .env.local."
             : "reCAPTCHA did not load. Please refresh and try again.",
         );
       }
@@ -92,6 +175,15 @@ export function SignupRecaptcha() {
 
   return (
     <div className="space-y-2">
+      <input
+        ref={hiddenRef}
+        type="hidden"
+        id={hiddenInputId}
+        name="g-recaptcha-response"
+        defaultValue=""
+        aria-hidden
+        tabIndex={-1}
+      />
       <Script
         id="boss-recaptcha-v2"
         src="https://www.google.com/recaptcha/api.js?render=explicit"
@@ -108,13 +200,18 @@ export function SignupRecaptcha() {
         }}
         onError={() => {
           setLoadError(
-            "Could not load google.com/recaptcha (blocked network or extension). Use RECAPTCHA_DEV_BYPASS=1 for local sign-up tests.",
+            "Could not load reCAPTCHA (network or blocker). Refresh the page or try another browser.",
           );
         }}
       />
-      <div className="flex min-h-[78px] justify-center">
+      <div className="flex min-h-[78px] justify-center overflow-x-auto">
         <div ref={containerRef} />
       </div>
+      {expired ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Verification expired. Please tick &ldquo;I&apos;m not a robot&rdquo; again before signing up.
+        </p>
+      ) : null}
       {loadError ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           {loadError}
@@ -122,4 +219,4 @@ export function SignupRecaptcha() {
       ) : null}
     </div>
   );
-}
+});
