@@ -33,11 +33,13 @@ type CustomerSearchHit = {
   phone: string | null;
   organisation: string | null;
   profileId: string | null;
+  marketingOptIn: boolean | null;
 };
 
 export type CustomerListRow = CustomerSearchHit & {
   orderCount: number;
   hasProfile: boolean;
+  marketingOptInAt: string | null;
 };
 
 export async function listAllCustomersForCustomerInfo(): Promise<
@@ -55,7 +57,9 @@ export async function listAllCustomersForCustomerInfo(): Promise<
 
     const { data: profs, error: profErr } = await supabase
       .from("customer_profiles")
-      .select("id, customer_name, organisation, email_address, contact_number, created_at")
+      .select(
+        "id, customer_name, organisation, email_address, contact_number, created_at, marketing_opt_in, marketing_opt_in_at",
+      )
       .order("created_at", { ascending: false });
     if (profErr) {
       return { ok: false, error: profErr.message };
@@ -72,6 +76,8 @@ export async function listAllCustomersForCustomerInfo(): Promise<
         profileId: String(r.id ?? "").trim() || null,
         orderCount: 0,
         hasProfile: true,
+        marketingOptIn: Boolean(r.marketing_opt_in),
+        marketingOptInAt: (r.marketing_opt_in_at as string | null) ?? null,
       });
     }
 
@@ -101,6 +107,8 @@ export async function listAllCustomersForCustomerInfo(): Promise<
           profileId: null,
           orderCount: 1,
           hasProfile: false,
+          marketingOptIn: null,
+          marketingOptInAt: null,
         });
       }
     }
@@ -136,7 +144,9 @@ export async function searchCustomersForCustomerInfo(
     // 1) Profiles (name/email/phone).
     const { data: profs } = await supabase
       .from("customer_profiles")
-      .select("id, customer_name, organisation, email_address, contact_number")
+      .select(
+        "id, customer_name, organisation, email_address, contact_number, marketing_opt_in, marketing_opt_in_at",
+      )
       .or(
         `email_address.ilike.${needle},customer_name.ilike.${needle},organisation.ilike.${needle},contact_number.ilike.${needle}`,
       )
@@ -151,6 +161,7 @@ export async function searchCustomersForCustomerInfo(
         phone: (r.contact_number ?? "").trim() || null,
         organisation: (r.organisation ?? "").trim() || null,
         profileId: String(r.id ?? "").trim() || null,
+        marketingOptIn: Boolean(r.marketing_opt_in),
       });
     }
 
@@ -171,6 +182,7 @@ export async function searchCustomersForCustomerInfo(
         phone: null,
         organisation: null,
         profileId: null,
+        marketingOptIn: null,
       });
     }
 
@@ -192,6 +204,8 @@ export type CustomerInfoPayload = {
     delivery_address: string;
     billing_address: string;
     created_at: string;
+    marketing_opt_in: boolean;
+    marketing_opt_in_at: string | null;
     sign_in_status: "supabase_auth" | "legacy_hashed" | "legacy_plain" | "oauth_only";
   } | null;
   masterLogo: { public_url: string; storage_bucket: string; storage_path: string } | null;
@@ -234,7 +248,7 @@ export async function getCustomerInfoPayload(
     const { data: profile } = await supabase
       .from("customer_profiles")
       .select(
-        "id, customer_name, organisation, contact_number, email_address, delivery_address, billing_address, created_at, login_password, auth_user_id",
+        "id, customer_name, organisation, contact_number, email_address, delivery_address, billing_address, created_at, login_password, auth_user_id, marketing_opt_in, marketing_opt_in_at",
       )
       .eq("email_address", email)
       .maybeSingle();
@@ -308,6 +322,8 @@ export async function getCustomerInfoPayload(
               delivery_address: String(profile.delivery_address ?? ""),
               billing_address: String(profile.billing_address ?? ""),
               created_at: String(profile.created_at ?? ""),
+              marketing_opt_in: Boolean(profile.marketing_opt_in),
+              marketing_opt_in_at: (profile.marketing_opt_in_at as string | null) ?? null,
               sign_in_status: customerSignInStatus({
                 auth_user_id: profile.auth_user_id ?? null,
                 login_password: profile.login_password ?? null,

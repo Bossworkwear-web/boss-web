@@ -25,6 +25,58 @@ function audFromCents(cents: number): string {
   return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(n);
 }
 
+function formatMarketingOptInAt(iso: string | null | undefined): string | null {
+  if (!iso?.trim()) {
+    return null;
+  }
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) {
+    return null;
+  }
+  return new Intl.DateTimeFormat("en-AU", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Australia/Perth",
+  }).format(new Date(t));
+}
+
+function MarketingConsentBadge({
+  optedIn,
+  optedInAt,
+  compact = false,
+}: {
+  optedIn: boolean | null;
+  optedInAt?: string | null;
+  compact?: boolean;
+}) {
+  if (optedIn === null) {
+    return <span className="text-slate-400">—</span>;
+  }
+  if (optedIn) {
+    const when = formatMarketingOptInAt(optedInAt);
+    return (
+      <span
+        className={`inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 font-semibold text-emerald-800 ${
+          compact ? "px-2 py-0.5 text-[0.65rem] uppercase tracking-wide" : "px-2.5 py-1 text-xs"
+        }`}
+        title={when ? `Consented on ${when}` : "Marketing consent granted"}
+      >
+        {compact ? "Yes" : "Consented"}
+        {!compact && when ? <span className="ml-1.5 font-normal text-emerald-700">· {when}</span> : null}
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border border-slate-200 bg-slate-50 font-semibold text-slate-600 ${
+        compact ? "px-2 py-0.5 text-[0.65rem] uppercase tracking-wide" : "px-2.5 py-1 text-xs"
+      }`}
+    >
+      {compact ? "No" : "Not consented"}
+    </span>
+  );
+}
+
 function signInStatusLabel(
   status: NonNullable<CustomerInfoPayload["profile"]>["sign_in_status"],
 ): string {
@@ -128,7 +180,15 @@ export function CustomerInfoClient({
   initialEmail = null,
 }: CustomerInfoClientProps) {
   const [q, setQ] = useState("");
-  const [hits, setHits] = useState<Array<{ email: string; name: string | null; phone: string | null; organisation: string | null }>>([]);
+  const [hits, setHits] = useState<
+    Array<{
+      email: string;
+      name: string | null;
+      phone: string | null;
+      organisation: string | null;
+      marketingOptIn: boolean | null;
+    }>
+  >([]);
   const [allCustomers, setAllCustomers] = useState<CustomerListRow[]>([]);
   const [listLoaded, setListLoaded] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
@@ -422,6 +482,7 @@ export function CustomerInfoClient({
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Organisation</th>
                   <th className="px-4 py-3">Phone</th>
+                  <th className="px-4 py-3">Marketing</th>
                   <th className="px-4 py-3 text-right">Orders</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
@@ -447,6 +508,13 @@ export function CustomerInfoClient({
                     <td className="px-4 py-3 text-slate-700">{(c.name ?? "").trim() || "—"}</td>
                     <td className="px-4 py-3 text-slate-700">{(c.organisation ?? "").trim() || "—"}</td>
                     <td className="px-4 py-3 text-slate-700">{(c.phone ?? "").trim() || "—"}</td>
+                    <td className="px-4 py-3">
+                      <MarketingConsentBadge
+                        optedIn={c.hasProfile ? c.marketingOptIn : null}
+                        optedInAt={c.marketingOptInAt}
+                        compact
+                      />
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums text-slate-700">{c.orderCount}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex flex-wrap items-center justify-end gap-2">
@@ -521,6 +589,9 @@ export function CustomerInfoClient({
                   <p className="text-sm font-semibold text-brand-navy">{h.email}</p>
                   <p className="mt-1 text-xs text-slate-600">
                     {(h.organisation ?? "").trim() || "—"} · {(h.name ?? "").trim() || "—"} · {(h.phone ?? "").trim() || "—"}
+                  </p>
+                  <p className="mt-2">
+                    <MarketingConsentBadge optedIn={h.marketingOptIn ?? null} compact />
                   </p>
                 </button>
               </li>
@@ -633,6 +704,20 @@ export function CustomerInfoClient({
                   <p className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                     {signInStatusLabel(payload.profile.sign_in_status)}
                   </p>
+                </div>
+                <div className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Marketing &amp; promotions consent
+                  </span>
+                  <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <MarketingConsentBadge
+                      optedIn={payload.profile.marketing_opt_in}
+                      optedInAt={payload.profile.marketing_opt_in_at}
+                    />
+                    <p className="mt-2 text-xs text-slate-600">
+                      Recorded from the Customer Details opt-in checkbox (promotions and advertising).
+                    </p>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
