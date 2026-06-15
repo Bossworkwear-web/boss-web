@@ -162,7 +162,25 @@ export default async function PrivacyPolicyPage() {
               Workwear can show relevant ads to people who have interacted with us or who may be interested in our
               products. This is sometimes called a &quot;Customer Match&quot; or similar audience feature. We use these
               tools only for Boss Workwear&apos;s own advertising — not for unrelated third parties to market to you on
-              their behalf.
+              their behalf. Google&apos;s use of this data is subject to{" "}
+              <a
+                href="https://policies.google.com/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-brand-orange underline-offset-2 hover:underline"
+              >
+                Google&apos;s Privacy Policy
+              </a>
+              ; see also{" "}
+              <a
+                href="https://support.google.com/adspolicy/answer/6299717"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-brand-orange underline-offset-2 hover:underline"
+              >
+                Google Ads Customer Match policy
+              </a>
+              .
             </p>
             <p>
               You can withdraw marketing consent at any time by updating your preferences on the Customer Details page
