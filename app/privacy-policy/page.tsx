@@ -150,6 +150,29 @@ export default async function PrivacyPolicyPage() {
               unrelated outside parties for their own marketing.
             </p>
 
+            <h2>5.1 Online advertising and marketing platforms</h2>
+            <p>
+              Where you have given us consent (for example, by opting in on our Customer Details form), we may use your
+              contact details (such as your name and email address) to send you promotional communications about Boss
+              Workwear products and offers.
+            </p>
+            <p>
+              We may also share <strong>hashed</strong> versions of contact information (for example, a one-way hash of
+              your email address) with advertising platforms such as <strong>Google Ads</strong> solely so that Boss
+              Workwear can show relevant ads to people who have interacted with us or who may be interested in our
+              products. This is sometimes called a &quot;Customer Match&quot; or similar audience feature. We use these
+              tools only for Boss Workwear&apos;s own advertising — not for unrelated third parties to market to you on
+              their behalf.
+            </p>
+            <p>
+              You can withdraw marketing consent at any time by updating your preferences on the Customer Details page
+              in your account, by using any unsubscribe link in our emails, or by contacting us at{" "}
+              <a href={privacyMailto} className="font-semibold text-brand-orange underline-offset-2 hover:underline">
+                {STOREFRONT_QUOTE_EMAIL_RECIPIENT}
+              </a>
+              .
+            </p>
+
             <h2>6. Retention and disposal of personal information</h2>
             <p>
               We retain personal information only for as long as reasonably necessary for the purposes for which it was

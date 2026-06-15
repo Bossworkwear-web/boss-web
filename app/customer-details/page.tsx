@@ -110,6 +110,7 @@ function buildCustomerDetailsDraft(formData: FormData): CustomerDetailsDraft {
     deliveryAddressParts,
     billingAddressParts: billingSameAsDelivery ? deliveryAddressParts : billingAddressParts,
     billingSameAsDelivery,
+    marketingOptIn: formData.get("marketing_opt_in") === "on",
     from: String(formData.get("from") ?? "").trim(),
   };
 }
@@ -156,6 +157,7 @@ async function submitCustomerDetails(formData: FormData) {
     country: String(formData.get("billing_country") ?? "").trim(),
   };
   const billingSameAsDelivery = formData.get("billing_same_as_delivery") === "on";
+  const marketingOptIn = formData.get("marketing_opt_in") === "on";
   const finalBillingAddressParts = billingSameAsDelivery ? deliveryAddressParts : billingAddressParts;
   const deliveryAddress = composeAddress(deliveryAddressParts);
   const billingAddress = composeAddress(finalBillingAddressParts);
@@ -234,7 +236,7 @@ async function submitCustomerDetails(formData: FormData) {
 
       const { data: currentRow, error: currentRowError } = await supabase
         .from("customer_profiles")
-        .select("login_password, auth_user_id, email_address")
+        .select("login_password, auth_user_id, email_address, marketing_opt_in, marketing_opt_in_at")
         .eq("id", profileId)
         .maybeSingle();
 
@@ -252,6 +254,13 @@ async function submitCustomerDetails(formData: FormData) {
         customerDetailsErrorRedirect(cookieStore, "invalid", draft);
       }
 
+      const wasMarketingOptIn = Boolean(currentRow?.marketing_opt_in);
+      const marketingOptInAt = marketingOptIn
+        ? wasMarketingOptIn
+          ? currentRow?.marketing_opt_in_at ?? new Date().toISOString()
+          : new Date().toISOString()
+        : null;
+
       const { error: updateError } = await supabase
         .from("customer_profiles")
         .update({
@@ -262,6 +271,8 @@ async function submitCustomerDetails(formData: FormData) {
           login_password: rowAuthUserId ? null : currentRow?.login_password ?? null,
           delivery_address: deliveryAddress,
           billing_address: billingAddress,
+          marketing_opt_in: marketingOptIn,
+          marketing_opt_in_at: marketingOptInAt,
           ...(rowAuthUserId ? { auth_user_id: rowAuthUserId } : {}),
         })
         .eq("id", profileId);
@@ -306,6 +317,7 @@ async function submitCustomerDetails(formData: FormData) {
       }
 
       const insertPassword: string | null = null;
+      const marketingOptInAt = marketingOptIn ? new Date().toISOString() : null;
 
       const { data: inserted, error } = await supabase
         .from("customer_profiles")
@@ -317,6 +329,8 @@ async function submitCustomerDetails(formData: FormData) {
           login_password: insertPassword,
           delivery_address: deliveryAddress,
           billing_address: billingAddress,
+          marketing_opt_in: marketingOptIn,
+          marketing_opt_in_at: marketingOptInAt,
           ...(authUserId ? { auth_user_id: authUserId } : {}),
         })
         .select("id")
@@ -418,6 +432,7 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
     billing_address: string;
     login_password: string | null;
     auth_user_id: string | null;
+    marketing_opt_in: boolean;
   } | null = null;
 
   if (loggedInEmail) {
@@ -426,7 +441,7 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
       const { data } = await supabase
         .from("customer_profiles")
         .select(
-          "id, customer_name, organisation, contact_number, email_address, delivery_address, billing_address, login_password, auth_user_id",
+          "id, customer_name, organisation, contact_number, email_address, delivery_address, billing_address, login_password, auth_user_id, marketing_opt_in",
         )
         .eq("email_address", loggedInEmail)
         .maybeSingle();
@@ -485,6 +500,9 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
       (!!existingProfile?.billing_address
         ? existingProfile.delivery_address === existingProfile.billing_address
         : true);
+  const defaultMarketingOptIn = repopulateFromDraft
+    ? draft!.marketingOptIn
+    : existingProfile?.marketing_opt_in ?? false;
 
   const signedInCustomer = Boolean(loggedInEmail.trim());
   const formFrom = repopulateFromDraft ? draft!.from : params.from ?? "";
@@ -659,6 +677,31 @@ export default async function CustomerDetailsPage({ searchParams }: CustomerDeta
             billingParts={billingParts}
             defaultSameAsDelivery={defaultSameAsDelivery}
           />
+
+          <div className="rounded-xl border border-brand-navy/10 bg-brand-surface/40 px-4 py-4">
+            <label htmlFor="marketing_opt_in" className="flex cursor-pointer items-start gap-3 text-sm leading-relaxed text-brand-navy/85">
+              <input
+                id="marketing_opt_in"
+                name="marketing_opt_in"
+                type="checkbox"
+                defaultChecked={defaultMarketingOptIn}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-brand-orange"
+              />
+              <span>
+                I agree to Boss Workwear collecting and using my contact details to send me promotions and advertising
+                about Boss Workwear products and offers. See our{" "}
+                <Link
+                  href="/privacy-policy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-brand-orange underline-offset-2 hover:underline"
+                >
+                  Privacy Policy
+                </Link>{" "}
+                for more information.
+              </span>
+            </label>
+          </div>
 
         </CustomerDetailsForm>
         </div>

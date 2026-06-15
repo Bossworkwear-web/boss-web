@@ -326,6 +326,8 @@ export type Database = {
           login_password: string | null;
           delivery_address: string;
           billing_address: string;
+          marketing_opt_in: boolean;
+          marketing_opt_in_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -338,6 +340,8 @@ export type Database = {
           login_password?: string | null;
           delivery_address: string;
           billing_address: string;
+          marketing_opt_in?: boolean;
+          marketing_opt_in_at?: string | null;
           created_at?: string;
         };
         Update: {
@@ -350,6 +354,8 @@ export type Database = {
           login_password?: string | null;
           delivery_address?: string;
           billing_address?: string;
+          marketing_opt_in?: boolean;
+          marketing_opt_in_at?: string | null;
           created_at?: string;
         };
         Relationships: [];

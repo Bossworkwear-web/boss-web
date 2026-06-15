@@ -19,6 +19,7 @@ export type CustomerDetailsDraft = {
   deliveryAddressParts: CustomerDetailsAddressParts;
   billingAddressParts: CustomerDetailsAddressParts;
   billingSameAsDelivery: boolean;
+  marketingOptIn: boolean;
   from: string;
 };
 
