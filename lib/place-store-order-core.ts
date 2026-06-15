@@ -7,6 +7,7 @@ import { totalEstimatedShippingWeightKg } from "@/lib/delivery-shipping-weight";
 import type { StoreOrderCartLine } from "@/lib/store-order-cart-payload";
 import { storefrontVolumeAdjustedCartLines } from "@/lib/storefront-volume-discount";
 import { sendStoreOrderConfirmationEmail } from "@/lib/store-order-email";
+import { sendOnlineOrderInternalAlert } from "@/lib/store-order-internal-alert";
 import { allocateNextBossStoreOrderNumber, invoiceNumberFromOrderNumber } from "@/lib/boss-customer-order-id";
 import { getPerthYmd } from "@/lib/perth-calendar";
 import { insertSupplierOrderLinesFromStoreCheckout } from "@/lib/supplier-order-lines-from-store-order";
@@ -565,6 +566,29 @@ export async function placeStoreOrderCore(
   });
   if (!emailRes.ok) {
     console.error("[placeStoreOrderCore] confirmation email:", emailRes.error);
+  }
+
+  const lineSummary = normalizedItems
+    .slice(0, 6)
+    .map((line) => `${line.quantity}× ${line.productName.trim()}`)
+    .join(", ");
+  const lineSummarySuffix =
+    normalizedItems.length > 6 ? `, +${normalizedItems.length - 6} more` : "";
+  try {
+    const alertRes = await sendOnlineOrderInternalAlert({
+      orderNumber,
+      customerName,
+      customerEmail,
+      deliveryAddress,
+      totalFormatted,
+      lineCount: normalizedItems.length,
+      lineSummary: `${lineSummary}${lineSummarySuffix}`,
+    });
+    if (!alertRes.ok) {
+      console.error("[placeStoreOrderCore] online order internal alert: send failed");
+    }
+  } catch (e) {
+    console.error("[placeStoreOrderCore] online order internal alert:", e);
   }
 
   if (stripeSessionId) {
