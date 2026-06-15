@@ -56,19 +56,19 @@ function MarketingConsentBadge({
     const when = formatMarketingOptInAt(optedInAt);
     return (
       <span
-        className={`inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 font-semibold text-emerald-800 ${
+        className={`inline-flex items-center rounded-full border border-green-300 bg-green-100 font-semibold text-green-900 ${
           compact ? "px-2 py-0.5 text-[0.65rem] uppercase tracking-wide" : "px-2.5 py-1 text-xs"
         }`}
         title={when ? `Consented on ${when}` : "Marketing consent granted"}
       >
         {compact ? "Yes" : "Consented"}
-        {!compact && when ? <span className="ml-1.5 font-normal text-emerald-700">· {when}</span> : null}
+        {!compact && when ? <span className="ml-1.5 font-normal text-green-800">· {when}</span> : null}
       </span>
     );
   }
   return (
     <span
-      className={`inline-flex items-center rounded-full border border-slate-200 bg-slate-50 font-semibold text-slate-600 ${
+      className={`inline-flex items-center rounded-full border border-red-300 bg-red-100 font-semibold text-red-900 ${
         compact ? "px-2 py-0.5 text-[0.65rem] uppercase tracking-wide" : "px-2.5 py-1 text-xs"
       }`}
     >
