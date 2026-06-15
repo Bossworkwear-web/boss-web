@@ -99,7 +99,34 @@ function MasterLogoDropzone({
   );
 }
 
-export function CustomerInfoClient() {
+function customerImpersonateUrl(email: string) {
+  return `/api/admin/impersonate-customer?email=${encodeURIComponent(email.trim().toLowerCase())}`;
+}
+
+function openCustomerAccount(email: string) {
+  const emailNorm = email.trim().toLowerCase();
+  if (!emailNorm) {
+    return;
+  }
+  if (
+    !window.confirm(
+      `Open the storefront My account page signed in as ${emailNorm}?\n\nThis opens a new browser tab. Your admin session stays open in this tab.`,
+    )
+  ) {
+    return;
+  }
+  window.open(customerImpersonateUrl(emailNorm), "_blank", "noopener,noreferrer");
+}
+
+type CustomerInfoClientProps = {
+  initialImpersonateError?: string | null;
+  initialEmail?: string | null;
+};
+
+export function CustomerInfoClient({
+  initialImpersonateError = null,
+  initialEmail = null,
+}: CustomerInfoClientProps) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Array<{ email: string; name: string | null; phone: string | null; organisation: string | null }>>([]);
   const [allCustomers, setAllCustomers] = useState<CustomerListRow[]>([]);
@@ -180,6 +207,20 @@ export function CustomerInfoClient() {
     refreshCustomerList();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
   }, []);
+
+  useEffect(() => {
+    if (initialImpersonateError) {
+      setError(initialImpersonateError);
+    }
+  }, [initialImpersonateError]);
+
+  useEffect(() => {
+    if (!initialEmail?.trim()) {
+      return;
+    }
+    loadCustomer(initialEmail.trim().toLowerCase());
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once from redirect query
+  }, [initialEmail]);
 
   function runSearch() {
     setError(null);
@@ -411,6 +452,14 @@ export function CustomerInfoClient() {
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         <button
                           type="button"
+                          onClick={() => openCustomerAccount(c.email)}
+                          disabled={pending}
+                          className="rounded-lg border border-brand-navy/15 bg-brand-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-navy/90 disabled:opacity-50"
+                        >
+                          Log in as customer
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => loadCustomer(c.email)}
                           disabled={pending}
                           className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
@@ -555,7 +604,19 @@ export function CustomerInfoClient() {
               </p>
             ) : null}
             {!payload.profile ? (
-              <p className="mt-3 text-sm text-slate-600">No `customer_profiles` row for this email.</p>
+              <div className="mt-3 space-y-3">
+                <p className="text-sm text-slate-600">No `customer_profiles` row for this email.</p>
+                {payload.orderHistory.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => openCustomerAccount(payload.email)}
+                    disabled={pending}
+                    className="rounded-lg border border-brand-navy bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy/90 disabled:opacity-50"
+                  >
+                    Log in as customer (orders only)
+                  </button>
+                ) : null}
+              </div>
             ) : profileForm ? (
               <div className="mt-3 space-y-3">
                 <label className="block">
@@ -571,6 +632,19 @@ export function CustomerInfoClient() {
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sign-in</span>
                   <p className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                     {signInStatusLabel(payload.profile.sign_in_status)}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openCustomerAccount(payload.email)}
+                    disabled={pending}
+                    className="rounded-lg border border-brand-navy bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy/90 disabled:opacity-50"
+                  >
+                    Log in as customer
+                  </button>
+                  <p className="self-center text-xs text-slate-500">
+                    Opens My account in a new tab, signed in as this customer.
                   </p>
                 </div>
                 {(
