@@ -239,6 +239,7 @@ export function storefrontCartNetProductSubtotalAfterVolumeAud(
 /**
  * Split cart-level volume discount across lines proportionally (last line absorbs rounding).
  * Use for Stripe line items and `store_order_items` so line totals sum to the discounted subtotal.
+ * Returned array matches `items` order (not regrouped by line type).
  */
 export function storefrontVolumeAdjustedCartLines<
   T extends VolumeCartLine,
@@ -248,8 +249,9 @@ export function storefrontVolumeAdjustedCartLines<
   }
 
   const { dealLines, headwearLines, regularLines } = splitCartLinesForVolumeDiscount(items);
+  const pricedByLine = new WeakMap<T, { unitPrice: number; totalPrice: number }>();
 
-  const passThroughDeal = dealLines.map((it) => {
+  for (const it of dealLines) {
     const qty = Math.max(0, Math.floor(Number(it.quantity) || 0));
     const u = storefrontCartLineListUnitAud(it);
     const totalPrice =
@@ -257,14 +259,38 @@ export function storefrontVolumeAdjustedCartLines<
         ? roundAudMoney(it.totalPrice)
         : roundAudMoney(u * qty);
     const unitPrice = qty > 0 ? roundAudMoney(totalPrice / qty) : u;
-    return { ...it, unitPrice, totalPrice };
-  });
-
-  const headwearOut = applyHeadwearVolumeDiscountToLines(headwearLines);
+    pricedByLine.set(it, { unitPrice, totalPrice });
+  }
 
   const grossRegular = storefrontCartGrossListSubtotalAud(regularLines);
   const regularRate = storefrontVolumeDiscountRateFromSubtotalAud(grossRegular);
   const regularOut = applySubtotalVolumeDiscountToLines(regularLines, regularRate);
+  for (let i = 0; i < regularLines.length; i++) {
+    const row = regularOut[i];
+    const src = regularLines[i];
+    if (row && src) {
+      pricedByLine.set(src, { unitPrice: row.unitPrice, totalPrice: row.totalPrice });
+    }
+  }
 
-  return [...regularOut, ...headwearOut, ...passThroughDeal];
+  const headwearOut = applyHeadwearVolumeDiscountToLines(headwearLines);
+  for (let i = 0; i < headwearLines.length; i++) {
+    const row = headwearOut[i];
+    const src = headwearLines[i];
+    if (row && src) {
+      pricedByLine.set(src, { unitPrice: row.unitPrice, totalPrice: row.totalPrice });
+    }
+  }
+
+  return items.map((it) => {
+    const priced = pricedByLine.get(it);
+    if (priced) {
+      return { ...it, ...priced };
+    }
+    const qty = Math.max(0, Math.floor(Number(it.quantity) || 0));
+    const u = storefrontCartLineListUnitAud(it);
+    const totalPrice = roundAudMoney(u * qty);
+    const unitPrice = qty > 0 ? roundAudMoney(totalPrice / qty) : u;
+    return { ...it, unitPrice, totalPrice };
+  });
 }
