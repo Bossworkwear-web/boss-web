@@ -14,7 +14,7 @@ export function buildHeadwearStorefrontPlacementOptions(): StorefrontPlacementOp
       short: "HF",
       diagramAbbr: "HF",
       embroideryCost: 9.95,
-      printingCost: 8.95,
+      printingCost: 9.95,
     },
     {
       id: "head-back",
