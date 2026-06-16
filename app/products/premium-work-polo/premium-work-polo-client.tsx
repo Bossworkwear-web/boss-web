@@ -66,9 +66,9 @@ import { addCartItem, getCartItems, removeCartItem, updateCartItem, type CartIte
 import { productPathSegment } from "@/lib/product-path-slug";
 import { bisleyPdpDisplayProductNameWithApexPrefix, headwearPdpDisplayOverride, productCardDisplayLines } from "@/lib/product-card-copy";
 import {
-  headwearColorLabelCandidatesFromToken,
   headwearColorTokenFromFilename,
   headwearPickImageForColor,
+  headwearStyleCodeFromSlug,
   headwearUrlMatchesColor,
   isHeadwearStorefrontProduct,
   isHeadwearStructuredVariantFilename,
@@ -885,16 +885,8 @@ function scoreGalleryUrlForColor(color: string, url: string): number {
   }
 
   const headwearToken = headwearColorTokenFromFilename(file);
-  if (headwearToken) {
-    const derivedLabels = headwearColorLabelCandidatesFromToken(headwearToken);
-    for (const label of derivedLabels) {
-      if (compactColorKey(label) === colorCompact) {
-        score += 130;
-      }
-    }
-    if (compactColorKey(headwearToken) === colorCompact) {
-      score += 120;
-    }
+  if (headwearToken && headwearUrlMatchesColor(url, trimmed, null)) {
+    score += 200;
   }
 
   if (!shotMatch) {
@@ -1528,15 +1520,20 @@ function inferBestColorForGalleryImage(
     }
   }
 
-  if (pickOpts?.isHeadwear && pickOpts.headwearStyleCode) {
+  if (pickOpts?.isHeadwear) {
+    const hwStyle =
+      pickOpts.headwearStyleCode?.trim() || headwearStyleCodeFromSlug(pickOpts.productSlug) || null;
     for (const c of colors) {
-      if (headwearUrlMatchesColor(imageUrl, c, pickOpts.headwearStyleCode)) {
+      if (headwearUrlMatchesColor(imageUrl, c, hwStyle)) {
         return c;
       }
     }
     const idx = galleryUrls.indexOf(imageUrl);
     if (idx >= 0 && idx < colors.length && galleryUrls.length >= colors.length) {
-      return colors[idx] ?? null;
+      const inferred = colors[idx] ?? null;
+      if (inferred && headwearUrlMatchesColor(imageUrl, inferred, hwStyle)) {
+        return inferred;
+      }
     }
   }
 
@@ -2373,7 +2370,10 @@ export function PremiumWorkPoloClient({
       dncPrefixCount,
       isDncWorkwear: isDnc,
       isHeadwear,
-      headwearStyleCode: product.displayProductCode ?? null,
+      headwearStyleCode:
+        product.displayProductCode?.trim() ||
+        headwearStyleCodeFromSlug(product.slug) ||
+        null,
       productSlug: product.slug ?? null,
       isAp2310Listing: isAp2310StorefrontProduct(product),
     };
@@ -2382,7 +2382,6 @@ export function PremiumWorkPoloClient({
     product.category,
     product.displayProductCode,
     product.description,
-    product.displayProductCode,
     product.name,
     product.slug,
     product.supplierName,
@@ -2542,7 +2541,10 @@ export function PremiumWorkPoloClient({
       dncPrefixCount,
       isDncWorkwear: isDnc,
       isHeadwear,
-      headwearStyleCode: product.displayProductCode ?? null,
+      headwearStyleCode:
+        product.displayProductCode?.trim() ||
+        headwearStyleCodeFromSlug(product.slug) ||
+        null,
       productSlug: product.slug ?? null,
       isAp2310Listing: isAp2310StorefrontProduct(product),
     });

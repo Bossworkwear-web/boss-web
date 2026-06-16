@@ -152,6 +152,21 @@ export function headwearColorLabelCandidatesFromToken(token: string): string[] {
   return [...new Set(out.filter(Boolean))];
 }
 
+/** Segments from a chip label (`Navy/Red`, `Hot Pink` → compact keys). */
+function headwearColorLabelSegments(color: string): string[] {
+  return String(color ?? "")
+    .split(/[/\s]+/)
+    .map((p) => compactColorKey(p.trim()))
+    .filter((p) => p.length >= 2);
+}
+
+function headwearTokenSegments(token: string): string[] {
+  return normalizeHeadwearColorFilenameToken(token)
+    .split(/[_-]+/)
+    .map((p) => compactColorKey(p.trim()))
+    .filter((p) => p.length >= 2);
+}
+
 export function headwearUrlMatchesColor(
   url: string,
   color: string,
@@ -162,25 +177,44 @@ export function headwearUrlMatchesColor(
   if (!token) return false;
   const want = compactColorKey(color);
   if (!want) return false;
+
+  const labelSegments = headwearColorLabelSegments(color);
+  const tokenSegments = headwearTokenSegments(token);
+  const tokenKey = compactColorKey(normalizeHeadwearColorFilenameToken(token));
+
   for (const label of headwearColorLabelCandidatesFromToken(token)) {
     if (compactColorKey(label) === want) return true;
   }
-  const tokenKey = compactColorKey(normalizeHeadwearFilenameToken(token));
-  if (tokenKey && tokenKey === want) return true;
-  // `Hot Pink` chip ↔ `4199_Pink.jpg` (`Pink` token).
-  const colorParts = color
-    .split("/")
-    .map((p) => compactColorKey(p.trim()))
-    .filter(Boolean);
-  if (colorParts.length >= 2 && tokenKey.length >= 3) {
-    const last = colorParts[colorParts.length - 1];
-    if (last === tokenKey) return true;
+
+  if (tokenKey === want) return true;
+
+  // Single-segment chip (`Red`, `Navy`) — only single-token files (`Red.jpg`, not `Navy-Red.jpg`).
+  if (labelSegments.length === 1) {
+    return tokenSegments.length === 1 && tokenKey === labelSegments[0];
   }
+
+  // Combo chip (`Navy/Red`, `White/Red`) — full token must match all segments.
+  if (tokenSegments.length >= 2 && labelSegments.length >= 2) {
+    if (tokenKey === want) return true;
+    if (tokenSegments.length === labelSegments.length) {
+      for (let i = 0; i < labelSegments.length; i++) {
+        if (tokenSegments[i] !== labelSegments[i]) return false;
+      }
+      return true;
+    }
+  }
+
+  // Multi-word single chip (`Hot Pink`) ↔ lone token file (`Pink`) — not slash combos (`White/Navy`).
+  if (!color.includes("/") && labelSegments.length >= 2 && tokenSegments.length === 1) {
+    const last = labelSegments[labelSegments.length - 1];
+    if (last && last === tokenKey) return true;
+  }
+
   return false;
 }
 
 /**
- * Best variant image for a colour chip — index order from sync, then filename rules.
+ * Best variant image for a colour chip — filename rules first, then sync index when it agrees.
  */
 export function headwearPickImageForColor(
   urls: readonly string[],
@@ -195,6 +229,12 @@ export function headwearPickImageForColor(
   const style = styleCode?.trim() || headwearStyleCodeFromSlug(slug) || null;
   if (!isHeadwearStorefrontProduct(slug) && !style) return null;
 
+  for (const u of list) {
+    if (headwearUrlMatchesColor(u, trimmed, style)) {
+      return u;
+    }
+  }
+
   const want = compactColorKey(trimmed);
   let colorIdx = -1;
   for (let i = 0; i < colorOptions.length; i++) {
@@ -207,17 +247,11 @@ export function headwearPickImageForColor(
 
   if (colorIdx >= 0 && colorIdx < list.length && list.length >= colorOptions.length) {
     const atIdx = list[colorIdx]!;
-    const file = headwearFilenameTail(atIdx).split("?")[0] ?? "";
-    if (isHeadwearStructuredVariantFilename(file, style)) {
+    if (headwearUrlMatchesColor(atIdx, trimmed, style)) {
       return atIdx;
     }
   }
 
-  for (const u of list) {
-    if (headwearUrlMatchesColor(u, trimmed, style)) {
-      return u;
-    }
-  }
   return null;
 }
 

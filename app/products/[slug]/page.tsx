@@ -1875,7 +1875,7 @@ export async function getDetailData(
   return unstable_cache(
     async () => getDetailDataInternal(slug),
     /** Bump segment when PDP payload must refresh immediately after catalog imports (see `import:jbswear`, etc.). */
-    ["storefront-pdp-v38", slug],
+    ["storefront-pdp-v39", slug],
     { revalidate: 120, tags: ["storefront-pdp"] },
   )();
 }
