@@ -47,6 +47,8 @@
     "sync:fashion-biz": "node scripts/sync-supplier-catalog.mjs --supplier=fashion-biz",
     "sync:syzmik": "node scripts/sync-supplier-catalog.mjs --supplier=fashion-biz --only-brand=Syzmik",
     "sync:aussie-pacific": "node scripts/sync-aussie-pacific-api.mjs",
+    "probe:headwear": "node scripts/probe-headwear-api.mjs",
+    "sync:headwear": "node scripts/sync-headwear-api.mjs",
     "update:biz-collection-descriptions": "node scripts/update-biz-collection-descriptions-from-sum-csv.mjs",
     "hide:no-images": "node scripts/hide-products-without-images.mjs",
     "upload:supplier-images": "node scripts/upload-supplier-images.mjs",
