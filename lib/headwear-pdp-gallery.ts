@@ -1,6 +1,6 @@
 /**
  * Headwear (Xada / BigCommerce) PDP gallery: variant filenames ↔ colour chips.
- * Patterns: `4199_Black.jpg`, `4199aus-brown.jpg`, `3975-black.jpg`, `4143-green-stone.jpg`.
+ * Patterns: `4199_Black.jpg`, `4199aus-brown.jpg`, `3975-black.jpg`, `4199aus-white-red_3.jpg`.
  */
 
 function compactColorKey(input: string): string {
@@ -55,6 +55,14 @@ export function headwearFilenameTail(url: string): string {
   }
 }
 
+/** Strip BigCommerce duplicate suffixes (`white-red_3` → `white-red`). */
+export function normalizeHeadwearColorFilenameToken(token: string): string {
+  return String(token ?? "")
+    .trim()
+    .replace(/_\d+$/i, "")
+    .trim();
+}
+
 /** Colour token from Headwear variant filename (null for hero / generic shots). */
 export function headwearColorTokenFromFilename(
   fileNoQuery: string,
@@ -65,30 +73,40 @@ export function headwearColorTokenFromFilename(
   const style = String(styleCode ?? "").trim();
   const styleLower = style.toLowerCase();
 
+  let token: string | null = null;
   if (style) {
     const underscore = file.match(
       new RegExp(`^${style}_([A-Za-z0-9][A-Za-z0-9_-]*)\\.(jpg|jpeg|png|webp)$`, "i"),
     );
-    if (underscore?.[1]) return underscore[1];
-    const aus = file.match(
-      new RegExp(`^${styleLower}aus-([A-Za-z0-9][A-Za-z0-9_-]*)\\.(jpg|jpeg|png|webp)$`, "i"),
-    );
-    if (aus?.[1]) return aus[1];
-    const hyphen = file.match(
-      new RegExp(`^${styleLower}-(?!hero)([a-z0-9][a-z0-9-]*)\\.(jpg|jpeg|png|webp)$`, "i"),
-    );
-    if (hyphen?.[1] && hyphen[1] !== "mix") return hyphen[1];
+    if (underscore?.[1]) token = underscore[1];
+    if (!token) {
+      const aus = file.match(
+        new RegExp(`^${styleLower}aus-([A-Za-z0-9][A-Za-z0-9_-]*)\\.(jpg|jpeg|png|webp)$`, "i"),
+      );
+      if (aus?.[1]) token = aus[1];
+    }
+    if (!token) {
+      const hyphen = file.match(
+        new RegExp(`^${styleLower}-(?!hero)([a-z0-9][a-z0-9-]*)\\.(jpg|jpeg|png|webp)$`, "i"),
+      );
+      if (hyphen?.[1] && hyphen[1] !== "mix") token = hyphen[1];
+    }
   }
 
-  // Generic fallbacks when style code is unknown.
-  const headwearUnderscore = file.match(/^\d{3,5}_([A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i);
-  if (headwearUnderscore?.[1]) return headwearUnderscore[1];
-  const headwearAus = file.match(/^\d{3,5}aus-([A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i);
-  if (headwearAus?.[1]) return headwearAus[1];
-  const headwearHyphen = file.match(/^\d{3,5}-(?!hero)([a-z0-9][a-z0-9-]*)\.(jpg|jpeg|png|webp)$/i);
-  if (headwearHyphen?.[1] && headwearHyphen[1] !== "mix") return headwearHyphen[1];
+  if (!token) {
+    const headwearUnderscore = file.match(/^\d{3,5}_([A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i);
+    if (headwearUnderscore?.[1]) token = headwearUnderscore[1];
+  }
+  if (!token) {
+    const headwearAus = file.match(/^\d{3,5}aus-([A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i);
+    if (headwearAus?.[1]) token = headwearAus[1];
+  }
+  if (!token) {
+    const headwearHyphen = file.match(/^\d{3,5}-(?!hero)([a-z0-9][a-z0-9-]*)\.(jpg|jpeg|png|webp)$/i);
+    if (headwearHyphen?.[1] && headwearHyphen[1] !== "mix") token = headwearHyphen[1];
+  }
 
-  return null;
+  return token ? normalizeHeadwearColorFilenameToken(token) : null;
 }
 
 export function isHeadwearStructuredVariantFilename(
@@ -112,7 +130,7 @@ function humanizeHeadwearToken(token: string): string {
 
 /** Candidate storefront colour labels for a filename token (`Black-Red` → `Black / Red`, `Black Red`). */
 export function headwearColorLabelCandidatesFromToken(token: string): string[] {
-  const raw = String(token ?? "").trim();
+  const raw = normalizeHeadwearColorFilenameToken(token);
   if (!raw) return [];
   const out: string[] = [];
   if (/[_-]/.test(raw)) {
@@ -147,16 +165,69 @@ export function headwearUrlMatchesColor(
   for (const label of headwearColorLabelCandidatesFromToken(token)) {
     if (compactColorKey(label) === want) return true;
   }
-  return compactColorKey(token) === want;
+  const tokenKey = compactColorKey(normalizeHeadwearFilenameToken(token));
+  if (tokenKey && tokenKey === want) return true;
+  // `Hot Pink` chip ↔ `4199_Pink.jpg` (`Pink` token).
+  const colorParts = color
+    .split("/")
+    .map((p) => compactColorKey(p.trim()))
+    .filter(Boolean);
+  if (colorParts.length >= 2 && tokenKey.length >= 3) {
+    const last = colorParts[colorParts.length - 1];
+    if (last === tokenKey) return true;
+  }
+  return false;
 }
 
 /**
- * Reorder gallery: per-colour variant shots first (in chip order), lifestyle/extra shots after.
+ * Best variant image for a colour chip — index order from sync, then filename rules.
+ */
+export function headwearPickImageForColor(
+  urls: readonly string[],
+  color: string,
+  colorOptions: readonly string[],
+  styleCode?: string | null,
+  slug?: string | null,
+): string | null {
+  const list = urls.map((s) => String(s ?? "").trim()).filter(Boolean);
+  const trimmed = color.trim();
+  if (!trimmed || !list.length) return null;
+  const style = styleCode?.trim() || headwearStyleCodeFromSlug(slug) || null;
+  if (!isHeadwearStorefrontProduct(slug) && !style) return null;
+
+  const want = compactColorKey(trimmed);
+  let colorIdx = -1;
+  for (let i = 0; i < colorOptions.length; i++) {
+    const c = colorOptions[i] ?? "";
+    if (compactColorKey(c) === want || c.trim().toLowerCase() === trimmed.toLowerCase()) {
+      colorIdx = i;
+      break;
+    }
+  }
+
+  if (colorIdx >= 0 && colorIdx < list.length && list.length >= colorOptions.length) {
+    const atIdx = list[colorIdx]!;
+    const file = headwearFilenameTail(atIdx).split("?")[0] ?? "";
+    if (isHeadwearStructuredVariantFilename(file, style)) {
+      return atIdx;
+    }
+  }
+
+  for (const u of list) {
+    if (headwearUrlMatchesColor(u, trimmed, style)) {
+      return u;
+    }
+  }
+  return null;
+}
+
+/**
+ * Variant shots first (sync order = chip order), lifestyle / extra shots after.
  */
 export function resolveHeadwearPdpGalleryState(
   imageUrls: readonly string[],
   slug: string | null | undefined,
-  colorOptions: readonly string[],
+  _colorOptions?: readonly string[],
   styleCode?: string | null,
 ): { imageUrls: string[] } {
   const urls = imageUrls.map(String).filter((u) => u.trim().length > 0);
@@ -180,21 +251,5 @@ export function resolveHeadwearPdpGalleryState(
     }
   }
 
-  if (!colorOptions.length || colorOptions.length <= 1) {
-    return { imageUrls: [...variant, ...extra] };
-  }
-
-  const ordered: string[] = [];
-  const used = new Set<string>();
-  for (const color of colorOptions) {
-    const hit = variant.find((u) => !used.has(u) && headwearUrlMatchesColor(u, color, style));
-    if (hit) {
-      ordered.push(hit);
-      used.add(hit);
-    }
-  }
-  for (const u of variant) {
-    if (!used.has(u)) ordered.push(u);
-  }
-  return { imageUrls: [...ordered, ...extra] };
+  return { imageUrls: [...variant, ...extra] };
 }

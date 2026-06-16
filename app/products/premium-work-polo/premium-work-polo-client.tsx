@@ -68,6 +68,8 @@ import { bisleyPdpDisplayProductNameWithApexPrefix, headwearPdpDisplayOverride, 
 import {
   headwearColorLabelCandidatesFromToken,
   headwearColorTokenFromFilename,
+  headwearPickImageForColor,
+  headwearUrlMatchesColor,
   isHeadwearStorefrontProduct,
   isHeadwearStructuredVariantFilename,
   resolveHeadwearPdpGalleryState,
@@ -1145,6 +1147,19 @@ function pickPrimaryImageForColor(color: string, urls: string[], opts?: GalleryC
     }
   }
 
+  if (opts?.isHeadwear && colOpts) {
+    const hw = headwearPickImageForColor(
+      list,
+      trimmed,
+      colOpts,
+      opts.headwearStyleCode ?? null,
+      opts.productSlug ?? null,
+    );
+    if (hw) {
+      return hw;
+    }
+  }
+
   if (!opts?.isJbWear && galleryHasStructuredProductShots(list)) {
     const wantKey = colorMatchKey(trimmed);
     if (wantKey.length >= 3) {
@@ -1513,6 +1528,18 @@ function inferBestColorForGalleryImage(
     }
   }
 
+  if (pickOpts?.isHeadwear && pickOpts.headwearStyleCode) {
+    for (const c of colors) {
+      if (headwearUrlMatchesColor(imageUrl, c, pickOpts.headwearStyleCode)) {
+        return c;
+      }
+    }
+    const idx = galleryUrls.indexOf(imageUrl);
+    if (idx >= 0 && idx < colors.length && galleryUrls.length >= colors.length) {
+      return colors[idx] ?? null;
+    }
+  }
+
   const opaqueSyncColor = galleryImageIndexSyncColor(
     imageUrl,
     colors,
@@ -1628,6 +1655,8 @@ export type GalleryColorPickOpts = {
    * `displayProductCode` because the storefront slug may omit `ap-2310`.
    */
   isAp2310Listing?: boolean;
+  isHeadwear?: boolean;
+  headwearStyleCode?: string | null;
 };
 
 function parseJbGalleryUrls(raw: readonly string[]): {
@@ -2316,6 +2345,7 @@ export function PremiumWorkPoloClient({
   const galleryPickOpts = useMemo((): GalleryColorPickOpts => {
     const isJb = isJbWearStorefrontProduct(product.slug, product.supplierName);
     const isDnc = isDncWorkwearStorefrontProduct(product.slug, product.supplierName);
+    const isHeadwear = isHeadwearStorefrontProduct(product.slug, product.supplierName, product.category);
     const slugLower = (product.slug ?? "").trim().toLowerCase();
     const supLower = (product.supplierName ?? "").trim().toLowerCase();
     const isAussiePacific =
@@ -2342,11 +2372,15 @@ export function PremiumWorkPoloClient({
       apColorImageCounts: resolvedApGallery.apColorImageCounts,
       dncPrefixCount,
       isDncWorkwear: isDnc,
+      isHeadwear,
+      headwearStyleCode: product.displayProductCode ?? null,
       productSlug: product.slug ?? null,
       isAp2310Listing: isAp2310StorefrontProduct(product),
     };
   }, [
     colorOptions,
+    product.category,
+    product.displayProductCode,
     product.description,
     product.displayProductCode,
     product.name,
@@ -2460,10 +2494,18 @@ export function PremiumWorkPoloClient({
   const [activeImage, setActiveImage] = useState<string>(() => {
     const rawUrls = product.imageUrls ?? [];
     const slugLower = (product.slug ?? "").trim().toLowerCase();
-    const urlsForPick =
+    let urlsForPick =
       bisleySlugUsesPositionalColorGallery(slugLower) && rawUrls.length >= 4
         ? (bisleySortedPositionalImageUrlsIfComplete(rawUrls) ?? rawUrls)
         : rawUrls;
+    if (isHeadwearStorefrontProduct(product.slug, product.supplierName, product.category)) {
+      urlsForPick = resolveHeadwearPdpGalleryState(
+        urlsForPick,
+        product.slug,
+        initialColors,
+        product.displayProductCode ?? null,
+      ).imageUrls;
+    }
     const { urls, prefixCount, dncPrefixCount: rawDncPc, apColorImageCounts: rawApcc } =
       parseJbGalleryUrls(urlsForPick);
     let pickUrls = urls;
@@ -2479,6 +2521,7 @@ export function PremiumWorkPoloClient({
     const g = galleryForUrls(pickUrls);
     const supLower = (product.supplierName ?? "").trim().toLowerCase();
     const isDnc = isDncWorkwearStorefrontProduct(product.slug, product.supplierName);
+    const isHeadwear = isHeadwearStorefrontProduct(product.slug, product.supplierName, product.category);
     const isAussiePacific =
       supLower === "aussie pacific" || slugLower.startsWith("ap-") || /\baussie\s+pacific\b/i.test(product.supplierName ?? "");
     const forceOpaqueColorIndex =
@@ -2498,6 +2541,8 @@ export function PremiumWorkPoloClient({
       apColorImageCounts,
       dncPrefixCount,
       isDncWorkwear: isDnc,
+      isHeadwear,
+      headwearStyleCode: product.displayProductCode ?? null,
       productSlug: product.slug ?? null,
       isAp2310Listing: isAp2310StorefrontProduct(product),
     });
