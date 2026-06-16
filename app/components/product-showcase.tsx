@@ -12,7 +12,7 @@ import { categoryBrowseCardImageUrl } from "@/lib/category-browse-card-image";
 import { getDiscountPercent } from "@/lib/discounts";
 import { MAIN_CATEGORIES, type StorefrontNavSub } from "@/lib/catalog";
 import { hasStorefrontListNameAndPrice, isProductEligibleForSiteSearch } from "@/lib/product-visibility";
-import { storefrontRetailFromSupplierBase, STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
+import { storefrontRetailFromSupplierBase, storefrontRetailProductMetaFromRow, STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { productCardDisplayLines } from "@/lib/product-card-copy";
 import { PRODUCT_CARD_CODE_PRICE_SEPARATOR, productCardModelPriceRowStyle } from "@/lib/product-card-model-price-layout";
 import { productPathSegment } from "@/lib/product-path-slug";
@@ -117,7 +117,10 @@ function CategoryPromoImage({ src, alt }: { src: string; alt: string }) {
 function toStoreProduct(item: ProductRow): StoreProduct {
   const raw = typeof item.slug === "string" && item.slug.trim().length > 0 ? item.slug.trim() : null;
   const dbCat = typeof item.category === "string" ? item.category.trim() : "";
-  const retail = storefrontRetailFromSupplierBase(item.base_price);
+  const retail = storefrontRetailFromSupplierBase(
+    item.base_price,
+    storefrontRetailProductMetaFromRow(item),
+  );
   return {
     id: item.id,
     slug: productPathSegment({ name: item.name, slug: raw }),

@@ -755,7 +755,11 @@ async function getDetailDataInternal(
 
     const fallbackColors = getFallbackColors(product.name);
 
-    const listRetail = storefrontRetailFromSupplierBaseOrFallback(product.base_price, 25.0);
+    const listRetail = storefrontRetailFromSupplierBaseOrFallback(product.base_price, 25.0, {
+      supplierName: supplierNameRaw || null,
+      slug: productSlugLower,
+      category: product.category ?? null,
+    });
     const saleRaw = "sale_price" in product ? product.sale_price : null;
     const manualSale = activeManualSaleRetail(listRetail, saleRaw);
     const discountPercent = getDiscountPercent(product.name);
@@ -1878,7 +1882,7 @@ export async function getDetailData(
   return unstable_cache(
     async () => getDetailDataInternal(slug),
     /** Bump segment when PDP payload must refresh immediately after catalog imports (see `import:jbswear`, etc.). */
-    ["storefront-pdp-v40", slug],
+    ["storefront-pdp-v41", slug],
     { revalidate: 120, tags: ["storefront-pdp"] },
   )();
 }

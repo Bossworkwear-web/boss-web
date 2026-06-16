@@ -427,8 +427,16 @@ function StockRowEditor({
   const [supplierValue, setSupplierValue] = useState(
     product.base_price == null ? "" : String(product.base_price.toFixed(2)),
   );
+  const retailMeta = {
+    supplierName: product.supplierName,
+    slug: null as string | null,
+    category: product.category,
+  };
+
   const [retailValue, setRetailValue] = useState(() => {
-    const n = product.base_price == null ? null : storefrontRetailFromSupplierBase(product.base_price);
+    const n = product.base_price == null
+      ? null
+      : storefrontRetailFromSupplierBase(product.base_price, retailMeta);
     return n == null ? "" : String(n.toFixed(1));
   });
   const [saleValue, setSaleValue] = useState(
@@ -439,7 +447,7 @@ function StockRowEditor({
   useEffect(() => {
     setValue(String(product.stock_quantity));
     setSupplierValue(product.base_price == null ? "" : String(product.base_price.toFixed(2)));
-    const retail = product.base_price == null ? null : storefrontRetailFromSupplierBase(product.base_price);
+    const retail = product.base_price == null ? null : storefrontRetailFromSupplierBase(product.base_price, retailMeta);
     setRetailValue(retail == null ? "" : String(retail.toFixed(1)));
     setSaleValue(product.sale_price == null ? "" : formatSaleDraft(product.sale_price));
   }, [product.id, product.stock_quantity, product.base_price, product.sale_price]);
@@ -511,7 +519,7 @@ function StockRowEditor({
                   const next = e.target.value;
                   setSupplierValue(next);
                   const n = Number.parseFloat(next);
-                  const retail = Number.isFinite(n) ? storefrontRetailFromSupplierBase(n) : null;
+                  const retail = Number.isFinite(n) ? storefrontRetailFromSupplierBase(n, retailMeta) : null;
                   setRetailValue(retail == null ? "" : String(retail.toFixed(1)));
                 }}
                 inputMode="decimal"

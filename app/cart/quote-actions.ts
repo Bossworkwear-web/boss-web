@@ -32,7 +32,10 @@ async function loadCurrentProductUnitMap(
   if (ids.length === 0) {
     return map;
   }
-  const { data } = await supabase.from("products").select("id, name, base_price, sale_price").in("id", ids);
+  const { data } = await supabase
+    .from("products")
+    .select("id, name, base_price, sale_price, supplier_name, slug, category")
+    .in("id", ids);
   for (const row of data ?? []) {
     const unit = currentProductUnitFromRow(row);
     if (unit != null) {

@@ -1,3 +1,5 @@
+import { isHeadwearStorefrontProduct } from "@/lib/headwear-pdp-gallery";
+
 /**
  * `products.base_price` = supplier unit cost (공급자 가격).
  * Pre-GST consumer price = 공급가 × 1.7.
@@ -5,6 +7,41 @@
  * Final price shown to customers = that amount × card fee (2%).
  */
 export const STOREFRONT_RETAIL_MARKUP_MULTIPLIER_BEFORE_GST = 1.7;
+
+/** Added to derived storefront list price for Headwear (`hw-*`, supplier Headwear). */
+export const HEADWEAR_STOREFRONT_RETAIL_SURCHARGE_AUD = 12;
+
+export type StorefrontRetailProductMeta = {
+  supplierName?: string | null;
+  slug?: string | null;
+  category?: string | null;
+};
+
+export function storefrontRetailProductMetaFromRow(
+  row: {
+    supplier_name?: string | null;
+    slug?: string | null;
+    category?: string | null;
+  },
+): StorefrontRetailProductMeta {
+  return {
+    supplierName: row.supplier_name ?? null,
+    slug: row.slug ?? null,
+    category: row.category ?? null,
+  };
+}
+
+export function applyStorefrontRetailProductAdjustments(
+  retail: number,
+  meta?: StorefrontRetailProductMeta | null,
+): number {
+  if (
+    isHeadwearStorefrontProduct(meta?.slug, meta?.supplierName, meta?.category)
+  ) {
+    return roundToStorePrice(retail + HEADWEAR_STOREFRONT_RETAIL_SURCHARGE_AUD);
+  }
+  return retail;
+}
 
 /** Australia GST (10%) on top of the pre-GST store price. */
 export const STOREFRONT_RETAIL_GST_RATE = 0.1;
@@ -83,18 +120,31 @@ export function basePriceOrFallback(raw: unknown, fallback: number): number {
 }
 
 /** Customer-facing unit price from supplier `base_price` (null when price missing). */
-export function storefrontRetailFromSupplierBase(raw: unknown): number | null {
+export function storefrontRetailFromSupplierBase(
+  raw: unknown,
+  meta?: StorefrontRetailProductMeta | null,
+): number | null {
   const supplier = parseBasePrice(raw);
   if (supplier == null) {
     return null;
   }
-  return storefrontRetailFromSupplierBaseNumber(supplier);
+  return applyStorefrontRetailProductAdjustments(
+    storefrontRetailFromSupplierBaseNumber(supplier),
+    meta,
+  );
 }
 
 /** Same as `storefrontRetailFromSupplierBase` but never null (uses fallback supplier cost). */
-export function storefrontRetailFromSupplierBaseOrFallback(raw: unknown, fallbackSupplier: number): number {
+export function storefrontRetailFromSupplierBaseOrFallback(
+  raw: unknown,
+  fallbackSupplier: number,
+  meta?: StorefrontRetailProductMeta | null,
+): number {
   const supplier = basePriceOrFallback(raw, fallbackSupplier);
-  return storefrontRetailFromSupplierBaseNumber(supplier);
+  return applyStorefrontRetailProductAdjustments(
+    storefrontRetailFromSupplierBaseNumber(supplier),
+    meta,
+  );
 }
 
 /**

@@ -9,7 +9,7 @@ import { applyCustomerPasswordChange } from "@/lib/customer-password-update";
 import { buildQuoteSentEmailPreviewFromFields } from "@/lib/crm/quote-sent-customer-email";
 import { isPipelineStage } from "@/lib/crm/pipeline";
 import { sendCustomerQuoteSentEmail } from "@/lib/crm/notifications";
-import { storefrontRetailFromSupplierBase } from "@/lib/product-price";
+import { storefrontRetailFromSupplierBase, storefrontRetailProductMetaFromRow } from "@/lib/product-price";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { formatMoneyFromCents, siteBaseUrl } from "@/lib/store-order-utils";
 
@@ -36,6 +36,9 @@ type ProductCatalogRow = {
   base_price: number | null;
   available_colors: string[] | null;
   available_sizes: string[] | null;
+  supplier_name?: string | null;
+  slug?: string | null;
+  category?: string | null;
 };
 
 function mapProductRowToCatalogHints(row: ProductCatalogRow): LookupQuoteProductCatalogResult {
@@ -45,7 +48,7 @@ function mapProductRowToCatalogHints(row: ProductCatalogRow): LookupQuoteProduct
   const colours = (row.available_colors ?? []).map((c) => String(c).trim()).filter(Boolean);
   const sizes = (row.available_sizes ?? []).map((s) => String(s).trim()).filter(Boolean);
 
-  const retail = storefrontRetailFromSupplierBase(row.base_price);
+  const retail = storefrontRetailFromSupplierBase(row.base_price, storefrontRetailProductMetaFromRow(row));
   const price =
     retail != null ? `${formatMoneyFromCents(Math.round(retail * 100), "AUD")} (catalog GST incl.)` : "";
 
@@ -69,7 +72,7 @@ export async function lookupQuoteProductByIdentifier(raw: string): Promise<Looku
   if (!q) return { ok: false };
 
   const supabase = createSupabaseAdminClient();
-  const select = "name, base_price, available_colors, available_sizes";
+  const select = "name, base_price, available_colors, available_sizes, supplier_name, slug, category";
 
   if (QUOTE_PRODUCT_UUID_RE.test(q)) {
     const { data } = await supabase.from("products").select(select).eq("id", q).maybeSingle();

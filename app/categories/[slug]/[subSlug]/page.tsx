@@ -42,7 +42,7 @@ import {
 import { productPathSegment } from "@/lib/product-path-slug";
 import { resolveHealthCareBrowseSubSlug } from "@/lib/health-care-browse";
 import { resolveProductSubSlug } from "@/lib/product-subslug";
-import { storefrontRetailFromSupplierBase, STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
+import { storefrontRetailFromSupplierBase, storefrontRetailProductMetaFromRow, STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { getCachedActiveProductsBrowseRows } from "@/lib/cached-storefront-products";
 import { PRODUCT_CARD_CODE_PRICE_SEPARATOR, productCardModelPriceRowStyle } from "@/lib/product-card-model-price-layout";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
@@ -291,8 +291,8 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
   const sorted =
     sortEffective.length > 0
       ? [...filtered].sort((a, b) => {
-          const ap = storefrontRetailFromSupplierBase(a.base_price) ?? Number.POSITIVE_INFINITY;
-          const bp = storefrontRetailFromSupplierBase(b.base_price) ?? Number.POSITIVE_INFINITY;
+          const ap = storefrontRetailFromSupplierBase(a.base_price, storefrontRetailProductMetaFromRow(a)) ?? Number.POSITIVE_INFINITY;
+          const bp = storefrontRetailFromSupplierBase(b.base_price, storefrontRetailProductMetaFromRow(b)) ?? Number.POSITIVE_INFINITY;
           if (ap !== bp) {
             return sortEffective === "price-asc" ? ap - bp : bp - ap;
           }
@@ -385,7 +385,10 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
           <CategoryBrowseProductsGrid>
             {pageItems.map((item) => {
               const discountPercent = getDiscountPercent(item.name);
-              const listPrice = storefrontRetailFromSupplierBase(item.base_price);
+              const listPrice = storefrontRetailFromSupplierBase(
+                item.base_price,
+                storefrontRetailProductMetaFromRow(item),
+              );
               const { productName, productCode } = productCardDisplayLines(
                 item.name,
                 item.description,

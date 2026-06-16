@@ -1,5 +1,5 @@
 import { getDiscountPercent } from "@/lib/discounts";
-import { storefrontCardDisplayPrices, storefrontRetailFromSupplierBase } from "@/lib/product-price";
+import { storefrontCardDisplayPrices, storefrontRetailFromSupplierBase, storefrontRetailProductMetaFromRow } from "@/lib/product-price";
 import type { StoreOrderCartLine } from "@/lib/store-order-cart-payload";
 import { storefrontVolumeAdjustedCartLines } from "@/lib/storefront-volume-discount";
 
@@ -25,6 +25,9 @@ type ProductPriceRow = {
   name?: string | null;
   base_price?: unknown;
   sale_price?: unknown;
+  supplier_name?: string | null;
+  slug?: string | null;
+  category?: string | null;
 };
 
 /** Current product-only unit price (GST incl., as shown on cards/PDP), or null when unpriced. */
@@ -32,7 +35,10 @@ export function currentProductUnitFromRow(row: ProductPriceRow | null | undefine
   if (!row) {
     return null;
   }
-  const listRetail = storefrontRetailFromSupplierBase(row.base_price);
+  const listRetail = storefrontRetailFromSupplierBase(
+    row.base_price,
+    storefrontRetailProductMetaFromRow(row),
+  );
   if (listRetail == null) {
     return null;
   }

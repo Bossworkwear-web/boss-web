@@ -295,7 +295,7 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
       if (productIds.length > 0) {
         const { data: productRows } = await supabase
           .from("products")
-          .select("id, name, base_price, sale_price")
+          .select("id, name, base_price, sale_price, supplier_name, slug, category")
           .in("id", productIds);
         for (const row of productRows ?? []) {
           const unit = currentProductUnitFromRow(row);
