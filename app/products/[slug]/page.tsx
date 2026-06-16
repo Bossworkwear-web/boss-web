@@ -755,6 +755,15 @@ async function getDetailDataInternal(
 
     const fallbackColors = getFallbackColors(product.name);
 
+    const supplierNameRaw =
+      "supplier_name" in product && product.supplier_name != null
+        ? String(product.supplier_name).trim()
+        : "";
+
+    const productSlugLower = String(("slug" in product && product.slug ? product.slug : slug) ?? "")
+      .trim()
+      .toLowerCase();
+
     const listRetail = storefrontRetailFromSupplierBaseOrFallback(product.base_price, 25.0, {
       supplierName: supplierNameRaw || null,
       slug: productSlugLower,
@@ -769,11 +778,6 @@ async function getDetailDataInternal(
         : discountPercent > 0
           ? listRetail * (1 - discountPercent / 100)
           : listRetail;
-
-    const supplierNameRaw =
-      "supplier_name" in product && product.supplier_name != null
-        ? String(product.supplier_name).trim()
-        : "";
 
     const dbDescription =
       product.description != null && String(product.description).trim().length > 0
@@ -959,10 +963,6 @@ async function getDetailDataInternal(
         normalizedImageUrls = rest.length > 0 ? [...rest, ...model] : keep;
       }
     }
-
-    const productSlugLower = String(("slug" in product && product.slug ? product.slug : slug) ?? "")
-      .trim()
-      .toLowerCase();
 
     // JB's Wear 4P: hide second gallery image (requested).
     {
