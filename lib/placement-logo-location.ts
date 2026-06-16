@@ -19,6 +19,8 @@ const PLACEMENT_ID_TO_FILE: Record<string, string> = {
   "front-collar": "FC.png",
   "left-sleeve": "LS.png",
   "right-sleeve": "RS.png",
+  "head-front": "HF.png",
+  "head-back": "HB.png",
 };
 
 const PLACEMENT_NAME_TO_FILE: Record<string, string> = {
@@ -39,6 +41,8 @@ const PLACEMENT_NAME_TO_FILE: Record<string, string> = {
   back: "BU.png",
   "left sleeve": "LS.png",
   "right sleeve": "RS.png",
+  "head front": "HF.png",
+  "head back": "HB.png",
 };
 
 /** Two-letter codes from placement names (matches `toShortCode` / diagram filenames). */
@@ -52,6 +56,8 @@ const PLACEMENT_ABBR_TO_FILE: Record<string, string> = {
   FC: "FC.png",
   LS: "LS.png",
   RS: "RS.png",
+  HF: "HF.png",
+  HB: "HB.png",
 };
 
 function publicLogoLocationUrl(file: string): string {

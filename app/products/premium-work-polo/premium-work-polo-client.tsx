@@ -75,6 +75,10 @@ import {
   resolveHeadwearPdpGalleryState,
 } from "@/lib/headwear-pdp-gallery";
 import {
+  buildHeadwearStorefrontPlacementOptions,
+  isPrintingOfferedForHeadwearPlacement,
+} from "@/lib/headwear-storefront-placements";
+import {
   getSizeGuideBundle,
   inferSizeGuideKind,
   SIZE_GUIDE_SUPPLIER_WEBSITE_FOOTNOTE,
@@ -374,6 +378,25 @@ function isEmbroideryOfferedForPlacement(diagramAbbr: string): boolean {
   return a !== "FB" && a !== "FC";
 }
 
+function isPrintingOfferedForPlacement(diagramAbbr: string, isHeadwear?: boolean): boolean {
+  if (isHeadwear) {
+    return isPrintingOfferedForHeadwearPlacement(diagramAbbr);
+  }
+  return true;
+}
+
+function isHeadwearPlacementOptions(
+  options: readonly { diagramAbbr: string }[],
+): boolean {
+  return (
+    options.length > 0 &&
+    options.every((o) => {
+      const a = o.diagramAbbr.trim().toUpperCase();
+      return a === "HF" || a === "HB";
+    })
+  );
+}
+
 function placementAssignmentsFromCartLines(
   placementLines: string[],
   options: { id: string; label: string; diagramAbbr: string }[],
@@ -389,6 +412,9 @@ function placementAssignmentsFromCartLines(
     const opt = options.find((o) => o.label === label);
     if (opt && (svc === "Embroidery" || svc === "Printing")) {
       if (svc === "Embroidery" && !isEmbroideryOfferedForPlacement(opt.diagramAbbr)) {
+        continue;
+      }
+      if (svc === "Printing" && !isPrintingOfferedForPlacement(opt.diagramAbbr, isHeadwearPlacementOptions(options))) {
         continue;
       }
       out[opt.id] = svc;
@@ -2402,9 +2428,16 @@ export function PremiumWorkPoloClient({
     [product.category, product.description, product.name, product.slug],
   );
 
-  const placementOptions: PlacementOption[] = useMemo(
-    () =>
-      placements.map((item) => {
+  const isHeadwearProduct = useMemo(
+    () => isHeadwearStorefrontProduct(product.slug, product.supplierName, product.category),
+    [product.category, product.slug, product.supplierName],
+  );
+
+  const placementOptions: PlacementOption[] = useMemo(() => {
+    if (isHeadwearProduct) {
+      return buildHeadwearStorefrontPlacementOptions();
+    }
+    return placements.map((item) => {
         const nameForCodes = item.name.replace(/\s+/g, " ").trim();
         const normalizedName = nameForCodes.toLowerCase();
         const diagramAbbr =
@@ -2430,9 +2463,8 @@ export function PremiumWorkPoloClient({
             defaultEmbroideryPlacementPricing[normalizedName] ?? PLACEMENT_FALLBACK_EMBROIDERY,
           printingCost: defaultPrintingPlacementPricing[normalizedName] ?? PLACEMENT_FALLBACK_PRINTING,
         };
-      }),
-    [placements]
-  );
+      });
+  }, [isHeadwearProduct, placements]);
 
   const placementOptionsForUi = useMemo(() => {
     if (!activeDealPackage) {
@@ -2458,6 +2490,27 @@ export function PremiumWorkPoloClient({
       return changed ? next : prev;
     });
   }, [placementOptions]);
+
+  useEffect(() => {
+    if (!isHeadwearProduct) {
+      return;
+    }
+    setPlacementAssignments((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [id, svc] of Object.entries(prev)) {
+        if (svc !== "Printing") {
+          continue;
+        }
+        const opt = placementOptions.find((o) => o.id === id);
+        if (opt && !isPrintingOfferedForPlacement(opt.diagramAbbr, true)) {
+          next[id] = null;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [isHeadwearProduct, placementOptions]);
 
   useEffect(() => {
     if (!activeDealPackage) {
@@ -2792,11 +2845,14 @@ export function PremiumWorkPoloClient({
       if (service === "Embroidery" && !isEmbroideryOfferedForPlacement(opt.diagramAbbr)) {
         continue;
       }
+      if (service === "Printing" && !isPrintingOfferedForPlacement(opt.diagramAbbr, isHeadwearProduct)) {
+        continue;
+      }
       placementCostCents += cents(service === "Embroidery" ? opt.embroideryCost : opt.printingCost);
     }
     const perItemCents = cents(product.basePrice) + placementCostCents;
     return perItemCents / 100;
-  }, [activeDealPackage, placementAssignments, placementOptions, product.basePrice]);
+  }, [activeDealPackage, isHeadwearProduct, placementAssignments, placementOptions, product.basePrice]);
 
   const totalPieces = useMemo(() => {
     let sum = 0;
@@ -2837,6 +2893,12 @@ export function PremiumWorkPoloClient({
     if (service === "Embroidery") {
       const opt = placementOptions.find((o) => o.id === id);
       if (opt && !isEmbroideryOfferedForPlacement(opt.diagramAbbr)) {
+        return;
+      }
+    }
+    if (service === "Printing") {
+      const opt = placementOptions.find((o) => o.id === id);
+      if (opt && !isPrintingOfferedForPlacement(opt.diagramAbbr, isHeadwearProduct)) {
         return;
       }
     }
@@ -3834,17 +3896,26 @@ export function PremiumWorkPoloClient({
                         )}
                         {/* Column 3 aligns with Printing icon */}
                         {isPrintingSelected ? (
-                          <button
-                            type="button"
-                            onClick={() => assignPlacement(option.id, "Printing")}
-                            className={`mx-auto w-[72%] max-w-full whitespace-nowrap rounded-md border px-2.5 py-1 ${PLACEMENT_SELECTOR_BUTTON_TEXT} font-medium transition sm:px-3 ${
-                              assignedService === "Printing"
-                                ? "border-blue-600 bg-blue-500 text-white"
-                                : "border-brand-navy/20 bg-white text-brand-navy hover:border-blue-500 hover:text-blue-600"
-                            }`}
-                          >
-                            {activeDealPackage ? "Print" : `Print +${toCurrencyExact(option.printingCost)}`}
-                          </button>
+                          isPrintingOfferedForPlacement(option.diagramAbbr, isHeadwearProduct) ? (
+                            <button
+                              type="button"
+                              onClick={() => assignPlacement(option.id, "Printing")}
+                              className={`mx-auto w-[72%] max-w-full whitespace-nowrap rounded-md border px-2.5 py-1 ${PLACEMENT_SELECTOR_BUTTON_TEXT} font-medium transition sm:px-3 ${
+                                assignedService === "Printing"
+                                  ? "border-blue-600 bg-blue-500 text-white"
+                                  : "border-brand-navy/20 bg-white text-brand-navy hover:border-blue-500 hover:text-blue-600"
+                              }`}
+                            >
+                              {activeDealPackage ? "Print" : `Print +${toCurrencyExact(option.printingCost)}`}
+                            </button>
+                          ) : (
+                            <span
+                              className={`inline-flex mx-auto w-[72%] max-w-full items-center justify-center border-none bg-transparent p-0 ${PLACEMENT_SELECTOR_BUTTON_TEXT} font-medium tabular-nums text-brand-navy/40 shadow-none ring-0`}
+                              aria-label="Printing not available for this placement"
+                            >
+                              N/A
+                            </span>
+                          )
                         ) : (
                           <span className="block" aria-hidden />
                         )}

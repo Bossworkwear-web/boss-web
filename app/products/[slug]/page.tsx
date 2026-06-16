@@ -57,6 +57,7 @@ import { filterAp3309ColorOptions, isStorefrontAp3309Slug } from "@/lib/ap-3309-
 import { filterAp2311ColorOptions, isStorefrontAp2311Slug } from "@/lib/ap-2311-storefront";
 import { resolveApPdpGalleryState } from "@/lib/ap-pdp-gallery";
 import { resolveHeadwearPdpGalleryState } from "@/lib/headwear-pdp-gallery";
+import { HEADWEAR_PDP_PLACEMENT_ROWS } from "@/lib/headwear-storefront-placements";
 import {
   isStorefrontYesChefCh234mPdp,
   isYesChefCh234mExcludedColourChip,
@@ -1847,13 +1848,15 @@ async function getDetailDataInternal(
 
     return {
       product: mappedProduct,
-      placements: sortPlacementsForProductPage(
-        normalizePlacementLabelsForStorefront(
-          dedupePlacementsByStorefrontRole(
-            mergePlacementsWithFallback(positions as PlacementData[] | null | undefined, fallbackPlacements),
+      placements: isHeadwearCatalog
+        ? [...HEADWEAR_PDP_PLACEMENT_ROWS]
+        : sortPlacementsForProductPage(
+            normalizePlacementLabelsForStorefront(
+              dedupePlacementsByStorefrontRole(
+                mergePlacementsWithFallback(positions as PlacementData[] | null | undefined, fallbackPlacements),
+              ),
+            ),
           ),
-        ),
-      ),
     };
   } catch {
     return null;
@@ -1875,7 +1878,7 @@ export async function getDetailData(
   return unstable_cache(
     async () => getDetailDataInternal(slug),
     /** Bump segment when PDP payload must refresh immediately after catalog imports (see `import:jbswear`, etc.). */
-    ["storefront-pdp-v39", slug],
+    ["storefront-pdp-v40", slug],
     { revalidate: 120, tags: ["storefront-pdp"] },
   )();
 }
