@@ -96,6 +96,38 @@ function isDncListingContext(
   return /^\s*dnc\s+/i.test(String(listingName ?? "").trim());
 }
 
+function headwearSupplierNameMatch(s?: string | null): boolean {
+  const t = String(s ?? "").trim().toLowerCase();
+  return t === "headwear" || t === "head wear";
+}
+
+function isHeadwearListingContext(
+  storeSlug?: string | null,
+  supplierName?: string | null,
+): boolean {
+  const sl = String(storeSlug ?? "").trim().toLowerCase();
+  if (sl.startsWith("hw-")) {
+    return true;
+  }
+  return headwearSupplierNameMatch(supplierName);
+}
+
+/** Headwear Xada sync: style code from slug `hw-4590` → `4590`. */
+function headwearStyleCodeFromListing(
+  storeSlug?: string | null,
+  supplierName?: string | null,
+): string | null {
+  if (!isHeadwearListingContext(storeSlug, supplierName)) {
+    return null;
+  }
+  const slug = String(storeSlug ?? "").trim().toLowerCase();
+  const slugM = /^hw-([a-z0-9][a-z0-9-]*)$/i.exec(slug);
+  if (slugM?.[1]) {
+    return slugM[1].toUpperCase();
+  }
+  return null;
+}
+
 /** DNC import: style code from trailing `(3718)` or slug `dnc-3718` — storefront shows digits when possible. */
 function dncStyleCodeFromListing(
   name: string,
@@ -655,6 +687,30 @@ function stripAussiePacificStructuredMetaLines(text: string): string {
     .trim();
 }
 
+/** Headwear Xada sync prepends `Style:` / `Categories:` — remove for PDP body only. */
+function stripHeadwearStructuredMetaLines(text: string): string {
+  const lines = text.split(/\r?\n/);
+  const kept: string[] = [];
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) {
+      kept.push(raw);
+      continue;
+    }
+    if (/^style\s*:/i.test(line)) {
+      continue;
+    }
+    if (/^categories\s*:/i.test(line)) {
+      continue;
+    }
+    kept.push(raw);
+  }
+  return kept
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /** Next section after a `Fabric:` block (do not tab-bullet these lines). */
 const AUSSIE_PACIFIC_FABRIC_FOLLOWING_STOP = new RegExp(
   "^(?:(?:product\\s+|key\\s+)?features|care(?:\\s*instructions)?|washing|machine\\s*wash|instructions?|specification|specifications|" +
@@ -813,6 +869,10 @@ function cardProductCode(
   if (dncCode) {
     return dncCode;
   }
+  const headwearCode = headwearStyleCodeFromListing(storeSlug, supplierName);
+  if (headwearCode) {
+    return headwearCode;
+  }
   if (isAussiePacific) {
     // API names end with ` - W3307` / ` - W1907L` / etc.
     const m = name.trim().match(/\s-\s*([A-Za-z0-9]{2,14})\s*$/);
@@ -874,6 +934,9 @@ function cardMarketingTitleFromDescription(
       continue;
     }
     if (/^style\s*:/i.test(normalizedLine)) {
+      continue;
+    }
+    if (/^categories\s*:/i.test(normalizedLine)) {
       continue;
     }
     if (/^supplier:\s*https?:\/\//i.test(normalizedLine)) {
@@ -1024,6 +1087,7 @@ export function productCardDisplayLines(
   const slugLower = String(storeSlug ?? "").trim().toLowerCase();
   const isBlueWhale = sup === "blue whale" || /^\s*blue\s*whale\b/i.test(name.trim());
   const isDnc = isDncListingContext(storeSlug, supplierName, name);
+  const isHeadwear = isHeadwearListingContext(storeSlug, supplierName);
   const isAussiePacific = sup === "aussie pacific" || slugLower.startsWith("ap-");
 
   const raw = (description ?? "").trim();
@@ -1069,6 +1133,12 @@ export function productCardDisplayLines(
       const stripped = storefrontStripSupplierBranding(withoutParens).trim();
       productName = stripped.length > 0 ? stripped : null;
     }
+    return { productName, productCode };
+  }
+  // Headwear: `description` holds sync metadata — headline always comes from `products.name`.
+  if (isHeadwear) {
+    const rawLine = String(name ?? "").trim().split(/\r?\n/)[0]?.trim() ?? "";
+    productName = rawLine.length > 0 ? rawLine : null;
     return { productName, productCode };
   }
   if (isJbWearListingContext(storeSlug, supplierName, name)) {
@@ -1365,6 +1435,9 @@ export function productDetailDescriptionBody(
     cleaned = stripAussiePacificStructuredMetaLines(cleaned);
     cleaned = formatAussiePacificFabricContinuationLines(cleaned);
     cleaned = formatAussiePacificFeaturesContinuationLines(cleaned);
+  }
+  if (cleaned && isHeadwearListingContext(storeSlug, supplierName)) {
+    cleaned = stripHeadwearStructuredMetaLines(cleaned);
   }
   const sl = normalizeStoreSlugForCatalogPrefix(storeSlug);
   const isJbContext =

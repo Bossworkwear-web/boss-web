@@ -1803,14 +1803,18 @@ async function getDetailDataInternal(
             ? "JB's Wear"
             : slugLower.startsWith("dnc-")
               ? "DNC Workwear"
-              : null;
+              : slugLower.startsWith("hw-")
+                ? "Headwear"
+                : null;
     const brand = fromName ?? fromSupplierName ?? inferredFromSlug;
     const displayBrandSkuLine =
       supplierLower === "aussie pacific" || slugLower.startsWith("ap-")
         ? `Aussie Pacific / ${displayProductCode}`
-        : brand
-          ? `${brand} / ${displayProductCode}`
-          : displayProductCode;
+        : supplierLower === "headwear" || slugLower.startsWith("hw-")
+          ? `Headwear / ${displayProductCode}`
+          : brand
+            ? `${brand} / ${displayProductCode}`
+            : displayProductCode;
 
     mappedProduct.displayProductName = displayProductName;
     mappedProduct.displayProductCode = displayProductCode;
