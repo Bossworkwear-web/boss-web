@@ -38,7 +38,7 @@ const PLACEMENT_FALLBACK_PRINTING = 1.5;
 const defaultEmbroideryPlacementPricing: Record<string, number> = {
   "left chest": 9.95,
   "left-hand chest": 9.95,
-  "right chest": 7.95,
+  "right chest": 9.95,
   "center chest": 24.95,
   "full back": 18,
   "front full": 18,
@@ -54,7 +54,7 @@ const defaultEmbroideryPlacementPricing: Record<string, number> = {
 const defaultPrintingPlacementPricing: Record<string, number> = {
   "left chest": 8.95,
   "left-hand chest": 8.95,
-  "right chest": 6.95,
+  "right chest": 8.95,
   "center chest": 14.95,
   "full back": 17.95,
   "front full": 17.95,
@@ -129,13 +129,11 @@ export function buildStorefrontPlacementOptions(
           ? "FB"
           : toShortCode(nameForCodes);
     const short =
-      normalizedName === "right chest"
-        ? "RC for Names"
-        : normalizedName === "full back" ||
-            normalizedName === "front full" ||
-            normalizedName === "front bottom"
-          ? "FB"
-          : toShortCode(nameForCodes);
+      normalizedName === "full back" ||
+      normalizedName === "front full" ||
+      normalizedName === "front bottom"
+        ? "FB"
+        : toShortCode(nameForCodes);
     return {
       id: item.id,
       label: nameForCodes,

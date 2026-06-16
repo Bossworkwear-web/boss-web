@@ -98,7 +98,7 @@ type PlacementOption = {
   id: string;
   label: string;
   short: string;
-  /** Two-letter code for diagram asset (RC stays `RC` even when `short` is “RC for Names”). */
+  /** Two-letter code for diagram asset (e.g. RC for Right chest). */
   diagramAbbr: string;
   embroideryCost: number;
   printingCost: number;
@@ -398,7 +398,7 @@ const servicePricing: Record<ServiceType, number> = {
 const defaultEmbroideryPlacementPricing: Record<string, number> = {
   "left chest": 9.95,
   "left-hand chest": 9.95,
-  "right chest": 7.95,
+  "right chest": 9.95,
   "center chest": 24.95,
   "full back": 18,
   "front full": 18,
@@ -415,7 +415,7 @@ const defaultEmbroideryPlacementPricing: Record<string, number> = {
 const defaultPrintingPlacementPricing: Record<string, number> = {
   "left chest": 8.95,
   "left-hand chest": 8.95,
-  "right chest": 6.95,
+  "right chest": 8.95,
   "center chest": 14.95,
   "full back": 17.95,
   "front full": 17.95,
@@ -2322,13 +2322,11 @@ export function PremiumWorkPoloClient({
               ? "FB"
               : toShortCode(nameForCodes);
         const short =
-          normalizedName === "right chest"
-            ? "RC for Names"
-            : normalizedName === "full back" ||
-                normalizedName === "front full" ||
-                normalizedName === "front bottom"
-              ? "FB"
-              : toShortCode(nameForCodes);
+          normalizedName === "full back" ||
+          normalizedName === "front full" ||
+          normalizedName === "front bottom"
+            ? "FB"
+            : toShortCode(nameForCodes);
         return {
           id: item.id,
           label: nameForCodes,
