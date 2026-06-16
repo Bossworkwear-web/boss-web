@@ -123,7 +123,6 @@ function weightKgFromPackaging(packaging) {
 function buildImageUrls(product, colours) {
   const ordered = [];
   const hero = String(product?.hero_image ?? "").trim();
-  if (hero.startsWith("http")) ordered.push(hero);
 
   for (const colour of colours) {
     const u = String(colour?.image_url ?? "").trim();
@@ -138,6 +137,11 @@ function buildImageUrls(product, colours) {
   for (const v of product?.variants ?? []) {
     const u = String(v?.image_url ?? "").trim();
     if (u.startsWith("http")) ordered.push(u);
+  }
+
+  // Lifestyle hero after per-colour variant shots — leading hero shifts PDP colour ↔ gallery index.
+  if (hero.startsWith("http")) {
+    ordered.push(hero);
   }
 
   return dedupeOrderedHttpUrls(ordered);

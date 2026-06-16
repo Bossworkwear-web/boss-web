@@ -622,6 +622,15 @@ function extractColorTokenFromGalleryFilename(fileNoQuery: string): string | nul
   if (tail?.[1]) {
     return tail[1];
   }
+  // Headwear BigCommerce variants: `4199_Black.jpg`, `4199_Black-Purple.jpg`, `4199aus-brown.jpg`
+  const headwearUnderscore = fileNoQuery.match(/^\d{3,5}_([A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i);
+  if (headwearUnderscore?.[1]) {
+    return headwearUnderscore[1];
+  }
+  const headwearAus = fileNoQuery.match(/^\d{3,5}aus-([A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i);
+  if (headwearAus?.[1]) {
+    return headwearAus[1];
+  }
   return null;
 }
 
@@ -871,6 +880,22 @@ function scoreGalleryUrlForColor(color: string, url: string): number {
     }
   }
 
+  const headwearUnderscore = file.match(/^\d{3,5}_([A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i);
+  const headwearAus = file.match(/^\d{3,5}aus-([A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i);
+  const headwearToken = headwearUnderscore?.[1] ?? headwearAus?.[1] ?? null;
+  if (headwearToken) {
+    const derived = supplierDisplayColorLabelFromFileNoQuery(file);
+    if (derived) {
+      const derivedKey = colorMatchKey(derived);
+      const wantKey = colorMatchKey(trimmed);
+      if (derivedKey === wantKey) {
+        score += 130;
+      } else if (compactColorKey(derived) === colorCompact) {
+        score += 120;
+      }
+    }
+  }
+
   if (!shotMatch) {
     for (const w of colorWords) {
       if (pathLower.includes(w)) {
@@ -975,6 +1000,13 @@ function galleryHasStructuredProductShots(urls: readonly string[]): boolean {
       isSupplierMedia &&
       /^[A-Za-z0-9]+\s+[A-Za-z0-9][A-Za-z0-9\s-]*\.(jpg|jpeg|png|webp)$/i.test(fileNoQuery)
     ) {
+      return true;
+    }
+    // Headwear BigCommerce variant filenames (not lifestyle `4199-hero-lr.jpg`).
+    if (/^\d{3,5}_(?:[A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i.test(fileNoQuery)) {
+      return true;
+    }
+    if (/^\d{3,5}aus-(?:[A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i.test(fileNoQuery)) {
       return true;
     }
   }
