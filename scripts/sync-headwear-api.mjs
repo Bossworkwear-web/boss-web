@@ -244,18 +244,28 @@ function trimRow(row, columns) {
   return o;
 }
 
+function isHeadwearSyncRow(row) {
+  const sup = String(row?.supplier_name ?? "").trim().toLowerCase();
+  const slug = String(row?.slug ?? "").trim().toLowerCase();
+  return sup === "headwear" || slug.startsWith("hw-");
+}
+
 async function upsertProductsBatch(supabase, batch) {
   const deduped = [...new Map(batch.map((r) => [r.slug, r])).values()];
   if (!deduped.length) return;
 
-  const names = deduped.map((r) => r.name);
+  const names = deduped
+    .filter((r) => !isHeadwearSyncRow(r))
+    .map((r) => r.name);
   const slugs = [...new Set(deduped.map((r) => r.slug).filter(Boolean))];
 
   const { data: bySlug, error: slugErr } = slugs.length
     ? await supabase.from("products").select("id, name, slug").in("slug", slugs)
     : { data: [], error: null };
   if (slugErr) throw slugErr;
-  const { data: byName, error: nameErr } = await supabase.from("products").select("id, name, slug").in("name", names);
+  const { data: byName, error: nameErr } = names.length
+    ? await supabase.from("products").select("id, name, slug").in("name", names)
+    : { data: [], error: null };
   if (nameErr) throw nameErr;
 
   const idBySlug = new Map((bySlug ?? []).filter((r) => r.slug).map((r) => [r.slug, r.id]));
@@ -264,7 +274,9 @@ async function upsertProductsBatch(supabase, batch) {
   const toInsert = [];
   const upsertById = new Map();
   for (const row of deduped) {
-    const id = idBySlug.get(row.slug) ?? idByName.get(row.name);
+    const id =
+      idBySlug.get(row.slug) ??
+      (isHeadwearSyncRow(row) ? null : idByName.get(row.name));
     if (id) upsertById.set(id, { id, ...row });
     else toInsert.push(row);
   }
