@@ -147,16 +147,29 @@ function buildImageUrls(product, colours) {
   return dedupeOrderedHttpUrls(ordered);
 }
 
+function coloursFromVariants(product) {
+  const seen = new Set();
+  const out = [];
+  for (const v of product?.variants ?? []) {
+    const name = String(v?.colour ?? v?.color ?? "").trim();
+    const image_url = String(v?.image_url ?? "").trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    out.push({ name, image_url });
+  }
+  return out;
+}
+
 function buildProductRow(product) {
   const styleSku = String(product?.sku ?? "").trim();
   const name = String(product?.name ?? "").trim();
-  const colours = [...(product?.colours ?? [])]
+  const coloursFromApi = [...(product?.colours ?? [])]
     .map((c) => ({
       name: String(c?.name ?? "").trim(),
       image_url: String(c?.image_url ?? "").trim(),
     }))
-    .filter((c) => c.name)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .filter((c) => c.name);
+  const colours = coloursFromApi.length ? coloursFromApi : coloursFromVariants(product);
 
   const colorNames = colours.length
     ? uniq(colours.map((c) => c.name))
@@ -164,7 +177,7 @@ function buildProductRow(product) {
         (product?.variants ?? [])
           .map((v) => String(v?.colour ?? v?.color ?? "").trim())
           .filter(Boolean),
-      ).sort((a, b) => a.localeCompare(b));
+      );
 
   const sizes = uniq(
     [

@@ -56,6 +56,7 @@ import {
 import { filterAp3309ColorOptions, isStorefrontAp3309Slug } from "@/lib/ap-3309-storefront";
 import { filterAp2311ColorOptions, isStorefrontAp2311Slug } from "@/lib/ap-2311-storefront";
 import { resolveApPdpGalleryState } from "@/lib/ap-pdp-gallery";
+import { resolveHeadwearPdpGalleryState } from "@/lib/headwear-pdp-gallery";
 import {
   isStorefrontYesChefCh234mPdp,
   isYesChefCh234mExcludedColourChip,
@@ -1015,6 +1016,8 @@ async function getDetailDataInternal(
       supplierNameRaw.trim().toLowerCase() === "dnc workwear" ||
       supplierNameRaw.trim().toLowerCase() === "dnc" ||
       productSlugLower.startsWith("dnc-");
+    const isHeadwearCatalog =
+      supplierNameRaw.trim().toLowerCase() === "headwear" || productSlugLower.startsWith("hw-");
     const jbPrefixCount = isJbWearCatalog ? parseJbPrefixCountFromFirstImageUrl(normalizedImageUrls) : 0;
     const jbDerivedColors =
       isJbWearCatalog && jbPrefixCount === 0
@@ -1711,6 +1714,16 @@ async function getDetailDataInternal(
       apColorImageCounts = apGallery.apColorImageCounts;
     }
 
+    if (isHeadwearCatalog && normalizedImageUrls.length > 0) {
+      const hwGallery = resolveHeadwearPdpGalleryState(
+        normalizedImageUrls,
+        productSlugLower,
+        colorOptionsEffective,
+        productCodeUpper || null,
+      );
+      normalizedImageUrls = hwGallery.imageUrls;
+    }
+
     if (isJbWearCatalog) {
       const styleFromName = product.name.trim().match(/\s*\(([A-Za-z0-9][A-Za-z0-9/_-]*)\)\s*$/)?.[1];
       const styleUpper =
@@ -1862,7 +1875,7 @@ export async function getDetailData(
   return unstable_cache(
     async () => getDetailDataInternal(slug),
     /** Bump segment when PDP payload must refresh immediately after catalog imports (see `import:jbswear`, etc.). */
-    ["storefront-pdp-v36", slug],
+    ["storefront-pdp-v37", slug],
     { revalidate: 120, tags: ["storefront-pdp"] },
   )();
 }

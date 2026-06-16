@@ -66,6 +66,13 @@ import { addCartItem, getCartItems, removeCartItem, updateCartItem, type CartIte
 import { productPathSegment } from "@/lib/product-path-slug";
 import { bisleyPdpDisplayProductNameWithApexPrefix, headwearPdpDisplayOverride, productCardDisplayLines } from "@/lib/product-card-copy";
 import {
+  headwearColorLabelCandidatesFromToken,
+  headwearColorTokenFromFilename,
+  isHeadwearStorefrontProduct,
+  isHeadwearStructuredVariantFilename,
+  resolveHeadwearPdpGalleryState,
+} from "@/lib/headwear-pdp-gallery";
+import {
   getSizeGuideBundle,
   inferSizeGuideKind,
   SIZE_GUIDE_SUPPLIER_WEBSITE_FOOTNOTE,
@@ -622,14 +629,9 @@ function extractColorTokenFromGalleryFilename(fileNoQuery: string): string | nul
   if (tail?.[1]) {
     return tail[1];
   }
-  // Headwear BigCommerce variants: `4199_Black.jpg`, `4199_Black-Purple.jpg`, `4199aus-brown.jpg`
-  const headwearUnderscore = fileNoQuery.match(/^\d{3,5}_([A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i);
-  if (headwearUnderscore?.[1]) {
-    return headwearUnderscore[1];
-  }
-  const headwearAus = fileNoQuery.match(/^\d{3,5}aus-([A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i);
-  if (headwearAus?.[1]) {
-    return headwearAus[1];
+  const headwearToken = headwearColorTokenFromFilename(fileNoQuery);
+  if (headwearToken) {
+    return headwearToken;
   }
   return null;
 }
@@ -880,19 +882,16 @@ function scoreGalleryUrlForColor(color: string, url: string): number {
     }
   }
 
-  const headwearUnderscore = file.match(/^\d{3,5}_([A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i);
-  const headwearAus = file.match(/^\d{3,5}aus-([A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i);
-  const headwearToken = headwearUnderscore?.[1] ?? headwearAus?.[1] ?? null;
+  const headwearToken = headwearColorTokenFromFilename(file);
   if (headwearToken) {
-    const derived = supplierDisplayColorLabelFromFileNoQuery(file);
-    if (derived) {
-      const derivedKey = colorMatchKey(derived);
-      const wantKey = colorMatchKey(trimmed);
-      if (derivedKey === wantKey) {
+    const derivedLabels = headwearColorLabelCandidatesFromToken(headwearToken);
+    for (const label of derivedLabels) {
+      if (compactColorKey(label) === colorCompact) {
         score += 130;
-      } else if (compactColorKey(derived) === colorCompact) {
-        score += 120;
       }
+    }
+    if (compactColorKey(headwearToken) === colorCompact) {
+      score += 120;
     }
   }
 
@@ -1003,10 +1002,7 @@ function galleryHasStructuredProductShots(urls: readonly string[]): boolean {
       return true;
     }
     // Headwear BigCommerce variant filenames (not lifestyle `4199-hero-lr.jpg`).
-    if (/^\d{3,5}_(?:[A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i.test(fileNoQuery)) {
-      return true;
-    }
-    if (/^\d{3,5}aus-(?:[A-Za-z0-9][A-Za-z0-9_-]*)\.(jpg|jpeg|png|webp)$/i.test(fileNoQuery)) {
+    if (isHeadwearStructuredVariantFilename(fileNoQuery)) {
       return true;
     }
   }
@@ -2256,6 +2252,14 @@ export function PremiumWorkPoloClient({
   const productImageUrlsForGallery = useMemo((): string[] => {
     const raw = product.imageUrls ?? [];
     const slugLower = (product.slug ?? "").trim().toLowerCase();
+    if (isHeadwearStorefrontProduct(product.slug, product.supplierName, product.category)) {
+      return resolveHeadwearPdpGalleryState(
+        raw,
+        product.slug,
+        colorOptions,
+        product.displayProductCode ?? null,
+      ).imageUrls;
+    }
     if (!bisleySlugUsesPositionalColorGallery(slugLower) || raw.length < 2) {
       return raw;
     }
@@ -2263,7 +2267,14 @@ export function PremiumWorkPoloClient({
     if (strict) return strict;
     const byDb = bisleyReorderDrillImagesToMatchColors(raw, effectivePdpColorOptions(product));
     return byDb ?? raw;
-  }, [product.imageUrls, product.slug]);
+  }, [
+    colorOptions,
+    product.category,
+    product.displayProductCode,
+    product.imageUrls,
+    product.slug,
+    product.supplierName,
+  ]);
 
   const galleryParsed = useMemo(
     () => parseJbGalleryUrls(productImageUrlsForGallery),
