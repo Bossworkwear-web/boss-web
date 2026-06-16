@@ -91,7 +91,10 @@ import {
   type SupplierSizeChartLink,
 } from "@/lib/supplier-size-chart-links";
 import { placementLogoLocationSrc } from "@/lib/placement-logo-location";
-import { storefrontVolumeDiscountRateFromSubtotalAud } from "@/lib/storefront-volume-discount";
+import {
+  headwearVolumeDiscountRateFromQuantity,
+  storefrontVolumeDiscountRateFromSubtotalAud,
+} from "@/lib/storefront-volume-discount";
 import {
   filterPlacementsForSpecialDealPackage,
   resolveActiveSpecialDealPackageForProduct,
@@ -2881,9 +2884,26 @@ export function PremiumWorkPoloClient({
       return 0;
     }
     const gross = perItemPrice * totalPieces;
-    const rate = storefrontVolumeDiscountRateFromSubtotalAud(gross);
+    const rate = isHeadwearProduct
+      ? headwearVolumeDiscountRateFromQuantity(totalPieces)
+      : storefrontVolumeDiscountRateFromSubtotalAud(gross);
     return Math.round(gross * (1 - rate) * 100) / 100;
-  }, [activeDealPackage, perItemPrice, totalPieces]);
+  }, [activeDealPackage, isHeadwearProduct, perItemPrice, totalPieces]);
+
+  const headwearVolumeDiscountRate = useMemo(
+    () => (isHeadwearProduct ? headwearVolumeDiscountRateFromQuantity(totalPieces) : 0),
+    [isHeadwearProduct, totalPieces],
+  );
+
+  const displayPerItemPrice = useMemo(() => {
+    if (totalPieces <= 0) {
+      return perItemPrice;
+    }
+    if (activeDealPackage) {
+      return perItemPrice;
+    }
+    return Math.round((totalPrice / totalPieces) * 100) / 100;
+  }, [activeDealPackage, perItemPrice, totalPieces, totalPrice]);
 
   function assignPlacement(id: string, service: DecoratedServiceType) {
     if (ppePlainOnly) {
@@ -3029,11 +3049,15 @@ export function PremiumWorkPoloClient({
       }
     }
 
-    /** List-price batch total (cents). Volume discount is applied at cart / checkout on full-cart subtotal. */
+    /** List-price batch total (cents). Headwear: quantity tiers on PDP; other lines discount at cart subtotal. */
+    const grossListAud = perItemPrice * pieceQtySum;
+    const volumeRate = isHeadwearProduct
+      ? headwearVolumeDiscountRateFromQuantity(pieceQtySum)
+      : 0;
     const grossBatchCents = activeDealPackage
       ? Math.round(activeDealPackage.totalAud * 100)
       : pieceQtySum > 0
-        ? Math.round(perItemPrice * pieceQtySum * 100)
+        ? Math.round(grossListAud * (1 - volumeRate) * 100)
         : 0;
 
     const serviceLabel = isPlainSelected
@@ -3247,7 +3271,9 @@ export function PremiumWorkPoloClient({
                 ? totalPieces === activeDealPackage.units
                   ? `Package (${activeDealPackage.units} shirts + 1 logo)`
                   : `Select ${activeDealPackage.units} shirts for package price`
-                : `Per item: ${toCurrency(perItemPrice)}`}
+                : headwearVolumeDiscountRate > 0
+                  ? `Per item: ${toCurrency(displayPerItemPrice)} (${Math.round(headwearVolumeDiscountRate * 100)}% volume off)`
+                  : `Per item: ${toCurrency(perItemPrice)}`}
             </p>
             <p className="product-detail-total mt-1 inline-block text-[2.7rem] font-light text-brand-orange tabular-nums">
               {toCurrency(totalPrice)}

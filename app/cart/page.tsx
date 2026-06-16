@@ -264,14 +264,11 @@ export default function CartPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [detailItemId]);
 
-  const { gross: productGrossSubtotal, net: productNetSubtotal } = useMemo(
-    () => storefrontCartNetProductSubtotalAfterVolumeAud(items),
-    [items],
-  );
-  const volumeDiscountAud = useMemo(
-    () => Math.round((productGrossSubtotal - productNetSubtotal + Number.EPSILON) * 100) / 100,
-    [productGrossSubtotal, productNetSubtotal],
-  );
+  const {
+    gross: productGrossSubtotal,
+    net: productNetSubtotal,
+    regularVolumeDiscountAud: volumeDiscountAud,
+  } = useMemo(() => storefrontCartNetProductSubtotalAfterVolumeAud(items), [items]);
   const volumeAdjustedByLineId = useMemo(() => {
     const adjusted = storefrontVolumeAdjustedCartLines(items);
     const map = new Map<string, { unitPrice: number; totalPrice: number }>();
