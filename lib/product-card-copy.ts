@@ -104,7 +104,15 @@ function headwearSupplierNameMatch(s?: string | null): boolean {
 function isHeadwearListingContext(
   storeSlug?: string | null,
   supplierName?: string | null,
+  category?: string | null,
 ): boolean {
+  const cat = String(category ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+  if (cat === "head wear" || cat === "headwear") {
+    return true;
+  }
   const sl = String(storeSlug ?? "").trim().toLowerCase();
   if (sl.startsWith("hw-")) {
     return true;
@@ -112,13 +120,42 @@ function isHeadwearListingContext(
   return headwearSupplierNameMatch(supplierName);
 }
 
-/** Headwear Xada sync: style code from slug `hw-4590` → `4590`. */
+/** Xada sync descriptions start with `Style:` + `Categories: Headwear …`. */
+function descriptionLooksLikeHeadwearSync(text: string): boolean {
+  const t = text.trim();
+  if (!t) {
+    return false;
+  }
+  return /^style\s*:\s*.+/im.test(t) && /^categories\s*:\s*headwear/im.test(t);
+}
+
+/** Headwear PDP / cards: style code from sync `Style: 3060` line in `description`. */
+export function headwearStyleCodeFromDescription(description: string | null | undefined): string | null {
+  for (const line of String(description ?? "").split(/\r?\n/)) {
+    const m = line.trim().match(/^style\s*:\s*(.+)$/i);
+    if (m?.[1]) {
+      const code = m[1].trim();
+      if (code) {
+        return code.toUpperCase();
+      }
+    }
+  }
+  return null;
+}
+
+/** Headwear Xada sync: style code from `Style:` line, else slug `hw-4590` → `4590`. */
 function headwearStyleCodeFromListing(
   storeSlug?: string | null,
   supplierName?: string | null,
+  description?: string | null,
+  category?: string | null,
 ): string | null {
-  if (!isHeadwearListingContext(storeSlug, supplierName)) {
+  if (!isHeadwearListingContext(storeSlug, supplierName, category)) {
     return null;
+  }
+  const fromDesc = headwearStyleCodeFromDescription(description);
+  if (fromDesc) {
+    return fromDesc;
   }
   const slug = String(storeSlug ?? "").trim().toLowerCase();
   const slugM = /^hw-([a-z0-9][a-z0-9-]*)$/i.exec(slug);
@@ -126,6 +163,53 @@ function headwearStyleCodeFromListing(
     return slugM[1].toUpperCase();
   }
   return null;
+}
+
+/**
+ * Headwear PDP headline + style code — never use `Categories:` metadata as the title.
+ * Prefer `products.name` for title and `Style:` from description for the code (user-facing product ID).
+ */
+export function headwearPdpDisplayOverride(
+  name: string,
+  description: string | null | undefined,
+  storeSlug?: string | null,
+  supplierName?: string | null,
+  category?: string | null,
+): ProductCardDisplay | null {
+  const raw = (description ?? "").trim();
+  if (
+    !isHeadwearListingContext(storeSlug, supplierName, category) &&
+    !descriptionLooksLikeHeadwearSync(raw)
+  ) {
+    return null;
+  }
+  const rawLine = String(name ?? "").trim().split(/\r?\n/)[0]?.trim() ?? "";
+  let productName =
+    rawLine.length > 0 && !/^categories\s*:/i.test(rawLine) ? rawLine : null;
+  if (!productName && raw) {
+    const body = stripHeadwearStructuredMetaLines(raw);
+    const firstPara = body
+      .split(/\n\s*\n/)
+      .map((p) => p.trim())
+      .filter(Boolean)[0] ?? "";
+    const firstLine = firstPara.split(/\r?\n/)[0]?.trim() ?? "";
+    if (
+      firstLine &&
+      !/^categories\s*:/i.test(firstLine) &&
+      !/^style\s*:/i.test(firstLine) &&
+      !/^brand\s*:/i.test(firstLine)
+    ) {
+      productName = firstLine;
+    }
+  }
+  const productCode =
+    headwearStyleCodeFromDescription(raw) ??
+    headwearStyleCodeFromListing(storeSlug, supplierName, description, category) ??
+    "";
+  return {
+    productName,
+    productCode,
+  };
 }
 
 /** DNC import: style code from trailing `(3718)` or slug `dnc-3718` — storefront shows digits when possible. */
@@ -825,6 +909,8 @@ function cardProductCode(
   name: string,
   storeSlug?: string | null,
   supplierName?: string | null,
+  description?: string | null,
+  category?: string | null,
 ): string {
   const sup = String(supplierName ?? "").trim().toLowerCase();
   const slugLower = String(storeSlug ?? "").trim().toLowerCase();
@@ -869,7 +955,7 @@ function cardProductCode(
   if (dncCode) {
     return dncCode;
   }
-  const headwearCode = headwearStyleCodeFromListing(storeSlug, supplierName);
+  const headwearCode = headwearStyleCodeFromListing(storeSlug, supplierName, description, category);
   if (headwearCode) {
     return headwearCode;
   }
@@ -1080,14 +1166,14 @@ export function productCardDisplayLines(
   forStorefrontBrowseGrid?: boolean,
   /** Pass `available_sizes` when known so JB titles do not repeat a trailing size token (e.g. `… Navy 2XL`). */
   availableSizesForJbTitle?: readonly string[] | null,
+  category?: string | null,
 ): ProductCardDisplay {
-  const productCode = cardProductCode(name, storeSlug, supplierName);
+  const productCode = cardProductCode(name, storeSlug, supplierName, description, category);
   const codeKey = productCode.toUpperCase();
   const sup = String(supplierName ?? "").trim().toLowerCase();
   const slugLower = String(storeSlug ?? "").trim().toLowerCase();
   const isBlueWhale = sup === "blue whale" || /^\s*blue\s*whale\b/i.test(name.trim());
   const isDnc = isDncListingContext(storeSlug, supplierName, name);
-  const isHeadwear = isHeadwearListingContext(storeSlug, supplierName);
   const isAussiePacific = sup === "aussie pacific" || slugLower.startsWith("ap-");
 
   const raw = (description ?? "").trim();
@@ -1135,11 +1221,9 @@ export function productCardDisplayLines(
     }
     return { productName, productCode };
   }
-  // Headwear: `description` holds sync metadata — headline always comes from `products.name`.
-  if (isHeadwear) {
-    const rawLine = String(name ?? "").trim().split(/\r?\n/)[0]?.trim() ?? "";
-    productName = rawLine.length > 0 ? rawLine : null;
-    return { productName, productCode };
+  const headwearDisplay = headwearPdpDisplayOverride(name, description, storeSlug, supplierName, category);
+  if (headwearDisplay) {
+    return headwearDisplay;
   }
   if (isJbWearListingContext(storeSlug, supplierName, name)) {
     productName = jbWearCardTitleFromName(name, codeKey);

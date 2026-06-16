@@ -64,7 +64,7 @@ import {
 import { uploadStoreCheckoutReferenceImages } from "@/app/orders/actions";
 import { addCartItem, getCartItems, removeCartItem, updateCartItem, type CartItem } from "@/lib/cart";
 import { productPathSegment } from "@/lib/product-path-slug";
-import { bisleyPdpDisplayProductNameWithApexPrefix, productCardDisplayLines } from "@/lib/product-card-copy";
+import { bisleyPdpDisplayProductNameWithApexPrefix, headwearPdpDisplayOverride, productCardDisplayLines } from "@/lib/product-card-copy";
 import {
   getSizeGuideBundle,
   inferSizeGuideKind,
@@ -2092,33 +2092,46 @@ export function PremiumWorkPoloClient({
     return { productSlug: product.slug ?? null };
   }, [product.slug]);
 
-  const { productName, productCode } = useMemo(
-    () =>
-      product.displayProductName != null || product.displayProductCode != null
-        ? {
-            productName: product.displayProductName ?? null,
-            productCode: String(product.displayProductCode ?? "").trim(),
-          }
-        : productCardDisplayLines(
-            product.name,
-            product.description,
-            product.slug,
-            product.supplierName ?? null,
-            colorOptions,
-            undefined,
-            product.sizeOptions,
-          ),
-    [
-      colorOptions,
-      product.description,
-      product.displayProductCode,
-      product.displayProductName,
+  const { productName, productCode } = useMemo(() => {
+    const headwear = headwearPdpDisplayOverride(
       product.name,
-      product.sizeOptions,
+      product.description,
       product.slug,
-      product.supplierName,
-    ],
-  );
+      product.supplierName ?? null,
+      product.category,
+    );
+    if (headwear) {
+      return {
+        productName: headwear.productName,
+        productCode: String(headwear.productCode ?? "").trim(),
+      };
+    }
+    return product.displayProductName != null || product.displayProductCode != null
+      ? {
+          productName: product.displayProductName ?? null,
+          productCode: String(product.displayProductCode ?? "").trim(),
+        }
+      : productCardDisplayLines(
+          product.name,
+          product.description,
+          product.slug,
+          product.supplierName ?? null,
+          colorOptions,
+          undefined,
+          product.sizeOptions,
+          product.category,
+        );
+  }, [
+    colorOptions,
+    product.category,
+    product.description,
+    product.displayProductCode,
+    product.displayProductName,
+    product.name,
+    product.sizeOptions,
+    product.slug,
+    product.supplierName,
+  ]);
   const pdpProductTitle = useMemo(
     () =>
       bisleyPdpDisplayProductNameWithApexPrefix(
@@ -2170,10 +2183,15 @@ export function PremiumWorkPoloClient({
             ? "JB's Wear"
             : slug.startsWith("dnc-")
               ? "DNC Workwear"
-              : null;
+              : slug.startsWith("hw-")
+                ? "Headwear"
+                : null;
     const brand = fromName ?? fromSupplierName ?? inferredFromSlug;
     if (supplierLower === "aussie pacific" || slug.startsWith("ap-")) {
       return `Aussie Pacific / ${productCode}`;
+    }
+    if (supplierLower === "headwear" || slug.startsWith("hw-")) {
+      return `Headwear / ${productCode}`;
     }
     return brand ? `${brand} / ${productCode}` : productCode;
   }, [product.displayBrandSkuLine, product.name, product.slug, product.supplierName, productCode]);

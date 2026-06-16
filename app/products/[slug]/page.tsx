@@ -1788,6 +1788,7 @@ async function getDetailDataInternal(
       mappedProduct.colorOptions,
       false,
       mappedProduct.sizeOptions,
+      mappedProduct.category,
     );
 
     const slugLower = String(mappedProduct.slug ?? "").trim().toLowerCase();
@@ -1861,7 +1862,7 @@ export async function getDetailData(
   return unstable_cache(
     async () => getDetailDataInternal(slug),
     /** Bump segment when PDP payload must refresh immediately after catalog imports (see `import:jbswear`, etc.). */
-    ["storefront-pdp-v35", slug],
+    ["storefront-pdp-v36", slug],
     { revalidate: 120, tags: ["storefront-pdp"] },
   )();
 }
@@ -1916,6 +1917,7 @@ export async function generateMetadata({ params }: ProductDetailPageProps): Prom
           colorOpts,
           false,
           product.sizeOptions,
+          product.category,
         );
   const titleCore = (displayLines.productName?.trim() ? displayLines.productName : product.name).trim();
   const title =
