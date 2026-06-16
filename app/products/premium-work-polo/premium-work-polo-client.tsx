@@ -2417,20 +2417,22 @@ export function PremiumWorkPoloClient({
     resolvedApGallery.urls,
   ]);
 
+  const isHeadwearProduct = useMemo(
+    () => isHeadwearStorefrontProduct(product.slug, product.supplierName, product.category),
+    [product.category, product.slug, product.supplierName],
+  );
+
+  /** PPE-only subs (boots, gloves, …) are Plain-only — Headwear caps/hats are decorated (Emb/Print). */
   const ppePlainOnly = useMemo(
     () =>
+      !isHeadwearProduct &&
       isPpeStorefrontProduct(
         product.name,
         product.category,
         product.slug ?? null,
         product.description,
       ),
-    [product.category, product.description, product.name, product.slug],
-  );
-
-  const isHeadwearProduct = useMemo(
-    () => isHeadwearStorefrontProduct(product.slug, product.supplierName, product.category),
-    [product.category, product.slug, product.supplierName],
+    [isHeadwearProduct, product.category, product.description, product.name, product.slug],
   );
 
   const placementOptions: PlacementOption[] = useMemo(() => {
