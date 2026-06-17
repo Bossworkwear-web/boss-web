@@ -83,6 +83,7 @@ export function isHeadwearVolumeDiscountCartLine(line: {
 }
 
 type VolumeCartLine = {
+  id?: string;
   listUnitPrice?: number;
   unitPrice: number;
   quantity: number;
@@ -92,6 +93,30 @@ type VolumeCartLine = {
   supplierName?: string | null;
   productPathSlug?: string | null;
 };
+
+function volumeCartLinePriceKey(line: VolumeCartLine, items: readonly VolumeCartLine[], fallbackIndex: number): string {
+  const id = String(line.id ?? "").trim();
+  if (id) {
+    return `id:${id}`;
+  }
+  const idx = items.indexOf(line);
+  if (idx >= 0) {
+    return `idx:${idx}`;
+  }
+  return `fallback:${fallbackIndex}`;
+}
+
+function storeVolumeLinePrice<T extends VolumeCartLine>(
+  line: T,
+  price: { unitPrice: number; totalPrice: number },
+  items: readonly VolumeCartLine[],
+  pricedByKey: Map<string, { unitPrice: number; totalPrice: number }>,
+  pricedByLine: WeakMap<VolumeCartLine, { unitPrice: number; totalPrice: number }>,
+  fallbackIndex = -1,
+): void {
+  pricedByLine.set(line, price);
+  pricedByKey.set(volumeCartLinePriceKey(line, items, fallbackIndex), price);
+}
 
 /** Pre-discount list unit (falls back to stored unit for legacy cart lines). */
 export function storefrontCartLineListUnitAud(line: { listUnitPrice?: number; unitPrice: number }): number {
@@ -173,9 +198,10 @@ function applySubtotalVolumeDiscountToLines<T extends VolumeCartLine>(
 /** Headwear: discount rate from combined quantity per `productId`. */
 function applyHeadwearVolumeDiscountToLines<T extends VolumeCartLine>(
   lines: readonly T[],
-): Array<T & { unitPrice: number; totalPrice: number }> {
+): WeakMap<T, { unitPrice: number; totalPrice: number }> {
+  const priced = new WeakMap<T, { unitPrice: number; totalPrice: number }>();
   if (lines.length === 0) {
-    return [];
+    return priced;
   }
   const byProduct = new Map<string, T[]>();
   for (const it of lines) {
@@ -187,16 +213,22 @@ function applyHeadwearVolumeDiscountToLines<T extends VolumeCartLine>(
       byProduct.set(pid, [it]);
     }
   }
-  const out: Array<T & { unitPrice: number; totalPrice: number }> = [];
   for (const group of byProduct.values()) {
     const totalQty = group.reduce(
       (sum, it) => sum + Math.max(0, Math.floor(Number(it.quantity) || 0)),
       0,
     );
     const rate = headwearVolumeDiscountRateFromQuantity(totalQty);
-    out.push(...applySubtotalVolumeDiscountToLines(group, rate));
+    const adjusted = applySubtotalVolumeDiscountToLines(group, rate);
+    for (let i = 0; i < group.length; i++) {
+      const src = group[i];
+      const row = adjusted[i];
+      if (src && row) {
+        priced.set(src, { unitPrice: row.unitPrice, totalPrice: row.totalPrice });
+      }
+    }
   }
-  return out;
+  return priced;
 }
 
 export function storefrontCartNetProductSubtotalAfterVolumeAud(
@@ -222,7 +254,7 @@ export function storefrontCartNetProductSubtotalAfterVolumeAud(
 
   const grossHeadwear = storefrontCartGrossListSubtotalAud(headwearLines);
   const headwearAdjusted = applyHeadwearVolumeDiscountToLines(headwearLines);
-  const netHeadwear = headwearAdjusted.reduce((s, it) => s + it.totalPrice, 0);
+  const netHeadwear = headwearLines.reduce((s, it) => s + (headwearAdjusted.get(it)?.totalPrice ?? 0), 0);
 
   const grossRegular = storefrontCartGrossListSubtotalAud(regularLines);
   const regularRate = storefrontVolumeDiscountRateFromSubtotalAud(grossRegular);
@@ -249,7 +281,8 @@ export function storefrontVolumeAdjustedCartLines<
   }
 
   const { dealLines, headwearLines, regularLines } = splitCartLinesForVolumeDiscount(items);
-  const pricedByLine = new WeakMap<T, { unitPrice: number; totalPrice: number }>();
+  const pricedByKey = new Map<string, { unitPrice: number; totalPrice: number }>();
+  const pricedByLine = new WeakMap<VolumeCartLine, { unitPrice: number; totalPrice: number }>();
 
   for (const it of dealLines) {
     const qty = Math.max(0, Math.floor(Number(it.quantity) || 0));
@@ -259,31 +292,32 @@ export function storefrontVolumeAdjustedCartLines<
         ? roundAudMoney(it.totalPrice)
         : roundAudMoney(u * qty);
     const unitPrice = qty > 0 ? roundAudMoney(totalPrice / qty) : u;
-    pricedByLine.set(it, { unitPrice, totalPrice });
+    storeVolumeLinePrice(it, { unitPrice, totalPrice }, items, pricedByKey, pricedByLine);
   }
 
   const grossRegular = storefrontCartGrossListSubtotalAud(regularLines);
   const regularRate = storefrontVolumeDiscountRateFromSubtotalAud(grossRegular);
   const regularOut = applySubtotalVolumeDiscountToLines(regularLines, regularRate);
   for (let i = 0; i < regularLines.length; i++) {
-    const row = regularOut[i];
     const src = regularLines[i];
-    if (row && src) {
-      pricedByLine.set(src, { unitPrice: row.unitPrice, totalPrice: row.totalPrice });
+    const row = regularOut[i];
+    if (src && row) {
+      storeVolumeLinePrice(src, { unitPrice: row.unitPrice, totalPrice: row.totalPrice }, items, pricedByKey, pricedByLine, i);
     }
   }
 
-  const headwearOut = applyHeadwearVolumeDiscountToLines(headwearLines);
-  for (let i = 0; i < headwearLines.length; i++) {
-    const row = headwearOut[i];
-    const src = headwearLines[i];
-    if (row && src) {
-      pricedByLine.set(src, { unitPrice: row.unitPrice, totalPrice: row.totalPrice });
+  const headwearPrices = applyHeadwearVolumeDiscountToLines(headwearLines);
+  for (const src of headwearLines) {
+    const row = headwearPrices.get(src);
+    if (row) {
+      storeVolumeLinePrice(src, row, items, pricedByKey, pricedByLine);
     }
   }
 
-  return items.map((it) => {
-    const priced = pricedByLine.get(it);
+  return items.map((it, idx) => {
+    const priced =
+      pricedByKey.get(volumeCartLinePriceKey(it, items, idx)) ??
+      pricedByLine.get(it);
     if (priced) {
       return { ...it, ...priced };
     }

@@ -270,12 +270,11 @@ export default function CartPage() {
     regularVolumeDiscountAud: volumeDiscountAud,
   } = useMemo(() => storefrontCartNetProductSubtotalAfterVolumeAud(items), [items]);
   const volumeAdjustedByLineId = useMemo(() => {
-    const adjusted = storefrontVolumeAdjustedCartLines(items);
     const map = new Map<string, { unitPrice: number; totalPrice: number }>();
-    for (let i = 0; i < items.length; i += 1) {
-      const row = adjusted[i];
-      if (row) {
-        map.set(items[i]!.id, { unitPrice: row.unitPrice, totalPrice: row.totalPrice });
+    for (const row of storefrontVolumeAdjustedCartLines(items)) {
+      const id = String(row.id ?? "").trim();
+      if (id) {
+        map.set(id, { unitPrice: row.unitPrice, totalPrice: row.totalPrice });
       }
     }
     return map;

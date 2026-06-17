@@ -194,16 +194,30 @@ export async function placeStoreOrderCore(
 
   const postcode = extractAustralianPostcodeFromAddress(deliveryAddress);
   const weightKg = totalEstimatedShippingWeightKg(items);
-  const pricedLines = storefrontVolumeAdjustedCartLines(items);
+  const pricedLines = storefrontVolumeAdjustedCartLines(
+    items.map((line) => ({ ...line, id: line.cartLineId })),
+  );
+  const pricedById = new Map(
+    pricedLines
+      .map((row) => {
+        const id = String(row.id ?? "").trim();
+        return id ? [id, row] as const : null;
+      })
+      .filter((entry): entry is [string, typeof pricedLines[number]] => entry != null),
+  );
   const subtotalDollars = pricedLines.reduce((s, line) => s + line.totalPrice, 0);
   if (!Number.isFinite(subtotalDollars) || subtotalDollars < 0) {
     return { ok: false, error: "Invalid order total." };
   }
-  const itemsPricedForOrder: StoreOrderCartLine[] = items.map((line, idx) => ({
-    ...line,
-    unitPrice: pricedLines[idx]!.unitPrice,
-    totalPrice: pricedLines[idx]!.totalPrice,
-  }));
+  const itemsPricedForOrder: StoreOrderCartLine[] = items.map((line) => {
+    const key = String(line.cartLineId ?? "").trim();
+    const priced = key ? pricedById.get(key) : undefined;
+    return {
+      ...line,
+      unitPrice: priced?.unitPrice ?? line.unitPrice,
+      totalPrice: priced?.totalPrice ?? line.totalPrice,
+    };
+  });
 
   let supabase: ReturnType<typeof createSupabaseAdminClient>;
   try {

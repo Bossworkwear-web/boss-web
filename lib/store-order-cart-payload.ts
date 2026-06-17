@@ -1,5 +1,7 @@
 /** Cart lines accepted by `placeStoreOrder` (matches `CartItem` fields used at checkout). */
 export type StoreOrderCartLine = {
+  /** Browser cart line id (`CartItem.id`) — keeps volume-adjusted prices aligned per line. */
+  cartLineId?: string;
   productId: string;
   /** Mirrors `products.supplier_name` when set (cart / reorder). */
   supplierName?: string;

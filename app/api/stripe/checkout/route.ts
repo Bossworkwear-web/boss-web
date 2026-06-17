@@ -87,7 +87,17 @@ export async function POST(req: Request) {
   const postcode = extractAustralianPostcodeFromAddress(deliveryAddress);
   const estimatedWeightKg = totalEstimatedShippingWeightKg(items);
 
-  const priced = storefrontVolumeAdjustedCartLines(items);
+  const priced = storefrontVolumeAdjustedCartLines(
+    items.map((it) => ({ ...it, id: it.cartLineId })),
+  );
+  const pricedByCartLineId = new Map(
+    priced
+      .map((row) => {
+        const key = String(row.id ?? "").trim();
+        return key ? [key, row] as const : null;
+      })
+      .filter((entry): entry is [string, typeof priced[number]] => entry != null),
+  );
   const subtotal = storefrontCartNetProductSubtotalAfterVolumeAud(items).net;
 
   const cookieStore = await cookies();
@@ -215,7 +225,11 @@ export async function POST(req: Request) {
           quantity: it.quantity,
           price_data: {
             currency: "aud",
-            unit_amount: dollarsToCents(priced[idx]?.unitPrice ?? it.unitPrice),
+            unit_amount: dollarsToCents(
+              (it.cartLineId && pricedByCartLineId.get(it.cartLineId)?.unitPrice) ??
+                priced[idx]?.unitPrice ??
+                it.unitPrice,
+            ),
             product_data: { name: it.productName.slice(0, 120) },
           },
         })),

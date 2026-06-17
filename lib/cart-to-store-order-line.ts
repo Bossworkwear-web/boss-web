@@ -4,6 +4,7 @@ import type { StoreOrderCartLine } from "@/lib/store-order-cart-payload";
 /** Map browser cart lines to the payload stored for Stripe webhook fulfillment. */
 export function cartItemToStoreOrderLine(item: CartItem): StoreOrderCartLine {
   return {
+    cartLineId: item.id,
     productId: item.productId,
     supplierName: item.supplierName,
     productName: item.productName,
