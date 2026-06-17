@@ -1868,7 +1868,7 @@ async function getDetailDataInternal(
 }
 
 /** Cached PDP payload — repeat views / metadata share one Supabase+rating pass per ~2 min. */
-export async function getDetailData(
+async function getDetailData(
   slugParam: string,
 ): Promise<{ product: ProductDetailData; placements: PlacementData[] } | null> {
   const slug = normalizeRouteSlug(slugParam);

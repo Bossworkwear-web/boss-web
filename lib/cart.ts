@@ -2,6 +2,11 @@
 
 import { useSyncExternalStore } from "react";
 
+import {
+  inferHeadwearCartLineFields,
+  sortStorefrontCartLinesHeadwearLast,
+} from "@/lib/storefront-volume-discount";
+
 export type CartItem = {
   id: string;
   productId: string;
@@ -159,11 +164,56 @@ function emitCartUpdated() {
   }
 }
 
+function normalizeCartItem(item: CartItem): CartItem {
+  const inferred = inferHeadwearCartLineFields(item);
+  const id = String(item.id ?? "").trim() || crypto.randomUUID();
+  return {
+    ...item,
+    ...inferred,
+    id,
+    supplierName: inferred.supplierName ?? item.supplierName,
+    category: inferred.category ?? item.category,
+    productPathSlug: inferred.productPathSlug ?? item.productPathSlug,
+  };
+}
+
+function cartSnapshotChanged(before: readonly CartItem[], after: readonly CartItem[]): boolean {
+  if (before.length !== after.length) {
+    return true;
+  }
+  for (let i = 0; i < before.length; i += 1) {
+    const a = before[i]!;
+    const b = after[i]!;
+    if (
+      a.id !== b.id ||
+      a.productPathSlug !== b.productPathSlug ||
+      a.supplierName !== b.supplierName ||
+      a.category !== b.category
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function persistCartItems(items: CartItem[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+}
+
 export function getCartItems(): CartItem[] {
   if (typeof window === "undefined") {
     return [];
   }
-  return safeParse(window.localStorage.getItem(CART_STORAGE_KEY));
+  const raw = safeParse(window.localStorage.getItem(CART_STORAGE_KEY));
+  const normalized = raw.map(normalizeCartItem);
+  const sorted = sortStorefrontCartLinesHeadwearLast(normalized);
+  if (cartSnapshotChanged(raw, sorted)) {
+    persistCartItems(sorted);
+  }
+  return sorted;
 }
 
 export function getCartCount(): number {

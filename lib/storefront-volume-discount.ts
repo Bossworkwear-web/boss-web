@@ -72,8 +72,46 @@ export function isHeadwearVolumeDiscountCartLine(line: {
   supplierName?: string | null;
   productPathSlug?: string | null;
   category?: string | null;
+  productName?: string;
 }): boolean {
-  return isHeadwearStorefrontProduct(line.productPathSlug, line.supplierName, line.category);
+  if (isHeadwearStorefrontProduct(line.productPathSlug, line.supplierName, line.category)) {
+    return true;
+  }
+  return headwearNumericStyleCodeFromProductName(line.productName) != null;
+}
+
+function headwearNumericStyleCodeFromProductName(productName?: string): string | null {
+  const m = String(productName ?? "").match(/\((\d{3,5})\)\s*$/);
+  if (!m) {
+    return null;
+  }
+  const code = m[1]!.trim();
+  return /^\d{3,5}$/.test(code) ? code : null;
+}
+
+/** Backfill Headwear metadata on legacy cart lines (numeric style codes like (2653)). */
+export function inferHeadwearCartLineFields(line: {
+  productName?: string;
+  productPathSlug?: string | null;
+  supplierName?: string | null;
+  category?: string | null;
+}): {
+  productPathSlug?: string;
+  supplierName?: string;
+  category?: string;
+} {
+  if (isHeadwearStorefrontProduct(line.productPathSlug, line.supplierName, line.category)) {
+    return {};
+  }
+  const code = headwearNumericStyleCodeFromProductName(line.productName);
+  if (!code) {
+    return {};
+  }
+  return {
+    productPathSlug: `hw-${code}`,
+    supplierName: line.supplierName?.trim() || "Headwear",
+    category: line.category?.trim() || "Head wear",
+  };
 }
 
 /** Stable sort: apparel lines first (add order), then Headwear lines (add order). */
@@ -82,6 +120,7 @@ export function sortStorefrontCartLinesHeadwearLast<
     supplierName?: string | null;
     productPathSlug?: string | null;
     category?: string | null;
+    productName?: string;
   },
 >(items: readonly T[]): T[] {
   return items
@@ -108,6 +147,7 @@ type VolumeCartLine = {
   supplierName?: string | null;
   productPathSlug?: string | null;
   category?: string | null;
+  productName?: string;
 };
 
 function volumeCartLinePriceKey(line: VolumeCartLine, items: readonly VolumeCartLine[], fallbackIndex: number): string {

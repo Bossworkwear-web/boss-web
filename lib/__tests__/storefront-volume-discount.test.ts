@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  inferHeadwearCartLineFields,
+  isHeadwearVolumeDiscountCartLine,
   sortStorefrontCartLinesHeadwearLast,
   storefrontCartNetProductSubtotalAfterVolumeAud,
   storefrontVolumeAdjustedCartLines,
@@ -130,5 +132,18 @@ describe("sortStorefrontCartLinesHeadwearLast", () => {
       "hat",
       "cap",
     ]);
+  });
+
+  it("detects numeric Headwear style codes in product names", () => {
+    const cap = {
+      id: "cap-2653",
+      productName: "100% Recycled Earth Friendly Fabric (2653)",
+      productId: "hw-2653",
+      unitPrice: 30,
+      listUnitPrice: 30,
+      quantity: 50,
+    };
+    expect(isHeadwearVolumeDiscountCartLine(cap)).toBe(true);
+    expect(inferHeadwearCartLineFields(cap).productPathSlug).toBe("hw-2653");
   });
 });
