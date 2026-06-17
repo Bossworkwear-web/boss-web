@@ -51,9 +51,12 @@ describe("storefrontVolumeAdjustedCartLines", () => {
     expect(byId["line-c91-yellow"]!.unitPrice).toBeCloseTo(byId["line-c91-orange"]!.unitPrice, 1);
     expect(byId["line-hat-4050"]!.unitPrice).not.toBeCloseTo(byId["line-c91-yellow"]!.unitPrice, 0);
 
-    const { net } = storefrontCartNetProductSubtotalAfterVolumeAud(items);
+    const { net, volumeDiscountAud, regularVolumeDiscountAud, headwearVolumeDiscountAud } =
+      storefrontCartNetProductSubtotalAfterVolumeAud(items);
     const sum = adjusted.reduce((s, row) => s + row.totalPrice, 0);
     expect(sum).toBe(net);
+    expect(volumeDiscountAud).toBeCloseTo(regularVolumeDiscountAud + headwearVolumeDiscountAud, 2);
+    expect(headwearVolumeDiscountAud).toBeGreaterThan(0);
   });
 
   it("preserves input order and id alignment when headwear sits between apparel lines", () => {

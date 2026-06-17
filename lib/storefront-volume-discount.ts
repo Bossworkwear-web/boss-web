@@ -295,6 +295,10 @@ export function storefrontCartNetProductSubtotalAfterVolumeAud(
   rate: number;
   /** Apparel subtotal-tier volume discount only (Headwear quantity tiers excluded). */
   regularVolumeDiscountAud: number;
+  /** Headwear quantity-tier volume discount only. */
+  headwearVolumeDiscountAud: number;
+  /** Combined apparel + Headwear volume discount (for cart summary). */
+  volumeDiscountAud: number;
 } {
   const { dealLines, headwearLines, regularLines } = splitCartLinesForVolumeDiscount(items);
 
@@ -311,17 +315,26 @@ export function storefrontCartNetProductSubtotalAfterVolumeAud(
   const grossHeadwear = storefrontCartGrossListSubtotalAud(headwearLines);
   const headwearAdjusted = applyHeadwearVolumeDiscountToLines(headwearLines);
   const netHeadwear = headwearLines.reduce((s, it) => s + (headwearAdjusted.get(it)?.totalPrice ?? 0), 0);
+  const headwearVolumeDiscountAud = roundAudMoney(grossHeadwear - netHeadwear);
 
   const grossRegular = storefrontCartGrossListSubtotalAud(regularLines);
   const regularRate = storefrontVolumeDiscountRateFromSubtotalAud(grossRegular);
   const netRegular = roundAudMoney(grossRegular * (1 - regularRate));
   const regularVolumeDiscountAud = roundAudMoney(grossRegular - netRegular);
+  const volumeDiscountAud = roundAudMoney(regularVolumeDiscountAud + headwearVolumeDiscountAud);
 
   const gross = roundAudMoney(grossHeadwear + grossRegular + dealNet);
   const net = roundAudMoney(netHeadwear + netRegular + dealNet);
   const rate = gross > 0 ? roundAudMoney(1 - net / gross) : 0;
 
-  return { gross, net, rate, regularVolumeDiscountAud };
+  return {
+    gross,
+    net,
+    rate,
+    regularVolumeDiscountAud,
+    headwearVolumeDiscountAud,
+    volumeDiscountAud,
+  };
 }
 
 /** Volume-adjusted unit/total keyed by cart line `id` (never by display index). */

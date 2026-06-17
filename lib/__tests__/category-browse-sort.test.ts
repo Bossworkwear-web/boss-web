@@ -49,6 +49,29 @@ describe("sortCategoryBrowseDefault — mens / womens JB polo priority", () => {
   });
 });
 
+describe("sortCategoryBrowseDefault — PPE Head Wear 4199", () => {
+  const brandOf = () => "Headwear";
+
+  it("pins style 4199 first on ppe / head-wear", () => {
+    const rows: Row[] = [
+      { name: "Classic Cap (3975)", slug: "hw-3975", category: "Head Wear" },
+      { name: "Trucker Cap (4199)", slug: "hw-4199", category: "Head Wear" },
+      { name: "Bucket Hat (4200)", slug: "hw-4200", category: "Head Wear" },
+    ];
+    const sorted = sortCategoryBrowseDefault("ppe", rows, brandOf, "head-wear");
+    expect(sorted[0].slug).toBe("hw-4199");
+  });
+
+  it("does not pin 4199 on other PPE subcategories", () => {
+    const rows: Row[] = [
+      { name: "Classic Cap (3975)", slug: "hw-3975", category: "Head Wear" },
+      { name: "Trucker Cap (4199)", slug: "hw-4199", category: "Head Wear" },
+    ];
+    const sorted = sortCategoryBrowseDefault("ppe", rows, brandOf, "miscellaneous");
+    expect(sorted[0].slug).toBe("hw-3975");
+  });
+});
+
 describe("sortCategoryBrowseDefault — workwear Blue Whale C91 / C81", () => {
   const brandOf = (item: Row) =>
     item.name.toLowerCase().includes("blue whale") ? "Blue Whale" : "JB's Wear";

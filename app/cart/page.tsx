@@ -268,7 +268,7 @@ export default function CartPage() {
   const {
     gross: productGrossSubtotal,
     net: productNetSubtotal,
-    regularVolumeDiscountAud: volumeDiscountAud,
+    volumeDiscountAud,
   } = useMemo(() => storefrontCartNetProductSubtotalAfterVolumeAud(items), [items]);
   const volumeAdjustedByLineId = useMemo(
     () => volumeAdjustedCartLinePricesById(items),

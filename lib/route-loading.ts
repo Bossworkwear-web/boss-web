@@ -1,12 +1,7 @@
-import {
-  hideRouteProgressBar,
-  showRouteProgressBar,
-} from "@/lib/route-progress-bar-dom";
-
 /** Dispatch before programmatic `router.push` (e.g. header search). */
 export const ROUTE_LOADING_START_EVENT = "boss:route-loading-start";
 
-const MIN_BAR_MS = 380;
+const MIN_SPINNER_MS = 380;
 
 export type RouteLoadingOverlayOptions = {
   title: string;
@@ -23,9 +18,18 @@ let timeoutId: ReturnType<typeof setTimeout> | null = null;
 let stopDelayId: ReturnType<typeof setTimeout> | null = null;
 let loadingStartedAt = 0;
 const listeners = new Set<() => void>();
+let emitScheduled = false;
 
-function emitRouteLoadingChange() {
-  listeners.forEach((listener) => listener());
+/** Defer subscriber notifications so navigation handlers do not re-render during commit. */
+function scheduleEmitRouteLoadingChange() {
+  if (emitScheduled) {
+    return;
+  }
+  emitScheduled = true;
+  queueMicrotask(() => {
+    emitScheduled = false;
+    listeners.forEach((listener) => listener());
+  });
 }
 
 export function subscribeRouteLoading(listener: () => void) {
@@ -43,10 +47,6 @@ export function getRouteLoadingOverlayOptions() {
   return overlayOptions;
 }
 
-function runAfterCommit(fn: () => void) {
-  setTimeout(fn, 0);
-}
-
 function stopRouteLoadingNow() {
   loading = false;
   overlayOptions = null;
@@ -54,10 +54,7 @@ function stopRouteLoadingNow() {
     clearTimeout(timeoutId);
     timeoutId = null;
   }
-  emitRouteLoadingChange();
-  runAfterCommit(() => {
-    hideRouteProgressBar();
-  });
+  scheduleEmitRouteLoadingChange();
 }
 
 export function startRouteLoading(options?: RouteLoadingStartOptions) {
@@ -75,10 +72,7 @@ export function startRouteLoading(options?: RouteLoadingStartOptions) {
     overlayOptions = null;
   }
   loading = true;
-  emitRouteLoadingChange();
-  runAfterCommit(() => {
-    showRouteProgressBar();
-  });
+  scheduleEmitRouteLoadingChange();
 
   if (timeoutId) {
     clearTimeout(timeoutId);
@@ -93,7 +87,7 @@ export function stopRouteLoading() {
     return;
   }
   const elapsed = Date.now() - loadingStartedAt;
-  const wait = MIN_BAR_MS - elapsed;
+  const wait = MIN_SPINNER_MS - elapsed;
   if (wait > 0) {
     if (stopDelayId) {
       clearTimeout(stopDelayId);

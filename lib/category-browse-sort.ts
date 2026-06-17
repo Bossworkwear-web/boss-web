@@ -1,3 +1,5 @@
+import { headwearStyleCodeFromSlug } from "@/lib/headwear-pdp-gallery";
+
 /** Main category slugs where JB's Wear listings are shown first (default sort). */
 const JBS_WEAR_PRIORITY_MAIN_SLUGS = new Set(["workwear", "mens", "womens"]);
 
@@ -15,6 +17,13 @@ const WORKWEAR_BLUE_WHALE_LEADING_STYLE_CODES = ["C91", "C81"] as const;
 
 const WORKWEAR_BLUE_WHALE_LEADING_RANK = new Map<string, number>(
   WORKWEAR_BLUE_WHALE_LEADING_STYLE_CODES.map((code, index) => [code, index]),
+);
+
+/** PPE → Head Wear: style codes pinned to the first row (in this order). */
+const PPE_HEAD_WEAR_LEADING_STYLE_CODES = ["4199"] as const;
+
+const PPE_HEAD_WEAR_LEADING_RANK = new Map<string, number>(
+  PPE_HEAD_WEAR_LEADING_STYLE_CODES.map((code, index) => [code, index]),
 );
 
 const TRAILING_STYLE_PAREN_RE = /\s*\(([A-Za-z0-9][A-Za-z0-9/_-]*)\)\s*$/;
@@ -61,6 +70,31 @@ function blueWhaleStyleCodeFromListing(name: string, slug?: string | null): stri
   }
   const tail = /(?:^|-)([a-z0-9]{2,12})$/i.exec(slugLc);
   return tail?.[1] ? tail[1].toUpperCase() : null;
+}
+
+function headWearStyleCodeFromListing(item: CategoryBrowseSortItem): string | null {
+  const fromSlug = headwearStyleCodeFromSlug(item.slug);
+  if (fromSlug) {
+    return fromSlug;
+  }
+  const m = item.name.trim().match(TRAILING_STYLE_PAREN_RE);
+  return m ? m[1].toUpperCase().replace(/-CLEARANCE$/i, "") : null;
+}
+
+function ppeHeadWearLeadingRank(
+  mainSlug: string,
+  subSlug: string | undefined,
+  item: CategoryBrowseSortItem,
+): number | null {
+  if (mainSlug !== "ppe" || subSlug !== "head-wear") {
+    return null;
+  }
+  const code = headWearStyleCodeFromListing(item);
+  if (!code) {
+    return null;
+  }
+  const rank = PPE_HEAD_WEAR_LEADING_RANK.get(code);
+  return rank === undefined ? null : rank;
 }
 
 function workwearBlueWhaleLeadingRank(
@@ -138,7 +172,21 @@ export function compareCategoryBrowseDefaultSort<T extends CategoryBrowseSortIte
   a: T,
   b: T,
   brandOf: (item: T) => string,
+  subSlug?: string,
 ): number {
+  if (mainSlug === "ppe" && subSlug === "head-wear") {
+    const aLead = ppeHeadWearLeadingRank(mainSlug, subSlug, a);
+    const bLead = ppeHeadWearLeadingRank(mainSlug, subSlug, b);
+    const aHas = aLead != null;
+    const bHas = bLead != null;
+    if (aHas !== bHas) {
+      return aHas ? -1 : 1;
+    }
+    if (aHas && bHas && aLead !== bLead) {
+      return aLead - bLead;
+    }
+  }
+
   if (mainSlug === "workwear") {
     const aLead = workwearBlueWhaleLeadingRank(mainSlug, a, brandOf(a));
     const bLead = workwearBlueWhaleLeadingRank(mainSlug, b, brandOf(b));
@@ -186,6 +234,7 @@ export function sortCategoryBrowseDefault<T extends CategoryBrowseSortItem>(
   mainSlug: string,
   rows: T[],
   brandOf: (item: T) => string,
+  subSlug?: string,
 ): T[] {
-  return [...rows].sort((a, b) => compareCategoryBrowseDefaultSort(mainSlug, a, b, brandOf));
+  return [...rows].sort((a, b) => compareCategoryBrowseDefaultSort(mainSlug, a, b, brandOf, subSlug));
 }

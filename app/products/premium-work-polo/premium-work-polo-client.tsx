@@ -75,6 +75,10 @@ import {
   resolveHeadwearPdpGalleryState,
 } from "@/lib/headwear-pdp-gallery";
 import {
+  buildApronStorefrontPlacementOptions,
+  resolveApronPdpPlacementProfile,
+} from "@/lib/apron-storefront-placements";
+import {
   buildHeadwearStorefrontPlacementOptions,
   isPrintingOfferedForHeadwearPlacement,
 } from "@/lib/headwear-storefront-placements";
@@ -2425,22 +2429,38 @@ export function PremiumWorkPoloClient({
     [product.category, product.slug, product.supplierName],
   );
 
+  const apronPlacementProfile = useMemo(
+    () =>
+      resolveApronPdpPlacementProfile({
+        slug: product.slug,
+        name: product.name,
+        displayProductCode: product.displayProductCode ?? productCode,
+      }),
+    [product.slug, product.name, product.displayProductCode, productCode],
+  );
+
+  const isApronPlacementProduct = apronPlacementProfile != null;
+
   /** PPE-only subs (boots, gloves, …) are Plain-only — Headwear caps/hats are decorated (Emb/Print). */
   const ppePlainOnly = useMemo(
     () =>
       !isHeadwearProduct &&
+      !isApronPlacementProduct &&
       isPpeStorefrontProduct(
         product.name,
         product.category,
         product.slug ?? null,
         product.description,
       ),
-    [isHeadwearProduct, product.category, product.description, product.name, product.slug],
+    [isApronPlacementProduct, isHeadwearProduct, product.category, product.description, product.name, product.slug],
   );
 
   const placementOptions: PlacementOption[] = useMemo(() => {
     if (isHeadwearProduct) {
       return buildHeadwearStorefrontPlacementOptions();
+    }
+    if (isApronPlacementProduct && apronPlacementProfile) {
+      return buildApronStorefrontPlacementOptions(apronPlacementProfile);
     }
     return placements.map((item) => {
         const nameForCodes = item.name.replace(/\s+/g, " ").trim();
@@ -2469,7 +2489,7 @@ export function PremiumWorkPoloClient({
           printingCost: defaultPrintingPlacementPricing[normalizedName] ?? PLACEMENT_FALLBACK_PRINTING,
         };
       });
-  }, [isHeadwearProduct, placements]);
+  }, [apronPlacementProfile, isApronPlacementProduct, isHeadwearProduct, placements]);
 
   const placementOptionsForUi = useMemo(() => {
     if (!activeDealPackage) {

@@ -59,6 +59,11 @@ import { resolveApPdpGalleryState } from "@/lib/ap-pdp-gallery";
 import { resolveHeadwearPdpGalleryState } from "@/lib/headwear-pdp-gallery";
 import { HEADWEAR_PDP_PLACEMENT_ROWS } from "@/lib/headwear-storefront-placements";
 import {
+  apronPdpPlacementRowsForProfile,
+  isApronPdpPlacementProduct,
+  resolveApronPdpPlacementProfile,
+} from "@/lib/apron-storefront-placements";
+import {
   isStorefrontYesChefCh234mPdp,
   isYesChefCh234mExcludedColourChip,
 } from "@/lib/yes-chef-ch234m-pdp-colour";
@@ -1850,17 +1855,31 @@ async function getDetailDataInternal(
       sizeOptions: mappedProduct.sizeOptions,
     });
 
+    const apronPlacementProfile = isApronPdpPlacementProduct({
+      slug: mappedProduct.slug,
+      name: mappedProduct.name,
+      displayProductCode,
+    })
+      ? resolveApronPdpPlacementProfile({
+          slug: mappedProduct.slug,
+          name: mappedProduct.name,
+          displayProductCode,
+        })
+      : null;
+
     return {
       product: mappedProduct,
       placements: isHeadwearCatalog
         ? [...HEADWEAR_PDP_PLACEMENT_ROWS]
-        : sortPlacementsForProductPage(
-            normalizePlacementLabelsForStorefront(
-              dedupePlacementsByStorefrontRole(
-                mergePlacementsWithFallback(positions as PlacementData[] | null | undefined, fallbackPlacements),
+        : apronPlacementProfile
+          ? [...apronPdpPlacementRowsForProfile(apronPlacementProfile)]
+          : sortPlacementsForProductPage(
+              normalizePlacementLabelsForStorefront(
+                dedupePlacementsByStorefrontRole(
+                  mergePlacementsWithFallback(positions as PlacementData[] | null | undefined, fallbackPlacements),
+                ),
               ),
             ),
-          ),
     };
   } catch {
     return null;

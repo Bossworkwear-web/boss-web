@@ -21,6 +21,10 @@ const PLACEMENT_ID_TO_FILE: Record<string, string> = {
   "right-sleeve": "RS.png",
   "head-front": "HF.png",
   "head-back": "HB.png",
+  "apron-al": "AL.png",
+  "apron-am": "AM.png",
+  "apron-sam": "SAM.png",
+  "apron-sab": "SAB.png",
 };
 
 const PLACEMENT_NAME_TO_FILE: Record<string, string> = {
@@ -43,6 +47,10 @@ const PLACEMENT_NAME_TO_FILE: Record<string, string> = {
   "right sleeve": "RS.png",
   "head front": "HF.png",
   "head back": "HB.png",
+  "apron left": "AL.png",
+  "apron middle": "AM.png",
+  "side apron middle": "SAM.png",
+  "side apron bottom": "SAB.png",
 };
 
 /** Two-letter codes from placement names (matches `toShortCode` / diagram filenames). */
@@ -58,6 +66,10 @@ const PLACEMENT_ABBR_TO_FILE: Record<string, string> = {
   RS: "RS.png",
   HF: "HF.png",
   HB: "HB.png",
+  AL: "AL.png",
+  AM: "AM.png",
+  SAM: "SAM.png",
+  SAB: "SAB.png",
 };
 
 function publicLogoLocationUrl(file: string): string {

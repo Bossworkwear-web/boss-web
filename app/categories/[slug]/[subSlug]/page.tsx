@@ -251,7 +251,7 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
       const hay = `${item.name} ${item.slug ?? ""}`.toLowerCase();
       return !(hay.includes("bisley") || hay.includes("syzmik"));
     });
-  const filteredAllBrands = sortCategoryBrowseDefault(slug, subCategoryRows, inferredBrandForFilter);
+  const filteredAllBrands = sortCategoryBrowseDefault(slug, subCategoryRows, inferredBrandForFilter, subSlug);
 
   const brandParam = String(brandParamRaw ?? "").trim();
   const sortParam = String(sortParamRaw ?? "").trim();
@@ -296,7 +296,7 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
           if (ap !== bp) {
             return sortEffective === "price-asc" ? ap - bp : bp - ap;
           }
-          return compareCategoryBrowseDefaultSort(slug, a, b, inferredBrandForFilter);
+          return compareCategoryBrowseDefaultSort(slug, a, b, inferredBrandForFilter, subSlug);
         })
       : filtered;
 
