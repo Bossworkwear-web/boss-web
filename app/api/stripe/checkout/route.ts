@@ -226,7 +226,9 @@ export async function POST(req: Request) {
           price_data: {
             currency: "aud",
             unit_amount: dollarsToCents(
-              (it.cartLineId && pricedByCartLineId.get(it.cartLineId)?.unitPrice) ??
+              (it.cartLineId
+                ? pricedByCartLineId.get(it.cartLineId)?.unitPrice
+                : undefined) ??
                 priced[idx]?.unitPrice ??
                 it.unitPrice,
             ),
