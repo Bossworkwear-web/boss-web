@@ -4,6 +4,8 @@
  * - Headwear: by total unit quantity per product (`hw-*`, supplier Headwear).
  */
 
+import { isHeadwearStorefrontProduct } from "@/lib/headwear-pdp-gallery";
+
 /** Headwear quantity tiers (min units inclusive → discount rate). Sorted high → low. */
 const HEADWEAR_VOLUME_QUANTITY_TIERS: readonly { minQty: number; rate: number }[] = [
   { minQty: 199, rate: 0.59 },
@@ -69,17 +71,30 @@ function lineIsFixedDealPackage(line: { specialDealPackageId?: string }): boolea
 export function isHeadwearVolumeDiscountCartLine(line: {
   supplierName?: string | null;
   productPathSlug?: string | null;
+  category?: string | null;
 }): boolean {
-  const sup = String(line.supplierName ?? "")
-    .trim()
-    .toLowerCase();
-  if (sup === "headwear" || sup === "head wear") {
-    return true;
-  }
-  const path = String(line.productPathSlug ?? "")
-    .trim()
-    .toLowerCase();
-  return path.startsWith("hw-");
+  return isHeadwearStorefrontProduct(line.productPathSlug, line.supplierName, line.category);
+}
+
+/** Stable sort: apparel lines first (add order), then Headwear lines (add order). */
+export function sortStorefrontCartLinesHeadwearLast<
+  T extends {
+    supplierName?: string | null;
+    productPathSlug?: string | null;
+    category?: string | null;
+  },
+>(items: readonly T[]): T[] {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      const aHeadwear = isHeadwearVolumeDiscountCartLine(a.item);
+      const bHeadwear = isHeadwearVolumeDiscountCartLine(b.item);
+      if (aHeadwear !== bHeadwear) {
+        return aHeadwear ? 1 : -1;
+      }
+      return a.index - b.index;
+    })
+    .map(({ item }) => item);
 }
 
 type VolumeCartLine = {
@@ -92,6 +107,7 @@ type VolumeCartLine = {
   productId?: string;
   supplierName?: string | null;
   productPathSlug?: string | null;
+  category?: string | null;
 };
 
 function volumeCartLinePriceKey(line: VolumeCartLine, items: readonly VolumeCartLine[], fallbackIndex: number): string {
@@ -268,6 +284,25 @@ export function storefrontCartNetProductSubtotalAfterVolumeAud(
   return { gross, net, rate, regularVolumeDiscountAud };
 }
 
+/** Volume-adjusted unit/total keyed by cart line `id` (never by display index). */
+export function volumeAdjustedCartLinePricesById<T extends VolumeCartLine & { id?: string }>(
+  items: readonly T[],
+): Map<string, { unitPrice: number; totalPrice: number }> {
+  const map = new Map<string, { unitPrice: number; totalPrice: number }>();
+  for (const row of storefrontVolumeAdjustedCartLines(items)) {
+    const id = String(row.id ?? "").trim();
+    if (!id) {
+      continue;
+    }
+    const qty = Math.max(0, Math.floor(Number(row.quantity) || 0));
+    map.set(id, {
+      totalPrice: row.totalPrice,
+      unitPrice: qty > 0 ? roundAudMoney(row.totalPrice / qty) : row.unitPrice,
+    });
+  }
+  return map;
+}
+
 /**
  * Split cart-level volume discount across lines proportionally (last line absorbs rounding).
  * Use for Stripe line items and `store_order_items` so line totals sum to the discounted subtotal.
@@ -318,10 +353,12 @@ export function storefrontVolumeAdjustedCartLines<
     const priced =
       pricedByKey.get(volumeCartLinePriceKey(it, items, idx)) ??
       pricedByLine.get(it);
-    if (priced) {
-      return { ...it, ...priced };
-    }
     const qty = Math.max(0, Math.floor(Number(it.quantity) || 0));
+    if (priced) {
+      const totalPrice = priced.totalPrice;
+      const unitPrice = qty > 0 ? roundAudMoney(totalPrice / qty) : priced.unitPrice;
+      return { ...it, unitPrice, totalPrice };
+    }
     const u = storefrontCartLineListUnitAud(it);
     const totalPrice = roundAudMoney(u * qty);
     const unitPrice = qty > 0 ? roundAudMoney(totalPrice / qty) : u;

@@ -34,8 +34,9 @@ import { serviceTypeColoredContent } from "@/lib/service-type-colored";
 import { resolveStorefrontImageUrl } from "@/lib/storefront-image-url";
 import { STORE_MAIN_SHELL_CLASS } from "@/lib/store-main-shell";
 import {
+  sortStorefrontCartLinesHeadwearLast,
   storefrontCartNetProductSubtotalAfterVolumeAud,
-  storefrontVolumeAdjustedCartLines,
+  volumeAdjustedCartLinePricesById,
 } from "@/lib/storefront-volume-discount";
 
 /** When a cart line has no stored image (legacy cart or missing DB image). */
@@ -269,16 +270,11 @@ export default function CartPage() {
     net: productNetSubtotal,
     regularVolumeDiscountAud: volumeDiscountAud,
   } = useMemo(() => storefrontCartNetProductSubtotalAfterVolumeAud(items), [items]);
-  const volumeAdjustedByLineId = useMemo(() => {
-    const map = new Map<string, { unitPrice: number; totalPrice: number }>();
-    for (const row of storefrontVolumeAdjustedCartLines(items)) {
-      const id = String(row.id ?? "").trim();
-      if (id) {
-        map.set(id, { unitPrice: row.unitPrice, totalPrice: row.totalPrice });
-      }
-    }
-    return map;
-  }, [items]);
+  const volumeAdjustedByLineId = useMemo(
+    () => volumeAdjustedCartLinePricesById(items),
+    [items],
+  );
+  const displayItems = useMemo(() => sortStorefrontCartLinesHeadwearLast(items), [items]);
 
   const totalQuantity = useMemo(
     () => items.reduce((sum, item) => sum + item.quantity, 0),
@@ -386,10 +382,14 @@ export default function CartPage() {
         {!!items.length && (
           <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
             <div className="space-y-4">
-              {items.map((item) => {
+              {displayItems.map((item) => {
                 const priced = volumeAdjustedByLineId.get(item.id);
-                const showUnit = priced?.unitPrice ?? item.unitPrice;
                 const showLineTotal = priced?.totalPrice ?? item.totalPrice;
+                const showUnit =
+                  priced?.unitPrice ??
+                  (item.quantity > 0
+                    ? Math.round((showLineTotal / item.quantity) * 100) / 100
+                    : item.unitPrice);
                 const heroSrc = (() => {
                   const raw = typeof item.imageUrl === "string" ? item.imageUrl.trim() : "";
                   if (!raw) return CART_LINE_FALLBACK_IMAGE;
