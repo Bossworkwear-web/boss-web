@@ -31,6 +31,8 @@ export type CartItem = {
   addedAt: string;
   /** Customer requirements / specials from product page NOTE field */
   notes?: string;
+  /** Embroidery logo setup: new artwork ($66) vs customer's saved logo ($0). */
+  embroideryLogoSetup?: "new" | "saved";
   /** Public Supabase Storage URLs for customer reference images (same line as logos). */
   referenceImageUrls?: string[];
   /** Fixed package from Special Deals (`storefront-special-deal-packages`). */

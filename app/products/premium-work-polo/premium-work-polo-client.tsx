@@ -61,7 +61,10 @@ import {
   isBizCollectionDetailMetadataColourChip,
   isBizCollectionGroupMetadataColourChip,
 } from "@/lib/biz-collection-metadata-colour-chips";
-import { uploadStoreCheckoutReferenceImages } from "@/app/orders/actions";
+import {
+  resolveEmbroideryLogoSetup,
+  stripEmbroideryLogoSetupNote,
+} from "@/lib/storefront-cart-checkout-fees";
 import { addCartItem, getCartItems, removeCartItem, updateCartItem, type CartItem } from "@/lib/cart";
 import { productPathSegment } from "@/lib/product-path-slug";
 import { bisleyPdpDisplayProductNameWithApexPrefix, headwearPdpDisplayOverride, productCardDisplayLines } from "@/lib/product-card-copy";
@@ -2820,7 +2823,8 @@ export function PremiumWorkPoloClient({
     }
     setColorSizeQuantities(next);
 
-    setOrderNotes((line.notes ?? "").trim());
+    setOrderNotes(stripEmbroideryLogoSetupNote(line.notes ?? ""));
+    setEmbLogoSetup(resolveEmbroideryLogoSetup(line));
     setPlacementAssignments(placementAssignmentsFromCartLines(line.placements ?? [], placementOptions));
 
     setLogoAttachments(logoAttachmentsFlushReducer);
@@ -3149,6 +3153,7 @@ export function PremiumWorkPoloClient({
           unitPrice: unitAud,
           totalPrice: lineTotalAud,
           notes: notesForCart.length > 0 ? notesForCart : undefined,
+          ...(isEmbroiderySelected ? { embroideryLogoSetup: embLogoSetup } : {}),
           ...(sharedRefUrls && sharedRefUrls.length > 0 ? { referenceImageUrls: sharedRefUrls } : {}),
           ...(activeDealPackage ? { specialDealPackageId: activeDealPackage.id } : {}),
         };

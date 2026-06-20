@@ -18,6 +18,8 @@ export type StoreOrderCartLine = {
   unitPrice: number;
   totalPrice: number;
   notes?: string;
+  /** PDP embroidery logo setup choice (`new` = $66 setup when applicable, `saved` = $0). */
+  embroideryLogoSetup?: "new" | "saved";
   /** Same-origin Supabase public URLs attached at add-to-cart (logo uploads). */
   referenceImageUrls?: string[];
   /** Restored from `products.image_urls` when reordering (optional). */

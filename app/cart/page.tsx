@@ -559,8 +559,6 @@ export default function CartPage() {
                       <span className="text-slate-300">Sign in to confirm</span>
                     ) : !items.some((i) => (i.serviceType ?? "").toLowerCase().includes("embroidery")) ? (
                       "—"
-                    ) : hasPriorEmbroideryOrder === null ? (
-                      <span className="text-slate-300">…</span>
                     ) : logoSetupApplies ? (
                       toCurrency(logoSetupFeeAud)
                     ) : (

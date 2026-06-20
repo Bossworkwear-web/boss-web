@@ -297,18 +297,6 @@ export default function PaymentPage() {
     }
   }
 
-  const needsEmbroideryHistoryBeforePay = useMemo(() => {
-    if (items.length === 0) return false;
-    const hasEmb = items.some((i) => (i.serviceType ?? "").toLowerCase().includes("embroidery"));
-    if (!hasEmb) return false;
-    const newLogoOnEmbroidery = cartHasEmbroideryLogoReferenceUploads(items);
-    if (productNetSubtotal >= STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD && !newLogoOnEmbroidery) return false;
-    return true;
-  }, [items, productNetSubtotal]);
-
-  const payBlockedPendingEmbroideryHistory =
-    needsEmbroideryHistoryBeforePay && hasPriorEmbroideryOrder === null;
-
   async function startStripeCheckout() {
     setPayError(null);
     if (items.length === 0) {
@@ -567,11 +555,9 @@ export default function PaymentPage() {
               <span className="font-semibold">
                 {!items.some((i) => (i.serviceType ?? "").toLowerCase().includes("embroidery"))
                   ? "—"
-                  : hasPriorEmbroideryOrder === null
-                    ? "…"
-                    : logoSetupFee === 0
-                      ? "Waived"
-                      : toCurrency(logoSetupFee)}
+                  : logoSetupFee === 0
+                    ? "Waived"
+                    : toCurrency(logoSetupFee)}
               </span>
             </p>
             <p className="flex justify-between">
@@ -672,7 +658,7 @@ export default function PaymentPage() {
           ) : null}
           <button
             type="button"
-            disabled={payPending || items.length === 0 || payBlockedPendingEmbroideryHistory}
+            disabled={payPending || items.length === 0}
             onClick={() => void startStripeCheckout()}
             className="mt-2 inline-flex w-full items-center justify-center rounded-xl bg-brand-orange px-4 py-2.5 text-base font-medium text-brand-navy transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -680,11 +666,9 @@ export default function PaymentPage() {
               ? creditCoversAll
                 ? "Placing order…"
                 : "Redirecting…"
-              : payBlockedPendingEmbroideryHistory
-                ? "Loading pricing…"
-                : creditCoversAll
-                  ? "Place order with store credit"
-                  : "Pay with card"}
+              : creditCoversAll
+                ? "Place order with store credit"
+                : "Pay with card"}
           </button>
           {items.length === 0 ? (
             <Link href="/cart" className="text-sm font-semibold text-brand-orange hover:underline">

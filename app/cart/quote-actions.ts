@@ -86,6 +86,8 @@ function sanitizeLine(raw: unknown): QuoteLineSnapshot | null {
   if (typeof r.listUnitPrice !== "undefined") line.listUnitPrice = Math.max(0, num(r.listUnitPrice));
   const notes = str(r.notes).trim();
   if (notes) line.notes = notes;
+  const embSetup = str(r.embroideryLogoSetup).trim();
+  if (embSetup === "new" || embSetup === "saved") line.embroideryLogoSetup = embSetup;
   const refImgs = stringArray(r.referenceImageUrls);
   if (refImgs.length > 0) line.referenceImageUrls = refImgs;
   const imageUrl = str(r.imageUrl).trim();

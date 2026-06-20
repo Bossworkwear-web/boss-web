@@ -81,10 +81,40 @@ describe("storefront-cart-checkout-fees", () => {
         ...signedInBase,
         subtotalAud: subtotal,
         hasPriorEmbroideryOrder: false,
+        items: [{ serviceType: "Embroidery", embroideryLogoSetup: "new" }],
       });
       expect(result.logoSetupFeeAud).toBe(66);
       expect(result.logoSetupApplies).toBe(true);
       expect(result.totalAud).toBe(subtotal + 66);
+    });
+
+    it("waives logo setup when customer chose saved embroidery logo", () => {
+      const subtotal = STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD - 1;
+      const result = computeStorefrontCheckoutFees({
+        ...signedInBase,
+        subtotalAud: subtotal,
+        hasPriorEmbroideryOrder: false,
+        items: [{ serviceType: "Embroidery", embroideryLogoSetup: "saved" }],
+      });
+      expect(result.logoSetupFeeAud).toBe(0);
+      expect(result.logoSetupApplies).toBe(false);
+      expect(result.totalAud).toBe(subtotal);
+    });
+
+    it("waives logo setup for legacy cart notes that selected saved embroidery logo", () => {
+      const result = computeStorefrontCheckoutFees({
+        ...signedInBase,
+        subtotalAud: 100,
+        hasPriorEmbroideryOrder: false,
+        items: [
+          {
+            serviceType: "Embroidery",
+            notes: "\n\n[Embroidery logo setup: Use my saved embroidery logo ($0)]",
+          },
+        ],
+      });
+      expect(result.logoSetupFeeAud).toBe(0);
+      expect(result.logoSetupApplies).toBe(false);
     });
 
     it("waives logo setup at or above the promo subtotal threshold", () => {
@@ -107,12 +137,30 @@ describe("storefront-cart-checkout-fees", () => {
         items: [
           {
             serviceType: "Embroidery",
+            embroideryLogoSetup: "new",
             referenceImageUrls: ["https://cdn.example/logo.png"],
           },
         ],
       });
       expect(result.logoSetupFeeAud).toBe(66);
       expect(result.logoSetupApplies).toBe(true);
+    });
+
+    it("waives logo setup when returning customer chose saved logo even with reference URLs", () => {
+      const result = computeStorefrontCheckoutFees({
+        ...signedInBase,
+        subtotalAud: STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD - 1,
+        hasPriorEmbroideryOrder: true,
+        items: [
+          {
+            serviceType: "Embroidery",
+            embroideryLogoSetup: "saved",
+            referenceImageUrls: ["https://cdn.example/logo.png"],
+          },
+        ],
+      });
+      expect(result.logoSetupFeeAud).toBe(0);
+      expect(result.logoSetupApplies).toBe(false);
     });
 
     it("waives logo setup for returning customer new artwork when promo subtotal is met", () => {
@@ -123,6 +171,7 @@ describe("storefront-cart-checkout-fees", () => {
         items: [
           {
             serviceType: "Embroidery",
+            embroideryLogoSetup: "new",
             referenceImageUrls: ["https://cdn.example/logo.png"],
           },
         ],
@@ -131,13 +180,14 @@ describe("storefront-cart-checkout-fees", () => {
       expect(result.logoSetupApplies).toBe(false);
     });
 
-    it("skips logo setup while prior-order history is still loading", () => {
+    it("charges logo setup immediately without waiting for prior-order history", () => {
       const result = computeStorefrontCheckoutFees({
         ...signedInBase,
         hasPriorEmbroideryOrder: null,
+        items: [{ serviceType: "Embroidery", embroideryLogoSetup: "new" }],
       });
-      expect(result.logoSetupFeeAud).toBe(0);
-      expect(result.logoSetupApplies).toBe(false);
+      expect(result.logoSetupFeeAud).toBe(66);
+      expect(result.logoSetupApplies).toBe(true);
     });
 
     it("skips logo setup for special-deal package carts", () => {

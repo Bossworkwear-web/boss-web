@@ -18,6 +18,7 @@ export function cartItemToStoreOrderLine(item: CartItem): StoreOrderCartLine {
     unitPrice: item.unitPrice,
     totalPrice: item.totalPrice,
     notes: item.notes,
+    embroideryLogoSetup: item.embroideryLogoSetup,
     referenceImageUrls: item.referenceImageUrls,
     imageUrl: item.imageUrl,
     productPathSlug: item.productPathSlug,
