@@ -65,6 +65,7 @@ import {
   resolveEmbroideryLogoSetup,
   stripEmbroideryLogoSetupNote,
 } from "@/lib/storefront-cart-checkout-fees";
+import { uploadStoreCheckoutReferenceImages } from "@/app/orders/actions";
 import { addCartItem, getCartItems, removeCartItem, updateCartItem, type CartItem } from "@/lib/cart";
 import { productPathSegment } from "@/lib/product-path-slug";
 import { bisleyPdpDisplayProductNameWithApexPrefix, headwearPdpDisplayOverride, productCardDisplayLines } from "@/lib/product-card-copy";
