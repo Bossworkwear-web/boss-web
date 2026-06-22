@@ -67,32 +67,47 @@ function failOnHardError(error: unknown, context: string): never {
 const BROWSE_SELECT =
   "id, name, base_price, sale_price, image_urls, category, slug, description, storefront_hidden, audience, supplier_name, available_colors, available_sizes";
 
+/** PostgREST / Supabase API caps each response at 1000 rows unless project max is raised. */
+const POSTGREST_MAX_ROWS_PER_REQUEST = 1000;
+
 /**
- * One PostgREST round-trip via `storefront_browse_products` (trimmed image_urls).
- * Avoids paginated RPC loops (~7 sequential calls for ~3k SKUs).
+ * Paginated fetch via `storefront_browse_products` (trimmed image_urls).
+ * Must page — a single `.range(0, 5999)` still returns at most 1000 rows.
  */
 async function fetchActiveProductsBrowseRowsViaView(
   supabase: ReturnType<typeof createSupabaseClient>,
+  pageSize: number,
   maxScan: number,
 ): Promise<CategoryBrowseProductRow[] | null> {
-  const res = await supabase
-    .from("storefront_browse_products")
-    .select(BROWSE_SELECT)
-    .order("name")
-    .range(0, maxScan - 1);
+  const chunkSize = Math.min(POSTGREST_MAX_ROWS_PER_REQUEST, Math.max(100, pageSize));
+  const out: CategoryBrowseProductRow[] = [];
 
-  if (res.error) {
-    const msg = errorMessage(res.error);
-    if (isBrowseViewMissingError(msg) || isMissingColumnError(msg)) {
-      return null;
-    }
-    if (isLikelySupabaseConnectionOrAuthError(msg)) {
+  for (let offset = 0; offset < maxScan; offset += chunkSize) {
+    const res = await supabase
+      .from("storefront_browse_products")
+      .select(BROWSE_SELECT)
+      .order("name")
+      .range(offset, offset + chunkSize - 1);
+
+    if (res.error) {
+      const msg = errorMessage(res.error);
+      if (isBrowseViewMissingError(msg) || isMissingColumnError(msg)) {
+        return null;
+      }
+      if (isLikelySupabaseConnectionOrAuthError(msg)) {
+        failOnHardError(res.error, "Supabase browse view query failed");
+      }
       failOnHardError(res.error, "Supabase browse view query failed");
     }
-    failOnHardError(res.error, "Supabase browse view query failed");
+
+    const chunk = (res.data ?? []) as CategoryBrowseProductRow[];
+    out.push(...chunk);
+    if (chunk.length < chunkSize) {
+      break;
+    }
   }
 
-  return (res.data ?? []) as CategoryBrowseProductRow[];
+  return out;
 }
 
 async function fetchActiveProductsBrowseRowsLegacy(
@@ -214,7 +229,7 @@ export async function fetchActiveProductsBrowseRowsUncached(): Promise<CategoryB
   const pageSize = Math.max(100, Number(process.env.STOREFRONT_BROWSE_PAGE_SIZE ?? 500));
   const maxScan = Math.max(pageSize, Number(process.env.STOREFRONT_BROWSE_MAX_SCAN ?? 6_000));
 
-  const fromView = await fetchActiveProductsBrowseRowsViaView(supabase, maxScan);
+  const fromView = await fetchActiveProductsBrowseRowsViaView(supabase, pageSize, maxScan);
   if (fromView != null) {
     return fromView;
   }
