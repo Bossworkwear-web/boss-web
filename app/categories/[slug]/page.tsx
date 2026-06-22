@@ -47,6 +47,7 @@ import { resolveHealthCareBrowseSubSlug } from "@/lib/health-care-browse";
 import { resolveProductSubSlug } from "@/lib/product-subslug";
 import { storefrontRetailFromSupplierBase, storefrontRetailProductMetaFromRow, STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { getCachedActiveProductsBrowseRows } from "@/lib/cached-storefront-products";
+import { getCachedMainCategoryFilteredRows } from "@/lib/cached-main-category-browse";
 import { PRODUCT_CARD_CODE_PRICE_SEPARATOR, productCardModelPriceRowStyle } from "@/lib/product-card-model-price-layout";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
@@ -220,7 +221,10 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
             isWorkwearExclusiveBrand(item) &&
             hasStorefrontListNameAndPrice(item.name, item.base_price),
         )
-      : filterProductsForMainCategoryBrowse(slug, allRows).filter(
+      : (slug === "mens" || slug === "womens"
+          ? await getCachedMainCategoryFilteredRows(slug)
+          : filterProductsForMainCategoryBrowse(slug, allRows)
+        ).filter(
           // Hard guard: Bisley + Syzmik should never appear outside Workwear,
           // even if upstream heuristics change.
           (item) => !isWorkwearExclusiveBrand(item),

@@ -44,6 +44,7 @@ import { resolveHealthCareBrowseSubSlug } from "@/lib/health-care-browse";
 import { resolveProductSubSlug } from "@/lib/product-subslug";
 import { storefrontRetailFromSupplierBase, storefrontRetailProductMetaFromRow, STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { getCachedActiveProductsBrowseRows } from "@/lib/cached-storefront-products";
+import { getCachedSubCategoryFilteredRows } from "@/lib/cached-main-category-browse";
 import { PRODUCT_CARD_CODE_PRICE_SEPARATOR, productCardModelPriceRowStyle } from "@/lib/product-card-model-price-layout";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
@@ -218,7 +219,11 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
     );
   };
 
-  const subCategoryRows = filterProductsForSubCategoryBrowse(slug, subSlug, allRows).filter((item) => {
+  const subCategoryRows = (
+    slug === "mens" || slug === "womens"
+      ? await getCachedSubCategoryFilteredRows(slug, subSlug)
+      : filterProductsForSubCategoryBrowse(slug, subSlug, allRows)
+  ).filter((item) => {
       if (slug === "workwear") {
         if (isBizCollectionListing(item.name, item.slug ?? null, item.category ?? null)) {
           return false;
