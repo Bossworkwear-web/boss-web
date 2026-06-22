@@ -40,13 +40,11 @@ function isMissingColumnError(message: string): boolean {
   );
 }
 
-function isBrowseRpcMissingError(message: string): boolean {
+function isBrowseViewMissingError(message: string): boolean {
   const m = message.toLowerCase();
   return (
-    m.includes("get_storefront_browse_rows") ||
     m.includes("storefront_browse_products") ||
-    (m.includes("function") && m.includes("does not exist")) ||
-    (m.includes("schema cache") && m.includes("rpc"))
+    (m.includes("relation") && m.includes("does not exist"))
   );
 }
 
@@ -66,42 +64,35 @@ function failOnHardError(error: unknown, context: string): never {
   throw new StorefrontCatalogFetchError(`${context}: ${msg}`);
 }
 
-function normalizeBrowseRpcRows(rows: unknown[]): CategoryBrowseProductRow[] {
-  return rows as CategoryBrowseProductRow[];
-}
+const BROWSE_SELECT =
+  "id, name, base_price, sale_price, image_urls, category, slug, description, storefront_hidden, audience, supplier_name, available_colors, available_sizes";
 
 /**
- * Prefer DB RPC `get_storefront_browse_rows` (trimmed image_urls, indexed filter).
- * Falls back to legacy `products` pagination when the migration is not applied yet.
+ * One PostgREST round-trip via `storefront_browse_products` (trimmed image_urls).
+ * Avoids paginated RPC loops (~7 sequential calls for ~3k SKUs).
  */
-async function fetchActiveProductsBrowseRowsViaRpc(
+async function fetchActiveProductsBrowseRowsViaView(
   supabase: ReturnType<typeof createSupabaseClient>,
-  pageSize: number,
   maxScan: number,
-): Promise<CategoryBrowseProductRow[]> {
-  const out: CategoryBrowseProductRow[] = [];
-  for (let offset = 0; offset < maxScan; offset += pageSize) {
-    const res = await supabase.rpc("get_storefront_browse_rows", {
-      p_limit: pageSize,
-      p_offset: offset,
-    });
-    if (res.error) {
-      const msg = errorMessage(res.error);
-      if (isBrowseRpcMissingError(msg)) {
-        return fetchActiveProductsBrowseRowsLegacy(supabase, pageSize, maxScan);
-      }
-      if (isLikelySupabaseConnectionOrAuthError(msg)) {
-        failOnHardError(res.error, "Supabase browse RPC failed");
-      }
-      failOnHardError(res.error, "Supabase browse RPC failed");
+): Promise<CategoryBrowseProductRow[] | null> {
+  const res = await supabase
+    .from("storefront_browse_products")
+    .select(BROWSE_SELECT)
+    .order("name")
+    .range(0, maxScan - 1);
+
+  if (res.error) {
+    const msg = errorMessage(res.error);
+    if (isBrowseViewMissingError(msg) || isMissingColumnError(msg)) {
+      return null;
     }
-    const chunk = normalizeBrowseRpcRows(res.data ?? []);
-    out.push(...chunk);
-    if (chunk.length < pageSize) {
-      break;
+    if (isLikelySupabaseConnectionOrAuthError(msg)) {
+      failOnHardError(res.error, "Supabase browse view query failed");
     }
+    failOnHardError(res.error, "Supabase browse view query failed");
   }
-  return out;
+
+  return (res.data ?? []) as CategoryBrowseProductRow[];
 }
 
 async function fetchActiveProductsBrowseRowsLegacy(
@@ -223,5 +214,10 @@ export async function fetchActiveProductsBrowseRowsUncached(): Promise<CategoryB
   const pageSize = Math.max(100, Number(process.env.STOREFRONT_BROWSE_PAGE_SIZE ?? 500));
   const maxScan = Math.max(pageSize, Number(process.env.STOREFRONT_BROWSE_MAX_SCAN ?? 6_000));
 
-  return fetchActiveProductsBrowseRowsViaRpc(supabase, pageSize, maxScan);
+  const fromView = await fetchActiveProductsBrowseRowsViaView(supabase, maxScan);
+  if (fromView != null) {
+    return fromView;
+  }
+
+  return fetchActiveProductsBrowseRowsLegacy(supabase, pageSize, maxScan);
 }

@@ -1480,7 +1480,26 @@ export type Database = {
         ];
       };
     };
-    Views: Record<string, never>;
+    Views: {
+      storefront_browse_products: {
+        Row: {
+          id: string;
+          name: string;
+          base_price: number | null;
+          sale_price: number | null;
+          image_urls: string[] | null;
+          category: string | null;
+          slug: string | null;
+          description: string | null;
+          storefront_hidden: boolean;
+          audience: string | null;
+          supplier_name: string;
+          available_colors: string[] | null;
+          available_sizes: string[] | null;
+        };
+        Relationships: [];
+      };
+    };
     Functions: {
       issue_customer_store_credit: {
         Args: {

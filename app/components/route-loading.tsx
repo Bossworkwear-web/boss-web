@@ -8,28 +8,10 @@ import {
   getRouteLoadingOverlayOptions,
   getRouteLoadingSnapshot,
   ROUTE_LOADING_START_EVENT,
-  shouldStartRouteLoadingForAnchor,
   startRouteLoading,
   stopRouteLoading,
   subscribeRouteLoading,
 } from "@/lib/route-loading";
-
-function onLinkIntent(event: Event) {
-  if (!(event instanceof MouseEvent)) {
-    return;
-  }
-  if (event.button !== 0) {
-    return;
-  }
-  const anchor = (event.target as Element | null)?.closest("a");
-  if (!(anchor instanceof HTMLAnchorElement)) {
-    return;
-  }
-  if (!shouldStartRouteLoadingForAnchor(anchor, event)) {
-    return;
-  }
-  startRouteLoading();
-}
 
 function RouteLoadingInner() {
   const pathname = usePathname();
@@ -50,11 +32,9 @@ function RouteLoadingInner() {
     };
 
     window.addEventListener(ROUTE_LOADING_START_EVENT, onNavigationStart);
-    document.addEventListener("click", onLinkIntent, true);
 
     return () => {
       window.removeEventListener(ROUTE_LOADING_START_EVENT, onNavigationStart);
-      document.removeEventListener("click", onLinkIntent, true);
     };
   }, [pathname]);
 
@@ -116,7 +96,7 @@ function RouteLoadingOverlay() {
   );
 }
 
-/** Centered spinner on client-side navigation (storefront + admin). */
+/** Overlay for programmatic navigation only (search, admin). Link clicks rely on Next.js route swap. */
 export function RouteLoading() {
   return (
     <Suspense fallback={null}>
