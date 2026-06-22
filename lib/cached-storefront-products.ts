@@ -12,7 +12,7 @@ let devCache:
 
 const cachedFetchActiveProductsBrowseRowsProd = unstable_cache(
   fetchActiveProductsBrowseRowsUncached,
-  ["storefront-active-products-browse-v20"],
+  ["storefront-active-products-browse-v21"],
   {
     revalidate: 60,
     tags: ["storefront-products-browse"],

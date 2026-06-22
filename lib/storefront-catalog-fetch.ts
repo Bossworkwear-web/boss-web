@@ -70,44 +70,156 @@ const BROWSE_SELECT =
 /** PostgREST / Supabase API caps each response at 1000 rows unless project max is raised. */
 const POSTGREST_MAX_ROWS_PER_REQUEST = 1000;
 
+/** Default A–name head slice; late-alphabet Chef SKUs are merged from `CHEF_BROWSE_SUPPLEMENT_FILTER`. */
+const DEFAULT_BROWSE_HEAD_ROWS = 950;
+
 /**
- * Paginated fetch via `storefront_browse_products` (trimmed image_urls).
- * Must page — a single `.range(0, 5999)` still returns at most 1000 rows.
+ * Chef hospitality rows that sort after the head slice (Yes Chef, JB chef, Cool-Breeze, etc.).
+ * Kept in sync with storefront Chef browse (~53 SKUs); all fall outside the first ~950 names.
  */
-async function fetchActiveProductsBrowseRowsViaView(
+const CHEF_BROWSE_SUPPLEMENT_FILTER = [
+  "category.ilike.chef",
+  "name.ilike.%Yes Chef%",
+  "supplier_name.ilike.%Yes Chef%",
+  "name.ilike.%Cool-Breeze Cotton Chef%",
+  "name.ilike.%Classic Chef%",
+  "name.ilike.%Traditional Chef%",
+  "name.ilike.%Three Way Air Flow Chef%",
+  "name.ilike.%Polyester Cotton Drawstring Chef%",
+  "name.ilike.%Poly Cotton Chefs Hat%",
+  "name.ilike.%JB's CHEF%",
+  "name.ilike.%CHEFS%",
+  "name.ilike.%CHEF POLO%",
+  "name.ilike.%CHEF'S%",
+].join(",");
+
+function mergeBrowseRowsById(
+  head: CategoryBrowseProductRow[],
+  supplement: CategoryBrowseProductRow[],
+): CategoryBrowseProductRow[] {
+  const seen = new Set(head.map((row) => row.id));
+  const merged = [...head];
+  for (const row of supplement) {
+    if (!seen.has(row.id)) {
+      seen.add(row.id);
+      merged.push(row);
+    }
+  }
+  return merged;
+}
+
+function browseHeadRowCount(): number {
+  const raw = Number(process.env.STOREFRONT_BROWSE_HEAD_ROWS ?? DEFAULT_BROWSE_HEAD_ROWS);
+  if (!Number.isFinite(raw)) {
+    return DEFAULT_BROWSE_HEAD_ROWS;
+  }
+  return Math.min(POSTGREST_MAX_ROWS_PER_REQUEST - 50, Math.max(100, Math.floor(raw)));
+}
+
+function browseUsesFullScan(): boolean {
+  return process.env.STOREFRONT_BROWSE_FULL_SCAN === "1";
+}
+
+async function fetchBrowseViewChunk(
   supabase: ReturnType<typeof createSupabaseClient>,
-  pageSize: number,
+  offset: number,
+  limit: number,
+): Promise<{ data: CategoryBrowseProductRow[] | null; error: unknown }> {
+  const res = await supabase
+    .from("storefront_browse_products")
+    .select(BROWSE_SELECT)
+    .order("name")
+    .range(offset, offset + limit - 1);
+
+  if (res.error) {
+    return { data: null, error: res.error };
+  }
+  return { data: (res.data ?? []) as CategoryBrowseProductRow[], error: null };
+}
+
+function handleBrowseViewError(error: unknown, context: string): null {
+  const msg = errorMessage(error);
+  if (isBrowseViewMissingError(msg) || isMissingColumnError(msg)) {
+    return null;
+  }
+  if (isLikelySupabaseConnectionOrAuthError(msg)) {
+    failOnHardError(error, context);
+  }
+  failOnHardError(error, context);
+}
+
+/** Full catalog — parallel 1k pages (set STOREFRONT_BROWSE_FULL_SCAN=1). */
+async function fetchActiveProductsBrowseRowsViaViewFull(
+  supabase: ReturnType<typeof createSupabaseClient>,
   maxScan: number,
 ): Promise<CategoryBrowseProductRow[] | null> {
-  const chunkSize = Math.min(POSTGREST_MAX_ROWS_PER_REQUEST, Math.max(100, pageSize));
-  const out: CategoryBrowseProductRow[] = [];
-
+  const chunkSize = POSTGREST_MAX_ROWS_PER_REQUEST;
+  const offsets: number[] = [];
   for (let offset = 0; offset < maxScan; offset += chunkSize) {
-    const res = await supabase
-      .from("storefront_browse_products")
-      .select(BROWSE_SELECT)
-      .order("name")
-      .range(offset, offset + chunkSize - 1);
+    offsets.push(offset);
+  }
 
-    if (res.error) {
-      const msg = errorMessage(res.error);
-      if (isBrowseViewMissingError(msg) || isMissingColumnError(msg)) {
-        return null;
-      }
-      if (isLikelySupabaseConnectionOrAuthError(msg)) {
-        failOnHardError(res.error, "Supabase browse view query failed");
-      }
-      failOnHardError(res.error, "Supabase browse view query failed");
+  const chunks = await Promise.all(
+    offsets.map((offset) => fetchBrowseViewChunk(supabase, offset, chunkSize)),
+  );
+
+  const out: CategoryBrowseProductRow[] = [];
+  for (const chunk of chunks) {
+    if (chunk.error) {
+      return handleBrowseViewError(chunk.error, "Supabase browse view query failed");
     }
-
-    const chunk = (res.data ?? []) as CategoryBrowseProductRow[];
-    out.push(...chunk);
-    if (chunk.length < chunkSize) {
+    out.push(...(chunk.data ?? []));
+    if ((chunk.data ?? []).length < chunkSize) {
       break;
     }
   }
-
   return out;
+}
+
+/**
+ * Fast path (~1k rows): name-sorted head + Chef supplement in parallel.
+ * Chef SKUs (Yes Chef, JB chef, …) sort after row ~950; supplement restores them without scanning all 3k+ rows.
+ */
+async function fetchActiveProductsBrowseRowsViaViewFast(
+  supabase: ReturnType<typeof createSupabaseClient>,
+): Promise<CategoryBrowseProductRow[] | null> {
+  const headCount = browseHeadRowCount();
+
+  const [headRes, chefRes] = await Promise.all([
+    supabase
+      .from("storefront_browse_products")
+      .select(BROWSE_SELECT)
+      .order("name")
+      .range(0, headCount - 1),
+    supabase
+      .from("storefront_browse_products")
+      .select(BROWSE_SELECT)
+      .or(CHEF_BROWSE_SUPPLEMENT_FILTER)
+      .order("name")
+      .limit(100),
+  ]);
+
+  if (headRes.error) {
+    return handleBrowseViewError(headRes.error, "Supabase browse head query failed");
+  }
+  if (chefRes.error) {
+    return handleBrowseViewError(chefRes.error, "Supabase browse chef supplement query failed");
+  }
+
+  return mergeBrowseRowsById(
+    (headRes.data ?? []) as CategoryBrowseProductRow[],
+    (chefRes.data ?? []) as CategoryBrowseProductRow[],
+  );
+}
+
+async function fetchActiveProductsBrowseRowsViaView(
+  supabase: ReturnType<typeof createSupabaseClient>,
+  maxScan: number,
+): Promise<CategoryBrowseProductRow[] | null> {
+  if (browseUsesFullScan()) {
+    return fetchActiveProductsBrowseRowsViaViewFull(supabase, maxScan);
+  }
+  return fetchActiveProductsBrowseRowsViaViewFast(supabase);
 }
 
 async function fetchActiveProductsBrowseRowsLegacy(
@@ -229,7 +341,7 @@ export async function fetchActiveProductsBrowseRowsUncached(): Promise<CategoryB
   const pageSize = Math.max(100, Number(process.env.STOREFRONT_BROWSE_PAGE_SIZE ?? 500));
   const maxScan = Math.max(pageSize, Number(process.env.STOREFRONT_BROWSE_MAX_SCAN ?? 6_000));
 
-  const fromView = await fetchActiveProductsBrowseRowsViaView(supabase, pageSize, maxScan);
+  const fromView = await fetchActiveProductsBrowseRowsViaView(supabase, maxScan);
   if (fromView != null) {
     return fromView;
   }
