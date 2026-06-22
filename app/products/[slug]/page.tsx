@@ -82,7 +82,8 @@ import type { PlacementData, ProductDetailData } from "../premium-work-polo/prem
 
 import { PremiumWorkPoloClientDynamic } from "./premium-work-polo-client-dynamic";
 
-export const dynamic = "force-dynamic";
+/** Align with PDP `unstable_cache` (~120s). */
+export const revalidate = 120;
 
 const DEFAULT_PDP_FALLBACK_IMAGES: string[] = [
   "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1600&q=80",

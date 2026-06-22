@@ -40,6 +40,16 @@ function isMissingColumnError(message: string): boolean {
   );
 }
 
+function isBrowseRpcMissingError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("get_storefront_browse_rows") ||
+    m.includes("storefront_browse_products") ||
+    (m.includes("function") && m.includes("does not exist")) ||
+    (m.includes("schema cache") && m.includes("rpc"))
+  );
+}
+
 function withoutSalePrice(select: string): string {
   return select
     .replace(/,\s*sale_price\s*,/i, ", ")
@@ -50,22 +60,55 @@ function withoutSalePrice(select: string): string {
     .trim();
 }
 
-/**
- * Loads active storefront browse rows from Supabase (no Next.js cache).
- * Throws on missing env vars or auth/connection failures so we never silently cache an empty catalog.
- */
-export async function fetchActiveProductsBrowseRowsUncached(): Promise<CategoryBrowseProductRow[]> {
-  let supabase: ReturnType<typeof createSupabaseClient>;
-  try {
-    supabase = createSupabaseClient();
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Missing Supabase client configuration";
-    console.error("[storefront-catalog] Supabase client unavailable:", msg);
-    throw new StorefrontCatalogFetchError(msg);
-  }
+function failOnHardError(error: unknown, context: string): never {
+  const msg = errorMessage(error);
+  console.error(`[storefront-catalog] ${context}:`, msg);
+  throw new StorefrontCatalogFetchError(`${context}: ${msg}`);
+}
 
-  const pageSize = Math.max(100, Number(process.env.STOREFRONT_BROWSE_PAGE_SIZE ?? 500));
-  const maxScan = Math.max(pageSize, Number(process.env.STOREFRONT_BROWSE_MAX_SCAN ?? 6_000));
+function normalizeBrowseRpcRows(rows: unknown[]): CategoryBrowseProductRow[] {
+  return rows as CategoryBrowseProductRow[];
+}
+
+/**
+ * Prefer DB RPC `get_storefront_browse_rows` (trimmed image_urls, indexed filter).
+ * Falls back to legacy `products` pagination when the migration is not applied yet.
+ */
+async function fetchActiveProductsBrowseRowsViaRpc(
+  supabase: ReturnType<typeof createSupabaseClient>,
+  pageSize: number,
+  maxScan: number,
+): Promise<CategoryBrowseProductRow[]> {
+  const out: CategoryBrowseProductRow[] = [];
+  for (let offset = 0; offset < maxScan; offset += pageSize) {
+    const res = await supabase.rpc("get_storefront_browse_rows", {
+      p_limit: pageSize,
+      p_offset: offset,
+    });
+    if (res.error) {
+      const msg = errorMessage(res.error);
+      if (isBrowseRpcMissingError(msg)) {
+        return fetchActiveProductsBrowseRowsLegacy(supabase, pageSize, maxScan);
+      }
+      if (isLikelySupabaseConnectionOrAuthError(msg)) {
+        failOnHardError(res.error, "Supabase browse RPC failed");
+      }
+      failOnHardError(res.error, "Supabase browse RPC failed");
+    }
+    const chunk = normalizeBrowseRpcRows(res.data ?? []);
+    out.push(...chunk);
+    if (chunk.length < pageSize) {
+      break;
+    }
+  }
+  return out;
+}
+
+async function fetchActiveProductsBrowseRowsLegacy(
+  supabase: ReturnType<typeof createSupabaseClient>,
+  pageSize: number,
+  maxScan: number,
+): Promise<CategoryBrowseProductRow[]> {
   const selectWithAudience =
     "id, name, base_price, sale_price, image_urls, category, slug, description, storefront_hidden, audience, supplier_name, available_colors, available_sizes";
   const selectWithoutAudience =
@@ -93,12 +136,6 @@ export async function fetchActiveProductsBrowseRowsUncached(): Promise<CategoryB
       }
     }
     return { data: out, error: null };
-  }
-
-  function failOnHardError(error: unknown, context: string): never {
-    const msg = errorMessage(error);
-    console.error(`[storefront-catalog] ${context}:`, msg);
-    throw new StorefrontCatalogFetchError(`${context}: ${msg}`);
   }
 
   const primary = await fetchAll(selectWithAudience);
@@ -167,4 +204,24 @@ export async function fetchActiveProductsBrowseRowsUncached(): Promise<CategoryB
   }
 
   return rows as CategoryBrowseProductRow[];
+}
+
+/**
+ * Loads active storefront browse rows from Supabase (no Next.js cache).
+ * Throws on missing env vars or auth/connection failures so we never silently cache an empty catalog.
+ */
+export async function fetchActiveProductsBrowseRowsUncached(): Promise<CategoryBrowseProductRow[]> {
+  let supabase: ReturnType<typeof createSupabaseClient>;
+  try {
+    supabase = createSupabaseClient();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Missing Supabase client configuration";
+    console.error("[storefront-catalog] Supabase client unavailable:", msg);
+    throw new StorefrontCatalogFetchError(msg);
+  }
+
+  const pageSize = Math.max(100, Number(process.env.STOREFRONT_BROWSE_PAGE_SIZE ?? 500));
+  const maxScan = Math.max(pageSize, Number(process.env.STOREFRONT_BROWSE_MAX_SCAN ?? 6_000));
+
+  return fetchActiveProductsBrowseRowsViaRpc(supabase, pageSize, maxScan);
 }

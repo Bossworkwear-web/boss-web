@@ -9,14 +9,13 @@ import {
   getRouteLoadingSnapshot,
   ROUTE_LOADING_START_EVENT,
   shouldStartRouteLoadingForAnchor,
-  shouldStartRouteLoadingForUrl,
   startRouteLoading,
   stopRouteLoading,
   subscribeRouteLoading,
 } from "@/lib/route-loading";
 
 function onLinkIntent(event: Event) {
-  if (!(event instanceof MouseEvent) && !(event instanceof PointerEvent)) {
+  if (!(event instanceof MouseEvent)) {
     return;
   }
   if (event.button !== 0) {
@@ -26,7 +25,7 @@ function onLinkIntent(event: Event) {
   if (!(anchor instanceof HTMLAnchorElement)) {
     return;
   }
-  if (!shouldStartRouteLoadingForAnchor(anchor, event as unknown as MouseEvent)) {
+  if (!shouldStartRouteLoadingForAnchor(anchor, event)) {
     return;
   }
   startRouteLoading();
@@ -47,57 +46,15 @@ function RouteLoadingInner() {
     }
 
     const onNavigationStart = () => {
-      startRouteLoading();
-    };
-
-    const onPopState = () => {
-      if (shouldStartRouteLoadingForUrl(window.location.href)) {
-        startRouteLoading();
-      }
-    };
-
-    const onNavigate = (event: Event) => {
-      if (!("destination" in event) || !("navigationType" in event)) {
-        return;
-      }
-      const nav = event as Event & {
-        navigationType: string;
-        destination: { sameDocument: boolean; url: string };
-      };
-      if (nav.navigationType === "reload") {
-        return;
-      }
-      const dest = nav.destination;
-      if (!dest.sameDocument) {
-        return;
-      }
-      try {
-        const url = new URL(dest.url);
-        if (url.origin !== window.location.origin) {
-          return;
-        }
-        const current = new URL(window.location.href);
-        if (url.pathname === current.pathname && url.search === current.search) {
-          return;
-        }
-        startRouteLoading();
-      } catch {
-        // ignore invalid URLs
-      }
+      startRouteLoading({ immediate: true });
     };
 
     window.addEventListener(ROUTE_LOADING_START_EVENT, onNavigationStart);
-    window.addEventListener("popstate", onPopState);
     document.addEventListener("click", onLinkIntent, true);
-
-    const navigationApi = (window as Window & { navigation?: EventTarget }).navigation;
-    navigationApi?.addEventListener("navigate", onNavigate);
 
     return () => {
       window.removeEventListener(ROUTE_LOADING_START_EVENT, onNavigationStart);
-      window.removeEventListener("popstate", onPopState);
       document.removeEventListener("click", onLinkIntent, true);
-      navigationApi?.removeEventListener("navigate", onNavigate);
     };
   }, [pathname]);
 

@@ -1504,6 +1504,24 @@ export type Database = {
         Args: { p_delivery_queue_id: string };
         Returns: undefined;
       };
+      get_storefront_browse_rows: {
+        Args: { p_limit?: number; p_offset?: number };
+        Returns: {
+          id: string;
+          name: string;
+          base_price: number | null;
+          sale_price: number | null;
+          image_urls: string[] | null;
+          category: string | null;
+          slug: string | null;
+          description: string | null;
+          storefront_hidden: boolean;
+          audience: string | null;
+          supplier_name: string;
+          available_colors: string[] | null;
+          available_sizes: string[] | null;
+        }[];
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

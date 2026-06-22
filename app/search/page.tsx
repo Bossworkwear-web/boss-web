@@ -6,7 +6,8 @@ import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
 import { getStorefrontShowcaseProducts } from "@/lib/storefront-showcase-products";
 import { firstQueryString } from "@/lib/url-search-params-string";
 
-export const dynamic = "force-dynamic";
+/** Align with `getStorefrontShowcaseProducts` / browse cache (~60s). */
+export const revalidate = 60;
 
 type SearchPageProps = {
   searchParams: Promise<{ q?: string }>;

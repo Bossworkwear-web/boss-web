@@ -18,6 +18,7 @@ export function ProductNavLink({ href, mainSlug, subSlug, className, style, chil
   return (
     <Link
       href={href}
+      prefetch
       className={className}
       style={style}
       onClick={() => persistSidebarNavClient(mainSlug, subSlug)}

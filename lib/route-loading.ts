@@ -1,7 +1,8 @@
 /** Dispatch before programmatic `router.push` (e.g. header search). */
 export const ROUTE_LOADING_START_EVENT = "boss:route-loading-start";
 
-const MIN_SPINNER_MS = 380;
+/** Only show the full-screen overlay when navigation exceeds this (avoids flash on fast transitions). */
+const SHOW_OVERLAY_DELAY_MS = 200;
 
 export type RouteLoadingOverlayOptions = {
   title: string;
@@ -10,13 +11,15 @@ export type RouteLoadingOverlayOptions = {
 
 type RouteLoadingStartOptions = {
   overlay?: RouteLoadingOverlayOptions;
+  /** When true, show overlay immediately (search, admin tab switches). */
+  immediate?: boolean;
 };
 
 let loading = false;
+let visible = false;
 let overlayOptions: RouteLoadingOverlayOptions | null = null;
 let timeoutId: ReturnType<typeof setTimeout> | null = null;
-let stopDelayId: ReturnType<typeof setTimeout> | null = null;
-let loadingStartedAt = 0;
+let showDelayId: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<() => void>();
 let emitScheduled = false;
 
@@ -39,17 +42,43 @@ export function subscribeRouteLoading(listener: () => void) {
   };
 }
 
+/** Whether the full-screen overlay should render. */
 export function getRouteLoadingSnapshot() {
-  return loading;
+  return visible;
 }
 
 export function getRouteLoadingOverlayOptions() {
   return overlayOptions;
 }
 
+function clearShowDelay() {
+  if (showDelayId) {
+    clearTimeout(showDelayId);
+    showDelayId = null;
+  }
+}
+
+function scheduleShowOverlay(immediate: boolean) {
+  clearShowDelay();
+  if (immediate) {
+    visible = true;
+    scheduleEmitRouteLoadingChange();
+    return;
+  }
+  showDelayId = setTimeout(() => {
+    showDelayId = null;
+    if (loading) {
+      visible = true;
+      scheduleEmitRouteLoadingChange();
+    }
+  }, SHOW_OVERLAY_DELAY_MS);
+}
+
 function stopRouteLoadingNow() {
   loading = false;
+  visible = false;
   overlayOptions = null;
+  clearShowDelay();
   if (timeoutId) {
     clearTimeout(timeoutId);
     timeoutId = null;
@@ -61,18 +90,18 @@ export function startRouteLoading(options?: RouteLoadingStartOptions) {
   if (typeof document === "undefined") {
     return;
   }
-  if (stopDelayId) {
-    clearTimeout(stopDelayId);
-    stopDelayId = null;
-  }
-  loadingStartedAt = Date.now();
+  const immediate = Boolean(options?.immediate || options?.overlay);
   if (options?.overlay) {
     overlayOptions = options.overlay;
   } else if (!loading) {
     overlayOptions = null;
   }
   loading = true;
-  scheduleEmitRouteLoadingChange();
+  if (!visible) {
+    scheduleShowOverlay(immediate);
+  } else {
+    scheduleEmitRouteLoadingChange();
+  }
 
   if (timeoutId) {
     clearTimeout(timeoutId);
@@ -84,18 +113,6 @@ export function startRouteLoading(options?: RouteLoadingStartOptions) {
 
 export function stopRouteLoading() {
   if (typeof document === "undefined" || !loading) {
-    return;
-  }
-  const elapsed = Date.now() - loadingStartedAt;
-  const wait = MIN_SPINNER_MS - elapsed;
-  if (wait > 0) {
-    if (stopDelayId) {
-      clearTimeout(stopDelayId);
-    }
-    stopDelayId = setTimeout(() => {
-      stopDelayId = null;
-      stopRouteLoadingNow();
-    }, wait);
     return;
   }
   stopRouteLoadingNow();
@@ -111,12 +128,12 @@ export function notifyRouteLoadingStart(options?: RouteLoadingStartOptions) {
   if (typeof window === "undefined") {
     return;
   }
-  startRouteLoading(options);
+  startRouteLoading({ ...options, immediate: options?.immediate ?? true });
   window.dispatchEvent(new Event(ROUTE_LOADING_START_EVENT));
 }
 
 export function notifyProductSearchLoadingStart() {
-  notifyRouteLoadingStart({ overlay: SEARCH_LOADING_OVERLAY });
+  notifyRouteLoadingStart({ overlay: SEARCH_LOADING_OVERLAY, immediate: true });
 }
 
 export function shouldStartRouteLoadingForAnchor(

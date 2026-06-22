@@ -47,7 +47,8 @@ import { getCachedActiveProductsBrowseRows } from "@/lib/cached-storefront-produ
 import { PRODUCT_CARD_CODE_PRICE_SEPARATOR, productCardModelPriceRowStyle } from "@/lib/product-card-model-price-layout";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
-export const dynamic = "force-dynamic";
+/** Align with `getCachedActiveProductsBrowseRows` (~60s). */
+export const revalidate = 60;
 
 type Props = {
   params: Promise<{ slug: string; subSlug: string }>;

@@ -15,6 +15,10 @@ import { finalizeCustomerAuthSession, getAuthenticatedCustomerUser } from "@/lib
 import { organizationJsonLd, webSiteJsonLd } from "@/lib/seo/json-ld";
 import { getSiteUrl } from "@/lib/site-url";
 
+function hasSupabaseSessionCookie(cookieStore: Awaited<ReturnType<typeof cookies>>): boolean {
+  return cookieStore.getAll().some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
+}
+
 const encodeSansCondensed = Encode_Sans_Condensed({
   variable: "--font-encode-sans-condensed",
   subsets: ["latin"],
@@ -78,7 +82,7 @@ export default async function RootLayout({
   const cookieStore = await cookies();
   let storeChatCustomerSignedIn = Boolean((cookieStore.get("customer_email")?.value ?? "").trim());
 
-  if (!storeChatCustomerSignedIn) {
+  if (!storeChatCustomerSignedIn && hasSupabaseSessionCookie(cookieStore)) {
     const authUser = await getAuthenticatedCustomerUser();
     if (authUser) {
       try {
