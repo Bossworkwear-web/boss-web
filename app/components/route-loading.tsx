@@ -143,15 +143,17 @@ function RouteLoadingOverlay() {
 
   return (
     <div
-      className="pointer-events-none fixed inset-0 z-[200] flex items-center justify-center bg-white/50"
+      className="pointer-events-none fixed inset-0 z-[200] flex items-center justify-center bg-black/40 p-5 sm:p-8"
       role="status"
       aria-busy="true"
       aria-live="polite"
       aria-label="Please wait a moment"
     >
-      <div className="flex flex-col items-center gap-3">
-        <LoadingRingSpinner className="h-10 w-10" />
-        <p className="text-base font-medium text-brand-navy sm:text-lg">Please wait a moment</p>
+      <div className="w-full max-w-sm rounded-3xl border border-brand-navy/10 bg-white px-8 py-8 text-center shadow-2xl sm:max-w-md sm:px-10 sm:py-10">
+        <div className="flex flex-col items-center gap-3">
+          <LoadingRingSpinner className="h-10 w-10" />
+          <p className="text-base font-medium text-brand-navy sm:text-lg">Please wait a moment</p>
+        </div>
       </div>
     </div>
   );
