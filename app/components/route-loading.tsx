@@ -8,10 +8,29 @@ import {
   getRouteLoadingOverlayOptions,
   getRouteLoadingSnapshot,
   ROUTE_LOADING_START_EVENT,
+  shouldStartRouteLoadingForAnchor,
+  shouldStartRouteLoadingForUrl,
   startRouteLoading,
   stopRouteLoading,
   subscribeRouteLoading,
 } from "@/lib/route-loading";
+
+function onLinkIntent(event: Event) {
+  if (!(event instanceof MouseEvent)) {
+    return;
+  }
+  if (event.button !== 0) {
+    return;
+  }
+  const anchor = (event.target as Element | null)?.closest("a");
+  if (!(anchor instanceof HTMLAnchorElement)) {
+    return;
+  }
+  if (!shouldStartRouteLoadingForAnchor(anchor, event)) {
+    return;
+  }
+  startRouteLoading();
+}
 
 function RouteLoadingInner() {
   const pathname = usePathname();
@@ -31,10 +50,20 @@ function RouteLoadingInner() {
       startRouteLoading({ immediate: true });
     };
 
+    const onPopState = () => {
+      if (shouldStartRouteLoadingForUrl(window.location.href)) {
+        startRouteLoading();
+      }
+    };
+
     window.addEventListener(ROUTE_LOADING_START_EVENT, onNavigationStart);
+    window.addEventListener("popstate", onPopState);
+    document.addEventListener("click", onLinkIntent, true);
 
     return () => {
       window.removeEventListener(ROUTE_LOADING_START_EVENT, onNavigationStart);
+      window.removeEventListener("popstate", onPopState);
+      document.removeEventListener("click", onLinkIntent, true);
     };
   }, [pathname]);
 
@@ -96,7 +125,7 @@ function RouteLoadingOverlay() {
   );
 }
 
-/** Overlay for programmatic navigation only (search, admin). Link clicks rely on Next.js route swap. */
+/** Spinner on link navigation (delayed) and immediately on search / admin navigation. */
 export function RouteLoading() {
   return (
     <Suspense fallback={null}>
