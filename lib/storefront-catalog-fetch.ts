@@ -116,8 +116,9 @@ function browseHeadRowCount(): number {
   return Math.min(POSTGREST_MAX_ROWS_PER_REQUEST - 50, Math.max(100, Math.floor(raw)));
 }
 
-function browseUsesFullScan(): boolean {
-  return process.env.STOREFRONT_BROWSE_FULL_SCAN === "1";
+/** Default: full catalog. Set STOREFRONT_BROWSE_FAST=1 for ~1k head+chef slice only. */
+function browseUsesFastHeadSlice(): boolean {
+  return process.env.STOREFRONT_BROWSE_FAST === "1";
 }
 
 async function fetchBrowseViewChunk(
@@ -148,7 +149,7 @@ function handleBrowseViewError(error: unknown, context: string): null {
   failOnHardError(error, context);
 }
 
-/** Full catalog — parallel 1k pages (set STOREFRONT_BROWSE_FULL_SCAN=1). */
+/** Full catalog — parallel 1k pages (default). */
 async function fetchActiveProductsBrowseRowsViaViewFull(
   supabase: ReturnType<typeof createSupabaseClient>,
   maxScan: number,
@@ -216,10 +217,10 @@ async function fetchActiveProductsBrowseRowsViaView(
   supabase: ReturnType<typeof createSupabaseClient>,
   maxScan: number,
 ): Promise<CategoryBrowseProductRow[] | null> {
-  if (browseUsesFullScan()) {
-    return fetchActiveProductsBrowseRowsViaViewFull(supabase, maxScan);
+  if (browseUsesFastHeadSlice()) {
+    return fetchActiveProductsBrowseRowsViaViewFast(supabase);
   }
-  return fetchActiveProductsBrowseRowsViaViewFast(supabase);
+  return fetchActiveProductsBrowseRowsViaViewFull(supabase, maxScan);
 }
 
 async function fetchActiveProductsBrowseRowsLegacy(
