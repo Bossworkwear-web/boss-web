@@ -14,7 +14,11 @@ import { FASHION_BIZ_STYLE_GENDER } from "@/lib/fashion-biz-gender.generated";
 import { FASHION_BIZ_LISTING_SUBSLUG } from "@/lib/fashion-biz-listing-subslug.generated";
 import { blueWhaleWorkwearExclusiveExpectedSubSlug } from "@/lib/blue-whale-category-browse";
 import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
-import { isDncPpeGloveExclusiveListing } from "@/lib/dnc-glove-routing";
+import {
+  dncMensExclusiveFromWomensBrowseSubSlug,
+  isDncMensExclusiveFromWomensListing,
+  isDncPpeGloveExclusiveListing,
+} from "@/lib/dnc-glove-routing";
 import { isDncPpeSafetyGlassesExclusiveListing } from "@/lib/dnc-safety-glasses-routing";
 import { resolveHealthCareBrowseSubSlug } from "@/lib/health-care-browse";
 
@@ -2800,6 +2804,17 @@ export function isProductVisibleInCategoryBrowse(
       return mainSlug === WOMENS_MAIN_SLUG;
     }
     return mainSlug === MENS_MAIN_SLUG;
+  }
+
+  // DNC men's polos/tees — Men's browse only (not Women's).
+  if (isDncMensExclusiveFromWomensListing(productName, meta)) {
+    if (mainSlug === WOMENS_MAIN_SLUG) {
+      return false;
+    }
+    if (mainSlug === MENS_MAIN_SLUG) {
+      const want = dncMensExclusiveFromWomensBrowseSubSlug(productName, meta);
+      return want != null && subSlug === want;
+    }
   }
 
   // Requested: specific women's polos SKUs should list under Men's/Polos.

@@ -15,6 +15,34 @@ const DNC_GLOVE_EXTRA_SLUGS = new Set([
   "dnc-ppgl41",
 ]);
 
+/** DNC men's SKUs that must not appear under Women's browse (Men's/Polos or Men's/T-shirts). */
+const DNC_MENS_EXCLUSIVE_FROM_WOMENS_STYLE_CODES = new Set(
+  ["5265", "5221", "5101", "5262", "5261"].map((c) => c.toUpperCase()),
+);
+
+export function isDncMensExclusiveFromWomensListing(
+  productName: string,
+  meta?: Pick<DncGloveListingMeta, "slug" | "supplier_name">,
+): boolean {
+  if (!isDncWorkwearSupplierMeta(meta)) {
+    return false;
+  }
+  const code = dncStyleCodeFromListing(productName, meta?.slug);
+  return code != null && DNC_MENS_EXCLUSIVE_FROM_WOMENS_STYLE_CODES.has(code.toUpperCase());
+}
+
+/** Men's browse sub-slug for `isDncMensExclusiveFromWomensListing` rows. */
+export function dncMensExclusiveFromWomensBrowseSubSlug(
+  productName: string,
+  meta?: Pick<DncGloveListingMeta, "slug" | "supplier_name">,
+): "polos" | "t-shirts" | null {
+  if (!isDncMensExclusiveFromWomensListing(productName, meta)) {
+    return null;
+  }
+  const code = dncStyleCodeFromListing(productName, meta?.slug);
+  return code === "5101" ? "t-shirts" : "polos";
+}
+
 export function isDncWorkwearSupplierMeta(
   meta?: Pick<DncGloveListingMeta, "supplier_name" | "slug"> | null,
 ): boolean {

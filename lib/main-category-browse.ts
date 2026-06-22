@@ -3,7 +3,7 @@ import {
   isBlueWhaleF81F82WorkwearJumperExclusiveListing,
 } from "@/lib/blue-whale-category-browse";
 import { getSubCategoriesForMain, HEALTH_CARE_MAIN_SLUG } from "@/lib/catalog";
-import { isDncPpeGloveExclusiveListing } from "@/lib/dnc-glove-routing";
+import { isDncPpeGloveExclusiveListing, isDncMensExclusiveFromWomensListing, dncMensExclusiveFromWomensBrowseSubSlug } from "@/lib/dnc-glove-routing";
 import { isDncPpeSafetyGlassesExclusiveListing } from "@/lib/dnc-safety-glasses-routing";
 import { getDiscountPercent } from "@/lib/discounts";
 import {
@@ -601,6 +601,10 @@ function resolveMensCategoryBrowseSubSlug(resolved: string | null, item: Categor
   if (isWv619mMensJumperExclusiveListing(item.name, mensRowMeta)) {
     return "jumper";
   }
+  const dncMensSub = dncMensExclusiveFromWomensBrowseSubSlug(item.name, mensRowMeta);
+  if (dncMensSub != null) {
+    return dncMensSub;
+  }
   if (resolved == null || resolved === "") {
     return null;
   }
@@ -627,6 +631,10 @@ function resolveWomensCategoryBrowseSubSlug(resolved: string | null, item: Categ
   };
   // JB's Wear 4OS — Men's/Shirts only (never any Women's sub-grid).
   if (isJb4OsMensShirtsExclusiveListing(item.name, womensExclusiveMeta)) {
+    return null;
+  }
+  // DNC men's polos/tees (5265, 5221, 5101, 5262, 5261) — Men's only.
+  if (isDncMensExclusiveFromWomensListing(item.name, womensExclusiveMeta)) {
     return null;
   }
   // Blue Whale — Workwear only (sub from `resolveProductSubSlug`: Polos / Jumper / Pants / Shirts / …).
