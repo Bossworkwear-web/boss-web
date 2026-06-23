@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildGoogleOAuthAuthorizeUrl,
-  createGoogleOAuthSecrets,
+  createSignedGoogleOAuthState,
   googleOAuthRedirectUri,
+  verifySignedGoogleOAuthState,
 } from "@/lib/google-oauth";
 
 describe("google-oauth", () => {
@@ -13,16 +14,23 @@ describe("google-oauth", () => {
     );
   });
 
-  it("creates matching nonce and hashed nonce", () => {
-    const { nonce, hashedNonce } = createGoogleOAuthSecrets();
-    expect(nonce).toBeTruthy();
-    expect(hashedNonce).toMatch(/^[a-f0-9]{64}$/);
-    expect(nonce).not.toBe(hashedNonce);
+  it("round-trips signed OAuth state without cookies", () => {
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET = "test-secret";
+    const { state } = createSignedGoogleOAuthState({ flow: "login", next: "/cart" });
+    const verified = verifySignedGoogleOAuthState(state);
+    expect(verified.ok).toBe(true);
+    if (verified.ok) {
+      expect(verified.flow).toBe("login");
+      expect(verified.next).toBe("/cart");
+      expect(verified.nonce).toBeTruthy();
+    }
+    delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
   });
 
   it("builds authorize URL with bossworkwear redirect", () => {
     process.env.GOOGLE_OAUTH_CLIENT_ID = "test-client-id.apps.googleusercontent.com";
-    const { state, hashedNonce } = createGoogleOAuthSecrets();
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET = "test-secret";
+    const { state, hashedNonce } = createSignedGoogleOAuthState({ flow: "signup", next: "/" });
     const url = new URL(
       buildGoogleOAuthAuthorizeUrl({
         origin: "https://www.bossworkwear.au",
@@ -36,6 +44,8 @@ describe("google-oauth", () => {
       "https://www.bossworkwear.au/api/auth/google/callback",
     );
     expect(url.searchParams.get("nonce")).toBe(hashedNonce);
+    expect(url.searchParams.get("state")).toBe(state);
     delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+    delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
   });
 });

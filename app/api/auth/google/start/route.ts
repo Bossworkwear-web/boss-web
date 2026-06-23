@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { CUSTOMER_OAUTH_FLOW_COOKIE, type CustomerOAuthFlow } from "@/lib/customer-oauth-flow";
+import type { CustomerOAuthFlow } from "@/lib/customer-oauth-flow";
 import {
   buildGoogleOAuthAuthorizeUrl,
-  createGoogleOAuthSecrets,
+  createSignedGoogleOAuthState,
   getGoogleOAuthClientId,
-  googleOAuthCookieOptions,
-  GOOGLE_OAUTH_NEXT_COOKIE,
-  GOOGLE_OAUTH_NONCE_COOKIE,
-  GOOGLE_OAUTH_STATE_COOKIE,
+  getGoogleOAuthOrigin,
   isGoogleOAuthConfigured,
 } from "@/lib/google-oauth";
 
@@ -40,18 +37,13 @@ export async function GET(request: Request) {
 
   const flow = parseFlow(requestUrl.searchParams.get("flow"));
   const next = parseNext(requestUrl.searchParams.get("next"));
-  const { state, nonce, hashedNonce } = createGoogleOAuthSecrets();
+  const oauthOrigin = getGoogleOAuthOrigin(request);
+  const { state, hashedNonce } = createSignedGoogleOAuthState({ flow, next });
   const authorizeUrl = buildGoogleOAuthAuthorizeUrl({
-    origin: site,
+    origin: oauthOrigin,
     state,
     hashedNonce,
   });
 
-  const response = NextResponse.redirect(authorizeUrl);
-  const cookieOpts = googleOAuthCookieOptions();
-  response.cookies.set(GOOGLE_OAUTH_STATE_COOKIE, state, cookieOpts);
-  response.cookies.set(GOOGLE_OAUTH_NONCE_COOKIE, nonce, cookieOpts);
-  response.cookies.set(GOOGLE_OAUTH_NEXT_COOKIE, next, cookieOpts);
-  response.cookies.set(CUSTOMER_OAUTH_FLOW_COOKIE, flow, cookieOpts);
-  return response;
+  return NextResponse.redirect(authorizeUrl);
 }

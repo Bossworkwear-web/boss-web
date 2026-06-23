@@ -1,15 +1,11 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { buildCustomerOAuthCompleteRedirect } from "@/lib/customer-oauth-complete";
-import { consumeCustomerOAuthFlowCookie } from "@/lib/customer-auth";
 import {
   exchangeGoogleOAuthCode,
-  googleOAuthCookieOptions,
-  GOOGLE_OAUTH_NEXT_COOKIE,
-  GOOGLE_OAUTH_NONCE_COOKIE,
-  GOOGLE_OAUTH_STATE_COOKIE,
+  getGoogleOAuthOrigin,
   isGoogleOAuthConfigured,
+  verifySignedGoogleOAuthState,
 } from "@/lib/google-oauth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -24,6 +20,7 @@ function oauthErrorRedirect(site: string, message?: string) {
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const site = requestUrl.origin;
+  const oauthOrigin = getGoogleOAuthOrigin(request);
 
   if (!isGoogleOAuthConfigured()) {
     return oauthErrorRedirect(site);
@@ -41,21 +38,12 @@ export async function GET(request: Request) {
     return oauthErrorRedirect(site);
   }
 
-  const cookieStore = await cookies();
-  const clearCookie = { ...googleOAuthCookieOptions(), maxAge: 0 };
-  const expectedState = cookieStore.get(GOOGLE_OAUTH_STATE_COOKIE)?.value;
-  const nonce = cookieStore.get(GOOGLE_OAUTH_NONCE_COOKIE)?.value;
-  const next = cookieStore.get(GOOGLE_OAUTH_NEXT_COOKIE)?.value ?? "/";
-
-  cookieStore.set(GOOGLE_OAUTH_STATE_COOKIE, "", clearCookie);
-  cookieStore.set(GOOGLE_OAUTH_NONCE_COOKIE, "", clearCookie);
-  cookieStore.set(GOOGLE_OAUTH_NEXT_COOKIE, "", clearCookie);
-
-  if (!expectedState || expectedState !== stateParam || !nonce) {
+  const verified = verifySignedGoogleOAuthState(stateParam);
+  if (!verified.ok) {
     return oauthErrorRedirect(site, "Invalid OAuth state");
   }
 
-  const tokenResult = await exchangeGoogleOAuthCode({ code, origin: site });
+  const tokenResult = await exchangeGoogleOAuthCode({ code, origin: oauthOrigin });
   if ("error" in tokenResult) {
     console.error("[api/auth/google/callback] token exchange:", tokenResult.error);
     return oauthErrorRedirect(site);
@@ -65,7 +53,7 @@ export async function GET(request: Request) {
   const { error } = await supabase.auth.signInWithIdToken({
     provider: "google",
     token: tokenResult.idToken,
-    nonce,
+    nonce: verified.nonce,
   });
 
   if (error) {
@@ -81,15 +69,13 @@ export async function GET(request: Request) {
     return oauthErrorRedirect(site);
   }
 
-  const oauthFlow = await consumeCustomerOAuthFlowCookie();
-
   try {
     return await buildCustomerOAuthCompleteRedirect({
       supabase,
       user,
-      oauthFlow,
+      oauthFlow: verified.flow,
       site,
-      next: next.startsWith("/") && !next.startsWith("//") ? next : "/",
+      next: verified.next,
     });
   } catch (e) {
     console.error("[api/auth/google/callback] complete:", e);
