@@ -48,12 +48,18 @@ export function OAuthSignInButtons({ mode }: Props) {
     setLoading(provider);
     setError(null);
 
-    const supabase = createSupabaseBrowserClient();
-    // Match the browser origin (127.0.0.1 vs localhost) so Supabase redirect URLs align.
     const siteOrigin =
       typeof window !== "undefined" ? window.location.origin : getSiteUrl();
     setOAuthFlowCookie(mode);
-    const redirectTo = `${siteOrigin}/auth/callback?next=${encodeURIComponent("/")}&flow=${mode}`;
+    const next = encodeURIComponent("/");
+
+    if (provider === "google") {
+      window.location.href = `/api/auth/google/start?flow=${mode}&next=${next}`;
+      return;
+    }
+
+    const supabase = createSupabaseBrowserClient();
+    const redirectTo = `${siteOrigin}/auth/callback?next=${next}&flow=${mode}`;
 
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,

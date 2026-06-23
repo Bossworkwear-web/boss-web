@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 
-import {
-  consumeCustomerOAuthFlowCookie,
-  finalizeCustomerAuthSession,
-  getCustomerProfileByAuthUserId,
-  getCustomerProfileByEmail,
-} from "@/lib/customer-auth";
+import { buildCustomerOAuthCompleteRedirect } from "@/lib/customer-oauth-complete";
+import { consumeCustomerOAuthFlowCookie } from "@/lib/customer-auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -50,36 +46,13 @@ export async function GET(request: Request) {
   }
 
   try {
-    const emailNorm = user.email?.trim().toLowerCase() ?? "";
-    let profile = (await getCustomerProfileByAuthUserId(user.id)).profile;
-    if (!profile && emailNorm) {
-      profile = (await getCustomerProfileByEmail(emailNorm)).profile;
-    }
-
-    if (oauthFlow === "login") {
-      if (!profile) {
-        await supabase.auth.signOut();
-        return NextResponse.redirect(`${site}/log-in?status=oauth_no_account`);
-      }
-    }
-
-    if (oauthFlow === "signup" && profile) {
-      await supabase.auth.signOut();
-      return NextResponse.redirect(`${site}/log-in?mode=signup&status=oauth_already_registered`);
-    }
-
-    const result = await finalizeCustomerAuthSession(user);
-
-    if (result.status === "ready") {
-      const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/";
-      return NextResponse.redirect(`${site}${safeNext}`);
-    }
-
-    const qs = new URLSearchParams({
-      email: result.email,
-      ...(result.fullName ? { full_name: result.fullName } : {}),
+    return await buildCustomerOAuthCompleteRedirect({
+      supabase,
+      user,
+      oauthFlow,
+      site,
+      next,
     });
-    return NextResponse.redirect(`${site}/customer-details?${qs.toString()}`);
   } catch (e) {
     console.error("[auth/callback] finalizeCustomerAuthSession:", e);
     return NextResponse.redirect(`${site}/log-in?status=oauth_error`);

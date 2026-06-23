@@ -29,36 +29,39 @@ Add **Redirect URLs**:
 
 ### Google
 
-1. Authentication → Providers → **Google** → Enable.
-2. Create OAuth client in [Google Cloud Console](https://console.cloud.google.com/) (Web application).
-3. Authorized redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`
-4. Paste **your** Client ID + Client Secret into Supabase (do not rely on Supabase’s shared Google app — that shows `*.supabase.co` on the consent screen).
+Google sign-in uses **your domain** (`bossworkwear.au`) on the Google account picker — not `*.supabase.co`. The app redirects to Google from `/api/auth/google/start` and returns to `/api/auth/google/callback` on the same host.
 
-#### Google sign-in text: “Bossworkwear.au 서비스로 로그인”
+1. Authentication → Providers → **Google** → Enable (keep Client ID + Secret there for Supabase).
+2. Create OAuth client in [Google Cloud Console](https://console.cloud.google.com/) (Web application) — **same client** as in Supabase.
+3. **Authorized redirect URIs** (add all that apply):
+   - `https://www.bossworkwear.au/api/auth/google/callback`
+   - `https://bossworkwear.au/api/auth/google/callback`
+   - `http://localhost:3000/api/auth/google/callback`
+   - (optional legacy) `https://byzowxdjoexaisponcpo.supabase.co/auth/v1/callback`
+4. **Authorized JavaScript origins:** `https://www.bossworkwear.au`, `https://bossworkwear.au`, `http://localhost:3000`
+5. [Google Auth Platform → **Branding**](https://console.cloud.google.com/auth/branding) — app name **Boss Work Wear**, logo, homepage `https://www.bossworkwear.au`, privacy policy URL.
+6. [Google Auth Platform → **Verification**](https://console.cloud.google.com/auth/verification) — add **Authorized domain** `bossworkwear.au` (verify in [Search Console](https://search.google.com/search-console)).
 
-If **App information** already shows **Boss Work Wear** + logo but Google still says **`byzowxdjoexaisponcpo.supabase.co 서비스로 로그인`**, that is **expected until Google approves brand verification** — not a Supabase or Next.js bug ([Supabase #33387](https://github.com/supabase/supabase/issues/33387), [Google auth docs](https://supabase.com/docs/guides/auth/social-login/auth-google)).
+#### Environment (Vercel + `.env.local`)
 
-| What you did | What Google still shows | Why |
-|--------------|-------------------------|-----|
-| App name + logo on OAuth consent screen | Supabase project hostname | Redirect URI is `*.supabase.co`; Google shows that **until brand is verified** |
-| Waited 24 hours | No change | Brand verification often takes **several business days**, not hours |
+Same OAuth client as Supabase Google provider:
 
-**Checklist (do in order):**
+- `GOOGLE_OAUTH_CLIENT_ID` — Web client ID
+- `GOOGLE_OAUTH_CLIENT_SECRET` — Web client secret (server only; never `NEXT_PUBLIC_`)
 
-1. **Same Google Cloud project** for everything: OAuth **Client ID** in Supabase must be from the project where **Boss Work Wear** branding is configured.
-2. Supabase → Authentication → Providers → **Google** → paste **your** Client ID + Secret (not empty). If empty, Supabase uses its shared Google app → always shows `*.supabase.co`.
-3. **Match Client ID:** On the Google sign-in page, copy the URL query `client_id=…` and compare with [Credentials → OAuth 2.0 Client IDs](https://console.cloud.google.com/apis/credentials). Mismatch = wrong project or wrong Supabase entry.
-4. [Google Auth Platform → **Branding**](https://console.cloud.google.com/auth/branding) — upload logo + app name (may differ from legacy “App information” screen). **Submit for brand verification.**
-5. [Google Auth Platform → **Verification**](https://console.cloud.google.com/auth/verification) — complete app verification (homepage `https://www.bossworkwear.au`, privacy policy, scopes).
-6. [Search Console](https://search.google.com/search-console) — verify domain **`bossworkwear.au`**; add it under OAuth **Authorized domains**.
-7. **Authorized redirect URI** (Web client): `https://byzowxdjoexaisponcpo.supabase.co/auth/v1/callback`
-8. **Authorized JavaScript origins:** `https://www.bossworkwear.au`, `https://bossworkwear.au`, `http://localhost:3000`
+Redeploy after adding env vars.
 
-After Google **approves** brand verification, the consent headline should show **Boss Work Wear** (or your verified name), not the Supabase hostname.
+#### What customers see
 
-**Optional (stronger trust):** Supabase [custom domain](https://supabase.com/docs/guides/platform/custom-domains) e.g. `auth.bossworkwear.au` so the redirect host is your domain (Pro plan). Brand verification is still required for the display name.
+With redirect URI on `bossworkwear.au`, Google shows **“Continue to bossworkwear.au”** (or `www.bossworkwear.au`) instead of `byzowxdjoexaisponcpo.supabase.co`.
 
-**While waiting:** Testing mode + test users still see the Supabase URL in many cases until verification completes.
+#### Legacy note (Supabase-hosted Google OAuth)
+
+If `GOOGLE_OAUTH_*` is missing, `/api/auth/google/start` fails open to log-in error. Microsoft still uses Supabase OAuth (`/auth/callback`).
+
+Previously, redirect URI `https://<project-ref>.supabase.co/auth/v1/callback` caused Google to show the Supabase hostname ([Supabase #33387](https://github.com/supabase/supabase/issues/33387)). Brand verification alone does not fix that while the redirect stays on `supabase.co`.
+
+**Optional (extra trust):** Supabase [custom domain](https://supabase.com/docs/guides/platform/custom-domains) e.g. `auth.bossworkwear.au` (Pro plan) — not required when using first-party Google callback above.
 
 ### Microsoft (Azure)
 
@@ -84,6 +87,8 @@ Already required:
 Recommended:
 
 - `NEXT_PUBLIC_SITE_URL=https://bossworkwear.au`
+- `GOOGLE_OAUTH_CLIENT_ID` — same Web client ID as Supabase Google provider
+- `GOOGLE_OAUTH_CLIENT_SECRET` — same secret (server-only; Vercel encrypted env)
 
 ## 4. Behaviour
 
