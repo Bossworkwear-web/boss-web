@@ -115,6 +115,7 @@ import {
   isYesChefCh234mExcludedColourChip,
 } from "@/lib/yes-chef-ch234m-pdp-colour";
 import type { ProductGoogleRating } from "@/lib/product-google-rating";
+import { sanitizeLatinInput } from "@/lib/latin-input";
 
 type ServiceType = "Plain" | "Embroidery" | "Printing";
 
@@ -1818,6 +1819,14 @@ function galleryForUrls(urls: string[]) {
 
 function emptySizeQuantities(sizes: string[]): Record<string, number> {
   return Object.fromEntries(sizes.map((s) => [s, 0]));
+}
+
+function parseSizeQuantityInput(raw: string): number {
+  const digits = sanitizeLatinInput(raw, "number");
+  if (digits === "") {
+    return 0;
+  }
+  return Math.max(0, Math.min(999, parseInt(digits, 10) || 0));
 }
 
 function emptyColorSizeQuantities(colors: string[], sizes: string[]): Record<string, Record<string, number>> {
@@ -3748,16 +3757,43 @@ export function PremiumWorkPoloClient({
                   </label>
                   <input
                     id={sizeQtyId}
-                    type="number"
-                    min={0}
-                    max={999}
+                    type="text"
                     inputMode="numeric"
+                    data-latin-mode="number"
+                    autoComplete="off"
+                    lang="en"
                     disabled={selectedColorIsDiscontinued}
-                    value={row[size] ?? 0}
+                    value={(row[size] ?? 0) === 0 ? "" : String(row[size] ?? 0)}
                     onChange={(e) => {
-                      const v = Math.max(0, Math.min(999, Math.floor(Number(e.target.value) || 0)));
+                      const v = parseSizeQuantityInput(e.target.value);
                       setColorSizeQuantities((prev) => {
                         const base = prev[selectedColor] ?? emptySizeQuantities(product.sizeOptions);
+                        return {
+                          ...prev,
+                          [selectedColor]: { ...base, [size]: v },
+                        };
+                      });
+                    }}
+                    onCompositionEnd={(e) => {
+                      const v = parseSizeQuantityInput(e.currentTarget.value);
+                      setColorSizeQuantities((prev) => {
+                        const base = prev[selectedColor] ?? emptySizeQuantities(product.sizeOptions);
+                        if ((base[size] ?? 0) === v) {
+                          return prev;
+                        }
+                        return {
+                          ...prev,
+                          [selectedColor]: { ...base, [size]: v },
+                        };
+                      });
+                    }}
+                    onBlur={(e) => {
+                      const v = parseSizeQuantityInput(e.target.value);
+                      setColorSizeQuantities((prev) => {
+                        const base = prev[selectedColor] ?? emptySizeQuantities(product.sizeOptions);
+                        if ((base[size] ?? 0) === v) {
+                          return prev;
+                        }
                         return {
                           ...prev,
                           [selectedColor]: { ...base, [size]: v },
