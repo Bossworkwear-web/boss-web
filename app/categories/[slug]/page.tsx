@@ -28,16 +28,9 @@ import { getDiscountPercent } from "@/lib/discounts";
 import { getMainCategory, getSubCategoriesForMain, HEALTH_CARE_MAIN_SLUG } from "@/lib/catalog";
 import {
   CATEGORY_BROWSE_PAGE_SIZE,
-  filterProductsForMainCategoryBrowse,
   resolveChefCategoryBrowseSubSlug,
-  type CategoryBrowseProductRow,
 } from "@/lib/main-category-browse";
-import { isBizCollectionListing } from "@/lib/fashion-biz-gender-route";
-import { isDncPpeGloveExclusiveListing } from "@/lib/dnc-glove-routing";
-import { isDncPpeSafetyGlassesExclusiveListing } from "@/lib/dnc-safety-glasses-routing";
 import {
-  hasStorefrontListNameAndPrice,
-  isAussiePacificCatalogListing,
   isJbWearSixSeriesListing,
   isJbWorkwearExcludedHeadwearOrSocks,
 } from "@/lib/product-visibility";
@@ -47,7 +40,12 @@ import { resolveHealthCareBrowseSubSlug } from "@/lib/health-care-browse";
 import { resolveProductSubSlug } from "@/lib/product-subslug";
 import { storefrontRetailFromSupplierBase, storefrontRetailProductMetaFromRow, STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { getCachedActiveProductsBrowseRows } from "@/lib/cached-storefront-products";
-import { getCachedMainCategoryFilteredRows } from "@/lib/cached-main-category-browse";
+import {
+  getCachedCatalogHasMappedProducts,
+  getCachedMainCategoryFilteredRows,
+  getCachedWorkwearExclusiveMainBrowseRows,
+} from "@/lib/cached-main-category-browse";
+import { isWorkwearExclusiveBrandRow } from "@/lib/workwear-exclusive-main-browse";
 import { PRODUCT_CARD_CODE_PRICE_SEPARATOR, productCardModelPriceRowStyle } from "@/lib/product-card-model-price-layout";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
@@ -119,7 +117,10 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     notFound();
   }
 
-  const allRows = await getCachedActiveProductsBrowseRows();
+  const [catalogRows, catalogHasMappedProducts] = await Promise.all([
+    getCachedActiveProductsBrowseRows(),
+    getCachedCatalogHasMappedProducts(),
+  ]);
 
   const inferredBrandForFilter = (item: {
     supplier_name?: string | null;
@@ -147,88 +148,11 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     return "";
   };
 
-  const jbLooksHiVis = (item: { name: string; slug?: string | null; category?: string | null; description?: string | null }) => {
-    const hay = `${item.name} ${item.slug ?? ""} ${item.category ?? ""} ${item.description ?? ""}`.toLowerCase();
-    return /\bhv\b/.test(hay) || /\bhi[\s-]*vis\b/.test(hay) || /\bhigh[\s-]*vis\b/.test(hay);
-  };
-
-  const looksWorkwearKeywordListing = (item: {
-    name: string;
-    slug?: string | null;
-    category?: string | null;
-    description?: string | null;
-  }) => {
-    const hay = `${item.name} ${item.slug ?? ""} ${item.category ?? ""} ${item.description ?? ""}`.toLowerCase();
-    return (
-      /\bhv\b/.test(hay) ||
-      /\bhi[\s-]*vis\b/.test(hay) ||
-      /\bhigh[\s-]*vis\b/.test(hay) ||
-      /\bwork\s*shirt\b/.test(hay) ||
-      /\bwork\s*shirts?\b/.test(hay) ||
-      /\breflective\b/.test(hay) ||
-      /\brail\b/.test(hay) ||
-      /\broad\b/.test(hay)
-    );
-  };
-
-  const isWorkwearExclusiveBrand = (item: CategoryBrowseProductRow): boolean => {
-    const dncPpeMeta = {
-      slug: item.slug ?? null,
-      category: item.category ?? null,
-      description: item.description ?? null,
-      supplier_name: item.supplier_name ?? null,
-    };
-    if (isDncPpeGloveExclusiveListing(item.name, dncPpeMeta)) {
-      return false;
-    }
-    if (isDncPpeSafetyGlassesExclusiveListing(item.name, dncPpeMeta)) {
-      return false;
-    }
-    if (isBizCollectionListing(item.name, item.slug ?? null, item.category ?? null)) {
-      return false;
-    }
-    if (
-      isAussiePacificCatalogListing(item.name, {
-        slug: item.slug ?? null,
-        supplier_name: item.supplier_name ?? null,
-      })
-    ) {
-      return false;
-    }
-    const b = inferredBrandForFilter(item).toLowerCase();
-    if (b === "syzmik" || b === "bisley") {
-      return true;
-    }
-    if (b === "jb's wear") {
-      if (isJbWorkwearExcludedHeadwearOrSocks(item.name, { category: item.category ?? null })) {
-        return false;
-      }
-      return (
-        isJbWearSixSeriesListing(item.name, {
-        slug: item.slug ?? null,
-        supplier_name: item.supplier_name ?? null,
-        }) || jbLooksHiVis(item)
-      );
-    }
-    return looksWorkwearKeywordListing(item);
-  };
-
-  const baseRows =
+  const baseRows = (
     slug === "workwear"
-      ? allRows.filter(
-          (item) =>
-            !item.storefront_hidden &&
-            isWorkwearExclusiveBrand(item) &&
-            hasStorefrontListNameAndPrice(item.name, item.base_price),
-        )
-      : (slug === "mens" || slug === "womens"
-          ? await getCachedMainCategoryFilteredRows(slug)
-          : filterProductsForMainCategoryBrowse(slug, allRows)
-        ).filter(
-          // Hard guard: Bisley + Syzmik should never appear outside Workwear,
-          // even if upstream heuristics change.
-          (item) => !isWorkwearExclusiveBrand(item),
-        );
+      ? await getCachedWorkwearExclusiveMainBrowseRows()
+      : await getCachedMainCategoryFilteredRows(slug)
+  ).filter((item) => slug === "workwear" || !isWorkwearExclusiveBrandRow(item));
 
   const filteredAllBrands = sortCategoryBrowseDefault(slug, baseRows, inferredBrandForFilter);
 
@@ -300,11 +224,6 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     }
     return Array.from({ length: end - start + 1 }, (_, i) => start + i);
   })();
-
-  const matchAnySub = allRows.filter((item) => {
-    const resolved = resolveProductSubSlug(item.name, item.category, item.slug, item.description);
-    return resolved != null;
-  });
 
   return (
     <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
@@ -500,13 +419,13 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
               className="space-y-2 rounded-xl border border-brand-navy/10 bg-brand-surface px-4 py-4 text-sm text-brand-navy/80"
               role="status"
             >
-              {allRows.length === 0 ? (
+              {catalogRows.length === 0 ? (
                 <p>
                   <span className="font-semibold text-brand-navy">Catalog unavailable.</span> The site could not
                   load products from the database. If this persists, Supabase API keys on Vercel may need syncing —
                   see <code className="rounded bg-white px-1">docs/SUPABASE_VERCEL_ENV.md</code>.
                 </p>
-              ) : matchAnySub.length === 0 ? (
+              ) : !catalogHasMappedProducts ? (
                 <p>
                   <span className="font-semibold text-brand-navy">Nothing mapped here.</span> No active
                   products are mapped into this category. Check catalog data or style-to-category rules.

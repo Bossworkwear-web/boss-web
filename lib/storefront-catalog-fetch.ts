@@ -1,5 +1,46 @@
+import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
 import type { CategoryBrowseProductRow } from "@/lib/main-category-browse";
 import { createSupabaseClient } from "@/lib/supabase";
+
+/** Matches `storefront_browse_products` view — enough for visibility/subslug rules, not full PDP copy. */
+export const BROWSE_DESCRIPTION_MAX_CHARS = 512;
+
+const BROWSE_IMAGE_URL_MAX_COUNT = 1;
+const CL542UL_BROWSE_HERO_FRAGMENT = "CL542UL_TALENT_MIDNIGHTNAVY_07.JPG";
+
+export function slimBrowseCatalogRow(row: CategoryBrowseProductRow): CategoryBrowseProductRow {
+  const rawDesc = row.description;
+  const description =
+    rawDesc == null
+      ? null
+      : rawDesc.length <= BROWSE_DESCRIPTION_MAX_CHARS
+        ? rawDesc
+        : rawDesc.slice(0, BROWSE_DESCRIPTION_MAX_CHARS);
+
+  const urls = row.image_urls;
+  if (!urls?.length) {
+    return description === row.description ? row : { ...row, description };
+  }
+
+  const code = fashionBizStyleCodeFromListing(row.name, row.slug ?? null);
+  let picked = urls[0] ?? null;
+  if (code?.toUpperCase() === "CL542UL") {
+    const hit = urls.find((u) => String(u).toUpperCase().includes(CL542UL_BROWSE_HERO_FRAGMENT));
+    if (hit?.trim()) {
+      picked = hit.trim();
+    }
+  }
+
+  const image_urls = picked ? [picked] : null;
+  if (description === row.description && image_urls?.[0] === urls[0] && urls.length <= BROWSE_IMAGE_URL_MAX_COUNT) {
+    return row;
+  }
+  return { ...row, description, image_urls };
+}
+
+function slimBrowseCatalogRows(rows: CategoryBrowseProductRow[]): CategoryBrowseProductRow[] {
+  return rows.map(slimBrowseCatalogRow);
+}
 
 export class StorefrontCatalogFetchError extends Error {
   constructor(message: string) {
@@ -344,8 +385,10 @@ export async function fetchActiveProductsBrowseRowsUncached(): Promise<CategoryB
 
   const fromView = await fetchActiveProductsBrowseRowsViaView(supabase, maxScan);
   if (fromView != null) {
-    return fromView;
+    return slimBrowseCatalogRows(fromView);
   }
 
-  return fetchActiveProductsBrowseRowsLegacy(supabase, pageSize, maxScan);
+  return slimBrowseCatalogRows(
+    await fetchActiveProductsBrowseRowsLegacy(supabase, pageSize, maxScan),
+  );
 }

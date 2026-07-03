@@ -28,9 +28,7 @@ import { getDiscountPercent } from "@/lib/discounts";
 import { getMainCategory, getSubCategoriesForMain, HEALTH_CARE_MAIN_SLUG, SUB_CATEGORIES } from "@/lib/catalog";
 import {
   CATEGORY_BROWSE_PAGE_SIZE,
-  filterProductsForSubCategoryBrowse,
   resolveChefCategoryBrowseSubSlug,
-  type CategoryBrowseProductRow,
 } from "@/lib/main-category-browse";
 import { productCardDisplayLines } from "@/lib/product-card-copy";
 import { isBizCollectionListing } from "@/lib/fashion-biz-gender-route";
@@ -44,7 +42,10 @@ import { resolveHealthCareBrowseSubSlug } from "@/lib/health-care-browse";
 import { resolveProductSubSlug } from "@/lib/product-subslug";
 import { storefrontRetailFromSupplierBase, storefrontRetailProductMetaFromRow, STOREFRONT_RETAIL_GST_RATE } from "@/lib/product-price";
 import { getCachedActiveProductsBrowseRows } from "@/lib/cached-storefront-products";
-import { getCachedSubCategoryFilteredRows } from "@/lib/cached-main-category-browse";
+import {
+  getCachedCatalogHasMappedProducts,
+  getCachedSubCategoryFilteredRows,
+} from "@/lib/cached-main-category-browse";
 import { PRODUCT_CARD_CODE_PRICE_SEPARATOR, productCardModelPriceRowStyle } from "@/lib/product-card-model-price-layout";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
@@ -170,7 +171,10 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
     notFound();
   }
 
-  const allRows = await getCachedActiveProductsBrowseRows();
+  const [catalogRows, catalogHasMappedProducts] = await Promise.all([
+    getCachedActiveProductsBrowseRows(),
+    getCachedCatalogHasMappedProducts(),
+  ]);
 
   const inferredBrandForFilter = (item: {
     supplier_name?: string | null;
@@ -202,28 +206,7 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
     return /\bhv\b/.test(hay) || /\bhi[\s-]*vis\b/.test(hay) || /\bhigh[\s-]*vis\b/.test(hay);
   };
 
-  const looksWorkwearShirtKeywords = (item: {
-    name: string;
-    slug?: string | null;
-    category?: string | null;
-    description?: string | null;
-  }) => {
-    const hay = `${item.name} ${item.slug ?? ""} ${item.category ?? ""} ${item.description ?? ""}`.toLowerCase();
-    return (
-      /\bhv\b/.test(hay) ||
-      /\bhi[\s-]*vis\b/.test(hay) ||
-      /\bhigh[\s-]*vis\b/.test(hay) ||
-      /\bwork\s*shirt\b/.test(hay) ||
-      /\bwork\s*shirts?\b/.test(hay) ||
-      /\breflective\b/.test(hay)
-    );
-  };
-
-  const subCategoryRows = (
-    slug === "mens" || slug === "womens"
-      ? await getCachedSubCategoryFilteredRows(slug, subSlug)
-      : filterProductsForSubCategoryBrowse(slug, subSlug, allRows)
-  ).filter((item) => {
+  const subCategoryRows = (await getCachedSubCategoryFilteredRows(slug, subSlug)).filter((item) => {
       if (slug === "workwear") {
         if (isBizCollectionListing(item.name, item.slug ?? null, item.category ?? null)) {
           return false;
@@ -325,11 +308,6 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
     }
     return Array.from({ length: end - start + 1 }, (_, i) => start + i);
   })();
-
-  const matchAnySub = allRows.filter((item) => {
-    const resolved = resolveProductSubSlug(item.name, item.category, item.slug, item.description);
-    return resolved != null;
-  });
 
   return (
     <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
@@ -535,13 +513,13 @@ export default async function SubCategoryBrowsePage({ params, searchParams }: Pr
               className="space-y-2 rounded-xl border border-brand-navy/10 bg-brand-surface px-4 py-4 text-sm text-brand-navy/80"
               role="status"
             >
-              {allRows.length === 0 ? (
+              {catalogRows.length === 0 ? (
                 <p>
                   <span className="font-semibold text-brand-navy">Catalog unavailable.</span> The site could not
                   load products from the database. If this persists, Supabase API keys on Vercel may need syncing —
                   see <code className="rounded bg-white px-1">docs/SUPABASE_VERCEL_ENV.md</code>.
                 </p>
-              ) : matchAnySub.length === 0 ? (
+              ) : !catalogHasMappedProducts ? (
                 <p>
                   <span className="font-semibold text-brand-navy">Nothing mapped here.</span> No active
                   products are mapped into this category. Check catalog data or style-to-category rules.

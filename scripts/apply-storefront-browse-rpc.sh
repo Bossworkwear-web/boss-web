@@ -10,7 +10,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BOSS_WEB="$(cd "$SCRIPT_DIR/.." && pwd)"
-MIGRATION="$BOSS_WEB/supabase/migrations/20260605_storefront_browse_rpc.sql"
+MIGRATION_BASE="$BOSS_WEB/supabase/migrations/20260605_storefront_browse_rpc.sql"
+MIGRATION_SLIM="$BOSS_WEB/supabase/migrations/20260703_storefront_browse_slim_payload.sql"
 DRY_RUN=0
 
 for arg in "$@"; do
@@ -19,8 +20,12 @@ for arg in "$@"; do
   fi
 done
 
-if [[ ! -f "$MIGRATION" ]]; then
-  echo "Missing migration: $MIGRATION" >&2
+if [[ ! -f "$MIGRATION_BASE" ]]; then
+  echo "Missing migration: $MIGRATION_BASE" >&2
+  exit 1
+fi
+if [[ ! -f "$MIGRATION_SLIM" ]]; then
+  echo "Missing migration: $MIGRATION_SLIM" >&2
   exit 1
 fi
 
@@ -71,8 +76,11 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   exit 0
 fi
 
-echo "== Applying $MIGRATION =="
-psql "$SUPABASE_DB_DIRECT_URL" -v ON_ERROR_STOP=1 -f "$MIGRATION"
+echo "== Applying $MIGRATION_BASE =="
+psql "$SUPABASE_DB_DIRECT_URL" -v ON_ERROR_STOP=1 -f "$MIGRATION_BASE"
+
+echo "== Applying $MIGRATION_SLIM =="
+psql "$SUPABASE_DB_DIRECT_URL" -v ON_ERROR_STOP=1 -f "$MIGRATION_SLIM"
 
 echo "== Post-check =="
 psql "$SUPABASE_DB_DIRECT_URL" -v ON_ERROR_STOP=1 -At -c "
