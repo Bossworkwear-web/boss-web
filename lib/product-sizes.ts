@@ -2,13 +2,18 @@ import { fashionBizListingGenderAudience } from "@/lib/fashion-biz-gender-route"
 
 /** Letter sizing for men's / unisex tops (and many men's workwear bottoms use numeric waist — CSV still wins). */
 const MENS_LETTER_ORDER = [
+  "XXXS",
+  "3XS",
   "XXS",
+  "2XS",
   "XS",
   "S",
   "M",
   "L",
   "XL",
+  "XXL",
   "2XL",
+  "XXXL",
   "3XL",
   "4XL",
   "5XL",

@@ -171,6 +171,9 @@ const PLACEMENT_SELECTOR_ROW_LABEL_TEXT = "text-[1.008rem]";
 const SIZE_QUANTITY_LABEL_TEXT = "text-[1.008rem]";
 const SIZE_QUANTITY_INPUT_CLASS =
   "w-full rounded-lg border border-brand-navy/20 bg-brand-surface/40 px-[0.4rem] py-[0.3rem] text-[1.008rem] text-brand-navy tabular-nums focus:border-brand-orange focus:outline-none focus:ring-1 focus:ring-brand-orange";
+const SIZE_QUANTITY_INPUT_WITH_SPINNER_CLASS = `${SIZE_QUANTITY_INPUT_CLASS} pr-6`;
+const SIZE_QUANTITY_SPINNER_BTN_CLASS =
+  "flex flex-1 items-center justify-center text-brand-navy/55 transition hover:bg-brand-navy/5 hover:text-brand-navy disabled:cursor-not-allowed disabled:opacity-35";
 
 type LogoAttachmentRow = {
   key: string;
@@ -1827,6 +1830,18 @@ function parseSizeQuantityInput(raw: string): number {
     return 0;
   }
   return Math.max(0, Math.min(999, parseInt(digits, 10) || 0));
+}
+
+function SizeQuantitySpinnerIcon({ direction }: { direction: "up" | "down" }) {
+  return (
+    <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden>
+      {direction === "up" ? (
+        <path d="M6 2.5 10.5 8.5h-9Z" fill="currentColor" />
+      ) : (
+        <path d="M6 9.5 1.5 3.5h9Z" fill="currentColor" />
+      )}
+    </svg>
+  );
 }
 
 function emptyColorSizeQuantities(colors: string[], sizes: string[]): Record<string, Record<string, number>> {
@@ -3741,11 +3756,22 @@ export function PremiumWorkPoloClient({
                 This colour is discontinued. Size &amp; quantity entry is disabled.
               </p>
             ) : null}
-            <div className="grid grid-cols-3 gap-1.5 sm:gap-2 lg:grid-cols-4">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2 lg:grid-cols-5">
               {product.sizeOptions.map((size) => {
                 const row =
                   colorSizeQuantities[selectedColor] ?? emptySizeQuantities(product.sizeOptions);
                 const sizeQtyId = `size-qty-${compactColorKey(selectedColor)}-${compactColorKey(size)}`;
+                const qty = row[size] ?? 0;
+                const commitQty = (nextQty: number) => {
+                  const v = Math.max(0, Math.min(999, nextQty));
+                  setColorSizeQuantities((prev) => {
+                    const base = prev[selectedColor] ?? emptySizeQuantities(product.sizeOptions);
+                    return {
+                      ...prev,
+                      [selectedColor]: { ...base, [size]: v },
+                    };
+                  });
+                };
                 return (
                   <div
                   key={size}
@@ -3755,55 +3781,78 @@ export function PremiumWorkPoloClient({
                   <label htmlFor={sizeQtyId} className="sr-only">
                     Quantity for {selectedColor} size {size}
                   </label>
-                  <input
-                    id={sizeQtyId}
-                    type="text"
-                    inputMode="numeric"
-                    data-latin-mode="number"
-                    autoComplete="off"
-                    lang="en"
-                    disabled={selectedColorIsDiscontinued}
-                    value={(row[size] ?? 0) === 0 ? "" : String(row[size] ?? 0)}
-                    onChange={(e) => {
-                      const v = parseSizeQuantityInput(e.target.value);
-                      setColorSizeQuantities((prev) => {
-                        const base = prev[selectedColor] ?? emptySizeQuantities(product.sizeOptions);
-                        return {
-                          ...prev,
-                          [selectedColor]: { ...base, [size]: v },
-                        };
-                      });
-                    }}
-                    onCompositionEnd={(e) => {
-                      const v = parseSizeQuantityInput(e.currentTarget.value);
-                      setColorSizeQuantities((prev) => {
-                        const base = prev[selectedColor] ?? emptySizeQuantities(product.sizeOptions);
-                        if ((base[size] ?? 0) === v) {
-                          return prev;
+                  <div className="relative">
+                    <input
+                      id={sizeQtyId}
+                      type="text"
+                      inputMode="numeric"
+                      data-latin-mode="number"
+                      autoComplete="off"
+                      lang="en"
+                      placeholder="0"
+                      disabled={selectedColorIsDiscontinued}
+                      value={qty === 0 ? "" : String(qty)}
+                      onFocus={(e) => {
+                        e.target.select();
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "ArrowUp") {
+                          e.preventDefault();
+                          commitQty(qty + 1);
+                          return;
                         }
-                        return {
-                          ...prev,
-                          [selectedColor]: { ...base, [size]: v },
-                        };
-                      });
-                    }}
-                    onBlur={(e) => {
-                      const v = parseSizeQuantityInput(e.target.value);
-                      setColorSizeQuantities((prev) => {
-                        const base = prev[selectedColor] ?? emptySizeQuantities(product.sizeOptions);
-                        if ((base[size] ?? 0) === v) {
-                          return prev;
+                        if (e.key === "ArrowDown") {
+                          e.preventDefault();
+                          commitQty(qty - 1);
+                          return;
                         }
-                        return {
-                          ...prev,
-                          [selectedColor]: { ...base, [size]: v },
-                        };
-                      });
-                    }}
-                    className={`${SIZE_QUANTITY_INPUT_CLASS} ${
-                      selectedColorIsDiscontinued ? "cursor-not-allowed opacity-50" : ""
-                    }`}
-                  />
+                        if (qty === 0 && /^[0-9]$/.test(e.key) && e.currentTarget.value === "") {
+                          if (e.key === "0") {
+                            e.preventDefault();
+                            return;
+                          }
+                          e.preventDefault();
+                          commitQty(parseInt(e.key, 10));
+                        }
+                      }}
+                      onChange={(e) => {
+                        commitQty(parseSizeQuantityInput(e.target.value));
+                      }}
+                      onCompositionEnd={(e) => {
+                        commitQty(parseSizeQuantityInput(e.currentTarget.value));
+                      }}
+                      onBlur={(e) => {
+                        commitQty(parseSizeQuantityInput(e.target.value));
+                      }}
+                      className={`${SIZE_QUANTITY_INPUT_WITH_SPINNER_CLASS} ${
+                        selectedColorIsDiscontinued ? "cursor-not-allowed opacity-50" : ""
+                      }`}
+                    />
+                    <div
+                      className={`absolute inset-y-0 right-0 flex w-5 flex-col overflow-hidden rounded-r-lg border-l border-brand-navy/15 ${
+                        selectedColorIsDiscontinued ? "pointer-events-none opacity-50" : ""
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        disabled={selectedColorIsDiscontinued || qty >= 999}
+                        aria-label={`Increase quantity for size ${size}`}
+                        onClick={() => commitQty(qty + 1)}
+                        className={SIZE_QUANTITY_SPINNER_BTN_CLASS}
+                      >
+                        <SizeQuantitySpinnerIcon direction="up" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={selectedColorIsDiscontinued || qty <= 0}
+                        aria-label={`Decrease quantity for size ${size}`}
+                        onClick={() => commitQty(qty - 1)}
+                        className={`${SIZE_QUANTITY_SPINNER_BTN_CLASS} border-t border-brand-navy/15`}
+                      >
+                        <SizeQuantitySpinnerIcon direction="down" />
+                      </button>
+                    </div>
+                  </div>
                   </div>
                 );
               })}
