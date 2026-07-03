@@ -3053,7 +3053,8 @@ export function isProductVisibleInCategoryBrowse(
     const isKids = /\b(kids|kid's|children|child)\b/i.test(productName);
 
     // Explicit rule requested: JB hoodie/polar/fleecy → Men's / Jackets.
-    if (jbForceMensJackets) {
+    // Kid's lines (e.g. JB's KIDS FLEECY SWEAT) are exempt so they still list under Kid's.
+    if (jbForceMensJackets && !isKids) {
       if (mainSlug !== MENS_MAIN_SLUG) {
         return false;
       }

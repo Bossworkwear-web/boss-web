@@ -52,6 +52,7 @@ import {
   womensBrowseRemapPantsSubSlugIfMisfiledWomensTop,
 } from "@/lib/product-visibility";
 import { storefrontStripSupplierBranding } from "@/lib/product-display-name";
+import { fashionBizStyleCodeFromListing } from "@/lib/fashion-biz-style-code";
 import { syzmikStyleCodeFromListing } from "@/lib/product-card-copy";
 import {
   inferSubSlugFromNameHeuristics,
@@ -556,6 +557,34 @@ function resolveWorkwearCategoryBrowseSubSlug(
   return resolved;
 }
 
+/**
+ * Kid's jackets/t-shirts rows that are really knit layers → Jumper.
+ * Catches named jumpers/sweats (JB 3KJ / 3KFS, "1/2 zip polar") and Biz Collection `SW*` sweater codes,
+ * while leaving true outerwear (hoodie / jacket / vest / softshell) under Jackets.
+ */
+function looksLikeKidsJumperRow(item: CategoryBrowseProductRow): boolean {
+  // Title/slug/category only — descriptions mention fabric ("knitted rib", "sweat-wicking")
+  // that would misclassify plain tees/polos as jumpers.
+  const blob = [item.name, item.category, item.slug]
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+    .join("\n")
+    .toLowerCase();
+  const looksOuterwear =
+    /\b(hoodie|hoody|jacket|coat|parka|windbreaker|bomber|anorak|softshell|hard\s*shell|hardshell|rain|puffer|vest)\b/.test(
+      blob,
+    );
+  if (looksOuterwear) {
+    return false;
+  }
+  const wantsJumper = /\b(jumper|sweater|sweatshirt|sweat|pullover|knit(?:ted)?|polar)\b/.test(blob);
+  if (wantsJumper) {
+    return true;
+  }
+  // Biz Collection `SW###` codes are sweaters even when the title carries no keyword.
+  const code = fashionBizStyleCodeFromListing(item.name, item.slug ?? null);
+  return code != null && /^SW\d/i.test(code);
+}
+
 function resolveKidsCategoryBrowseSubSlug(resolved: string | null, item: CategoryBrowseProductRow): string | null {
   const kidsMeta = {
     slug: item.slug ?? null,
@@ -579,6 +608,10 @@ function resolveKidsCategoryBrowseSubSlug(resolved: string | null, item: Categor
   }
   if (isKidsJacketsJ307kJ3150bJ740kExclusiveListing(item.name, kidsMeta)) {
     return "jackets";
+  }
+  // Knit layers (JB 3KJ / 3KFS, Biz `SW*` sweaters) → Jumper before the broad kids-jackets pin.
+  if ((resolved === "jackets" || resolved === "t-shirts") && looksLikeKidsJumperRow(item)) {
+    return "jumper";
   }
   if (isKidsLineJacketsExclusiveCategoryBrowseListing(item.name, kidsMeta)) {
     return "jackets";
