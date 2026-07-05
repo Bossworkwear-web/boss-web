@@ -4,21 +4,18 @@ import { Suspense } from "react";
 import { CustomerDetailsSavedNotice } from "@/app/components/customer-details-saved-notice";
 import { HomeCompanyIntro } from "@/app/components/home-company-intro";
 import { HomeHero } from "@/app/components/home-hero";
-import { ProductShowcase } from "@/app/components/product-showcase";
+import { HomeShopByCategory } from "@/app/components/home-shop-by-category";
 import { TopNav } from "@/app/components/top-nav";
 import { MainWithSupplierRail } from "@/app/components/supplier-ad-banner";
-import { getStorefrontShowcaseProducts } from "@/lib/storefront-showcase-products";
 
-/** Align with `getCachedActiveProductsBrowseRows` (~60s). */
-export const revalidate = 60;
+/** Static home shell; category links only (no full-catalog SSR). */
+export const revalidate = 3600;
 
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
-export default async function Home() {
-  const products = await getStorefrontShowcaseProducts();
-
+export default function Home() {
   return (
     <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
       <Suspense fallback={null}>
@@ -49,7 +46,7 @@ export default async function Home() {
             />
           </div>
         </section>
-        <ProductShowcase hideTopNav products={products} initialSearchQuery="" layout="home" />
+        <HomeShopByCategory />
       </MainWithSupplierRail>
     </main>
   );

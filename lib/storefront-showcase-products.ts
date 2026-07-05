@@ -58,7 +58,7 @@ const fallbackProducts: StoreProduct[] = [
   },
 ];
 
-/** Active storefront rows mapped for home / search grids (same source as category browse cache). */
+/** Active storefront rows mapped for `/search` grids (same source as category browse cache). Home uses static category cards only. */
 export async function getStorefrontShowcaseProducts(): Promise<StoreProduct[]> {
   try {
     const data = await getCachedActiveProductsBrowseRows();
