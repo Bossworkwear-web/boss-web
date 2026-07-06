@@ -11,7 +11,8 @@ export const dynamic = "force-dynamic";
  * GET /api/cron/xero-resync
  * Authorization: Bearer $CRON_SECRET
  *
- * Vercel Cron: see vercel.json. Only looks back a limited window so it never dredges ancient history.
+ * Vercel Cron: `0 5,10 * * *` UTC = 1:00 PM and 6:00 PM Australia/Perth (see vercel.json).
+ * Only looks back a limited window so it never dredges ancient history.
  */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
