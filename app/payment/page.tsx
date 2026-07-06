@@ -473,7 +473,14 @@ export default function PaymentPage() {
           // ignore
         }
       } else {
-        setPayError(res.error);
+        const duplicatePaid =
+          res.error.includes("Payment amount does not match") ||
+          res.error.includes("already recorded");
+        setPayError(
+          duplicatePaid
+            ? `${res.error} Your card may have been charged — do not pay again. Email sales@bossworkwear.com.au with your name and we will confirm your order.`
+            : res.error,
+        );
       }
       setReturningFromStripe(false);
     });

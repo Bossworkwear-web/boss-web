@@ -38,8 +38,11 @@ export async function POST(req: Request) {
       const result = await fulfillStoreOrderFromStripeCheckoutSession(session.id);
       if (!result.ok) {
         console.error("[stripe/webhook] fulfill:", session.id, result.error);
-        const retry = result.error.includes("temporarily unavailable");
-        if (retry) {
+        const noRetry =
+          result.error.includes("already recorded") ||
+          result.error.includes("Invalid Stripe Checkout session") ||
+          result.error.includes("No checkout snapshot");
+        if (!noRetry) {
           return Response.json({ ok: false, error: result.error }, { status: 500 });
         }
       }

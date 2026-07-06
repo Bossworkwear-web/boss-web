@@ -2946,6 +2946,12 @@ export function isProductVisibleInCategoryBrowse(
     if (isFashionBizShirtsWomensExclusiveListing(productName, meta)) {
       return mainSlug === WOMENS_MAIN_SLUG;
     }
+    const aud = normalizeAudience(meta?.audience ?? null);
+    const isKidsLine =
+      aud === "kids" || /\b(kids|kid's|children|child)\b/i.test(productName);
+    if (isKidsLine && mainSlug === KIDS_MAIN_SLUG) {
+      return true;
+    }
     return mainSlug === WORKWEAR_MAIN_SLUG;
   }
 

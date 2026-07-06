@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { assertAdminSession } from "@/lib/admin-auth";
+import { fulfillStoreOrderFromStripeCheckoutSession } from "@/lib/fulfill-stripe-checkout-order";
 import { revalidateStoreOrderListPaths } from "@/lib/revalidate-store-order-lists";
 import {
   createStripeRefundForPaymentIntent,
@@ -12,6 +13,41 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 export type StoreOrderRefundActionResult = { ok: true } | { ok: false; error: string };
+
+export type RecoverPaidCheckoutResult =
+  | { ok: true; orderNumber: string; orderId: string; trackUrl: string }
+  | { ok: false; error: string };
+
+/** Create a store order from a paid Stripe Checkout session that never fulfilled (Admin recovery). */
+export async function recoverPaidStripeCheckoutSession(
+  stripeSessionIdRaw: string,
+): Promise<RecoverPaidCheckoutResult> {
+  try {
+    await assertAdminSession();
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const sessionId = stripeSessionIdRaw.trim();
+  if (!sessionId.startsWith("cs_")) {
+    return { ok: false, error: "Enter a paid Checkout session id (cs_…)." };
+  }
+
+  const result = await fulfillStoreOrderFromStripeCheckoutSession(sessionId);
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+
+  revalidateStoreOrderListPaths();
+  revalidatePath("/admin/online-orders");
+  revalidatePath("/admin/store-orders");
+  return {
+    ok: true,
+    orderNumber: result.orderNumber,
+    orderId: result.orderId,
+    trackUrl: result.trackUrl,
+  };
+}
 
 type OrderStripeRow = {
   id: string;

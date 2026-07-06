@@ -1,4 +1,3 @@
-import { resolveInternalAlertEmail } from "@/lib/internal-alert-email";
 import { resendFromAccount } from "@/lib/resend-from";
 import { siteBaseUrl } from "@/lib/store-order-utils";
 
@@ -10,12 +9,12 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Who receives new online order alerts. Defaults to accounts@bossworkwear.au. */
+/** Default inbox for paid online order staff alerts. */
+export const ONLINE_ORDER_ALERT_EMAIL_DEFAULT = "sales@bossworkwear.au";
+
+/** Who receives new online order alerts. Override with `ONLINE_ORDER_ALERT_EMAIL` in env. */
 function alertRecipient(): string {
-  return resolveInternalAlertEmail(
-    process.env.ONLINE_ORDER_ALERT_EMAIL,
-    process.env.CRM_INTERNAL_NOTIFY_EMAIL,
-  );
+  return process.env.ONLINE_ORDER_ALERT_EMAIL?.trim() || ONLINE_ORDER_ALERT_EMAIL_DEFAULT;
 }
 
 /**

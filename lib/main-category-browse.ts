@@ -619,6 +619,10 @@ function resolveKidsCategoryBrowseSubSlug(resolved: string | null, item: Categor
   if (resolved == null || resolved === "") {
     return null;
   }
+  // Kid's nav uses `shirts`; DNC/Syzmik DB rows often file as `work-shirts`.
+  if (resolved === "work-shirts") {
+    return "shirts";
+  }
   return resolved;
 }
 

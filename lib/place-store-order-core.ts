@@ -18,6 +18,7 @@ import {
   validatePromotionCodeForCheckout,
 } from "@/lib/promotion-codes";
 import { validateSpecialDealPackageCartLines } from "@/lib/storefront-special-deal-package-cart";
+import { isStripeCheckoutPaidAmountAcceptable } from "@/lib/stripe-checkout-amount";
 import { retrievePaidCheckoutSession } from "@/lib/store-order-stripe";
 import { markStoreCheckoutPendingFulfilled } from "@/lib/store-checkout-pending";
 import {
@@ -317,8 +318,14 @@ export async function placeStoreOrderCore(
     if (!sessionRes.ok) {
       return { ok: false, error: sessionRes.error };
     }
-    if (cardPayCents > 0 && sessionRes.info.amountTotalCents !== cardPayCents) {
-      return { ok: false, error: "Payment amount does not match order total. Please contact support." };
+    if (
+      cardPayCents > 0 &&
+      !isStripeCheckoutPaidAmountAcceptable(cardPayCents, sessionRes.info.amountTotalCents)
+    ) {
+      return {
+        ok: false,
+        error: `Payment amount does not match order total (paid ${(sessionRes.info.amountTotalCents / 100).toFixed(2)} AUD, expected ${(cardPayCents / 100).toFixed(2)} AUD). Please contact support.`,
+      };
     }
     if (cardPayCents === 0 && sessionRes.info.amountTotalCents > 0) {
       return { ok: false, error: "Payment amount does not match order total. Please contact support." };
@@ -505,13 +512,18 @@ export async function placeStoreOrderCore(
   if (!clickUpRes.ok) {
     console.error("[placeStoreOrderCore] click_up_sheet_list:", clickUpRes.error);
   }
-  revalidatePath("/admin/supplier-orders");
-  revalidatePath("/admin/online-orders");
-  revalidatePath("/admin/instore-orders");
-  revalidatePath("/admin/store-orders");
-  revalidatePath("/admin/reports");
-  revalidatePath("/admin/work-process");
-  revalidatePath("/admin/click-up-sheet");
+  try {
+    revalidatePath("/admin/supplier-orders");
+    revalidatePath("/admin/online-orders");
+    revalidatePath("/admin/instore-orders");
+    revalidatePath("/admin/store-orders");
+    revalidatePath("/admin/reports");
+    revalidatePath("/admin/work-process");
+    revalidatePath("/admin/click-up-sheet");
+  } catch (e) {
+    // Webhook / CLI recovery runs outside a Next.js request — revalidation is best-effort only.
+    console.error("[placeStoreOrderCore] revalidatePath:", e);
+  }
 
   const totalFormatted = formatMoneyFromCents(totalCents, "AUD");
   let xeroInvoiceNumber: string | undefined;
