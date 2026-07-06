@@ -464,10 +464,15 @@ img.category-top-ad-wa-mark {
   line-height: 1.15;
 }
 
-/* Admin panel print: root was 80% for screen density — bump +50% on paper for legibility (rem-based UI scales). */
+/* Admin portal: +20% rem scale (nav, tables, forms) vs storefront fluid root. */
+html:has([data-admin-portal]) {
+  font-size: calc(clamp(73%, calc(70% + 1vw), 88%) * 1.2);
+}
+
+/* Admin panel print: extra legibility on paper (rem-based UI scales from html root). */
 @media print {
   html:has(.admin-root-print-shell) {
-    font-size: 120% !important;
+    font-size: calc(clamp(73%, calc(70% + 1vw), 88%) * 1.44) !important;
   }
 }
 

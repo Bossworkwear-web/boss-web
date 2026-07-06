@@ -1,3 +1,3 @@
 export default function AdminRootLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <div data-admin-portal>{children}</div>;
 }
