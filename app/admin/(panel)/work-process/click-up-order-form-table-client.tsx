@@ -25,6 +25,9 @@ function rowSearchBlob(row: ClickUpOrderFormRow): string {
     row.storeOrderDateDisplay,
     row.organisationName,
     row.customerName,
+    row.customerPhone,
+    row.customerEmail,
+    row.fulfillmentMethod === "Pickup" ? "pick up pickup" : "delivery",
     row.customerOrderId,
     row.processingStageLabel,
   ]
@@ -70,7 +73,7 @@ export function ClickUpOrderFormTableClient({ rows }: { rows: ClickUpOrderFormRo
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="날짜(워크시트·주문), 회사명, 고객명 또는 주문 ID"
+            placeholder="날짜, 회사명, 고객명, 전화, 이메일, Order Type 또는 주문 ID"
             className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none ring-brand-orange/30 placeholder:text-slate-400 focus:border-brand-orange focus:ring-2"
             autoComplete="off"
             spellCheck={false}
@@ -93,7 +96,7 @@ export function ClickUpOrderFormTableClient({ rows }: { rows: ClickUpOrderFormRo
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="w-full min-w-[860px] text-left text-sm">
+          <table className="w-full min-w-[1100px] text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="whitespace-nowrap px-4 py-3" title="Supplier 워크시트 날짜 (Click up sheet URL의 list_date)">
@@ -104,6 +107,9 @@ export function ClickUpOrderFormTableClient({ rows }: { rows: ClickUpOrderFormRo
                 <th className="min-w-[9rem] px-4 py-3">Order barcode</th>
                 <th className="px-4 py-3">Company Name</th>
                 <th className="px-4 py-3">Customer name</th>
+                <th className="px-4 py-3">Phone</th>
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">Order Type</th>
                 <th
                   className="min-w-[10rem] whitespace-nowrap px-4 py-3"
                   title="Click up → Production → Quality control → Dispatch pipeline (read-only)."
@@ -136,6 +142,23 @@ export function ClickUpOrderFormTableClient({ rows }: { rows: ClickUpOrderFormRo
                   </td>
                   <td className="max-w-[200px] truncate px-4 py-3 text-slate-700" title={row.customerName}>
                     {row.customerName}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-slate-700" title={row.customerPhone}>
+                    {row.customerPhone}
+                  </td>
+                  <td className="max-w-[220px] truncate px-4 py-3 text-slate-700" title={row.customerEmail}>
+                    {row.customerEmail}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <span
+                      className={
+                        row.fulfillmentMethod === "Pickup"
+                          ? "rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-sky-900"
+                          : "rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-700"
+                      }
+                    >
+                      {row.fulfillmentMethod === "Pickup" ? "Pick Up" : "Delivery"}
+                    </span>
                   </td>
                   <td className={`whitespace-nowrap px-4 py-3 ${processingStageCellClass(row.processingStageLabel)}`}>
                     {row.processingStageLabel}

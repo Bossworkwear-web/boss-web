@@ -1,6 +1,10 @@
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { connectionHasInvoiceScope } from "@/lib/xero/config";
-import { findOrCreateXeroContact } from "@/lib/xero/contacts";
+import {
+  findOrCreateXeroContact,
+  updateXeroContactName,
+  xeroInvoiceContactDisplayName,
+} from "@/lib/xero/contacts";
 import { getActiveXeroConnection } from "@/lib/xero/connection-db";
 import { createAuthorisedSalesInvoice, type XeroInvoiceLineInput } from "@/lib/xero/invoices";
 import { recordStoreOrderPaymentInXero } from "@/lib/xero/sync-store-order-payment";
@@ -35,6 +39,88 @@ function buildLineDescription(input: {
   return parts.join(" ");
 }
 
+async function lookupOrganisationByEmail(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  emailRaw: string,
+): Promise<string> {
+  const email = emailRaw.trim();
+  if (!email) return "";
+  const emailLower = email.toLowerCase();
+  const { data: eq } = await supabase
+    .from("customer_profiles")
+    .select("organisation")
+    .eq("email_address", emailLower)
+    .maybeSingle();
+  if (eq?.organisation?.trim()) return eq.organisation.trim();
+  const { data: orig } = await supabase
+    .from("customer_profiles")
+    .select("organisation")
+    .eq("email_address", email)
+    .maybeSingle();
+  if (orig?.organisation?.trim()) return orig.organisation.trim();
+  const { data: ilike } = await supabase
+    .from("customer_profiles")
+    .select("organisation")
+    .ilike("email_address", email)
+    .maybeSingle();
+  return ilike?.organisation?.trim() ?? "";
+}
+
+async function resolveInvoiceContactName(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  order: { customer_email: string; customer_name: string },
+): Promise<string> {
+  const organisation = await lookupOrganisationByEmail(supabase, order.customer_email);
+  return xeroInvoiceContactDisplayName({
+    organisation,
+    customerName: order.customer_name,
+    email: order.customer_email,
+  });
+}
+
+/** Best-effort: rename the Xero contact on an already-synced order to Company Name. */
+export async function refreshSyncedOrderXeroContactName(storeOrderId: string): Promise<{
+  ok: boolean;
+  error?: string;
+  contactName?: string;
+}> {
+  let supabase: ReturnType<typeof createSupabaseAdminClient>;
+  try {
+    supabase = createSupabaseAdminClient();
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Database not configured." };
+  }
+
+  const { data: order, error } = await supabase
+    .from("store_orders")
+    .select("customer_email, customer_name, xero_contact_id, xero_invoice_id")
+    .eq("id", storeOrderId)
+    .maybeSingle();
+
+  if (error || !order) {
+    return { ok: false, error: error?.message ?? "Order not found." };
+  }
+  if (!order.xero_invoice_id || !order.xero_contact_id) {
+    return { ok: false, error: "Order has no Xero invoice/contact yet." };
+  }
+
+  const connection = await getActiveXeroConnection();
+  if (!connection) {
+    return { ok: false, error: "Xero is not connected." };
+  }
+  if (!connectionHasInvoiceScope(connection.scopes)) {
+    return { ok: false, error: "Xero invoice permission missing." };
+  }
+
+  const contactName = await resolveInvoiceContactName(supabase, order);
+  try {
+    await updateXeroContactName(connection, order.xero_contact_id, contactName);
+    return { ok: true, contactName };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not update Xero contact name." };
+  }
+}
+
 export async function syncStoreOrderToXero(storeOrderId: string): Promise<SyncStoreOrderToXeroResult> {
   let supabase: ReturnType<typeof createSupabaseAdminClient>;
   try {
@@ -56,6 +142,7 @@ export async function syncStoreOrderToXero(storeOrderId: string): Promise<SyncSt
   }
 
   if (order.xero_invoice_id) {
+    await refreshSyncedOrderXeroContactName(storeOrderId);
     const payRes = await recordStoreOrderPaymentInXero(storeOrderId);
     if (!payRes.ok) {
       return { ok: false, error: payRes.error, skipped: payRes.skipped };
@@ -155,8 +242,9 @@ export async function syncStoreOrderToXero(storeOrderId: string): Promise<SyncSt
   }
 
   try {
+    const contactName = await resolveInvoiceContactName(supabase, order);
     const contactId = await findOrCreateXeroContact(connection, {
-      name: order.customer_name,
+      name: contactName,
       email: order.customer_email,
     });
 

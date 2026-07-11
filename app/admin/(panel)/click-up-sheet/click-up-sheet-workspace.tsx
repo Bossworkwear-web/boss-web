@@ -37,6 +37,9 @@ type ClickUpSheetDraftV1 = {
   v: 1;
   orderId: string;
   organisationName: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
   logoLocations: string;
   savedAt: string;
 };
@@ -51,6 +54,9 @@ function parseClickUpDraft(raw: string): ClickUpSheetDraftV1 | null {
       v: 1,
       orderId: typeof d.orderId === "string" ? d.orderId : "",
       organisationName: typeof d.organisationName === "string" ? d.organisationName : "",
+      customerName: typeof d.customerName === "string" ? d.customerName : "",
+      customerEmail: typeof d.customerEmail === "string" ? d.customerEmail : "",
+      customerPhone: typeof d.customerPhone === "string" ? d.customerPhone : "",
       logoLocations: typeof d.logoLocations === "string" ? d.logoLocations : "",
       savedAt: typeof d.savedAt === "string" ? d.savedAt : "",
     };
@@ -87,6 +93,10 @@ type Props = {
   initialListDate: string;
   initialCustomerOrderId: string;
   initialOrganisationName: string;
+  initialCustomerName: string;
+  initialCustomerEmail: string;
+  initialCustomerPhone: string;
+  initialFulfillmentMethod?: "Pickup" | "Delivery";
   initialLogoLocations: string;
   initialCheckoutMemos: StoreOrderCustomerMemoLine[];
   initialSupplierLines: ClickUpSupplierLineRow[];
@@ -103,6 +113,10 @@ export function ClickUpSheetWorkspace({
   initialListDate,
   initialCustomerOrderId,
   initialOrganisationName,
+  initialCustomerName,
+  initialCustomerEmail,
+  initialCustomerPhone,
+  initialFulfillmentMethod = "Delivery",
   initialLogoLocations,
   initialCheckoutMemos,
   initialSupplierLines,
@@ -115,6 +129,10 @@ export function ClickUpSheetWorkspace({
   const [orderId, setOrderId] = useState(initialCustomerOrderId);
   const [orderScanPayload, setOrderScanPayload] = useState<string | null>(initialOrderScanPayload);
   const [organisationName, setOrganisationName] = useState(initialOrganisationName);
+  const [customerName, setCustomerName] = useState(initialCustomerName);
+  const [customerEmail, setCustomerEmail] = useState(initialCustomerEmail);
+  const [customerPhone, setCustomerPhone] = useState(initialCustomerPhone);
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<"Pickup" | "Delivery">(initialFulfillmentMethod);
   const [supplierLines, setSupplierLines] = useState<ClickUpSupplierLineRow[]>(initialSupplierLines);
   const [logoLocations, setLogoLocations] = useState(initialLogoLocations);
   const [checkoutMemos, setCheckoutMemos] = useState<StoreOrderCustomerMemoLine[]>(initialCheckoutMemos);
@@ -138,11 +156,14 @@ export function ClickUpSheetWorkspace({
       return;
     }
     skipCustomerLookupOnceRef.current = true;
-    /* eslint-disable react-hooks/set-state-in-effect -- restore draft from localStorage once */
+     
     setOrderId(draft.orderId);
     setOrganisationName(draft.organisationName);
+    setCustomerName(draft.customerName);
+    setCustomerEmail(draft.customerEmail);
+    setCustomerPhone(draft.customerPhone);
     setLogoLocations(draft.logoLocations);
-    /* eslint-enable react-hooks/set-state-in-effect */
+     
   }, [initialListDate, initialCustomerOrderId]);
 
   useEffect(() => {
@@ -157,6 +178,10 @@ export function ClickUpSheetWorkspace({
       const clearTimer = window.setTimeout(() => {
         if (!cancelled) {
           setOrganisationName("");
+          setCustomerName("");
+          setCustomerEmail("");
+          setCustomerPhone("");
+          setFulfillmentMethod("Delivery");
           setLogoLocations("");
           setCheckoutMemos([]);
           setOrderScanPayload(null);
@@ -178,11 +203,15 @@ export function ClickUpSheetWorkspace({
         }
         setOrderScanPayload(result.orderScanPayload);
         setCheckoutMemos(result.checkoutMemos);
+        setFulfillmentMethod(result.fulfillmentMethod);
         if (skipCustomerLookupOnceRef.current) {
           skipCustomerLookupOnceRef.current = false;
           return;
         }
         setOrganisationName(result.organisationName);
+        setCustomerName(result.customerName);
+        setCustomerEmail(result.customerEmail);
+        setCustomerPhone(result.customerPhone);
         setLogoLocations(result.logoLocations);
       })();
     }, 320);
@@ -239,6 +268,9 @@ export function ClickUpSheetWorkspace({
       v: 1,
       orderId,
       organisationName,
+      customerName,
+      customerEmail,
+      customerPhone,
       logoLocations,
       savedAt: new Date().toISOString(),
     };
@@ -407,7 +439,7 @@ export function ClickUpSheetWorkspace({
 
         <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Order</h2>
-          <div className="click-up-sheet-print-order-4 mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end">
+          <div className="click-up-sheet-print-order-4 mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
             <div className="min-w-0">
               <label htmlFor="cus-order-id" className="text-[1.125rem] font-medium text-slate-600">
                 Order ID
@@ -431,6 +463,72 @@ export function ClickUpSheetWorkspace({
                 value={organisationName}
                 onChange={(e) => setOrganisationName(e.target.value)}
               />
+            </div>
+            <div className="min-w-0">
+              <label htmlFor="cus-name" className="text-[1.125rem] font-medium text-slate-600">
+                Customer name
+              </label>
+              <input
+                id="cus-name"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[1.3125rem]"
+                placeholder="Customer name"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+              />
+            </div>
+            <div className="min-w-0">
+              <label htmlFor="cus-phone" className="text-[1.125rem] font-medium text-slate-600">
+                Phone
+              </label>
+              <input
+                id="cus-phone"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[1.3125rem]"
+                placeholder="Phone"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+              />
+            </div>
+            <div className="min-w-0">
+              <label htmlFor="cus-email" className="text-[1.125rem] font-medium text-slate-600">
+                Email
+              </label>
+              <input
+                id="cus-email"
+                type="email"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[1.3125rem]"
+                placeholder="Email"
+                value={customerEmail}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+              />
+            </div>
+            <div className="min-w-0">
+              <p id="cus-order-type-label" className="text-[1.125rem] font-medium text-slate-600">
+                Order Type
+              </p>
+              <div
+                role="group"
+                aria-labelledby="cus-order-type-label"
+                className="mt-1 flex min-h-[2.75rem] w-full items-center gap-6 rounded-lg border border-slate-200 px-3 py-2 text-[1.3125rem]"
+              >
+                <label className="inline-flex cursor-pointer items-center gap-2 text-slate-800">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-brand-orange focus:ring-brand-orange/40"
+                    checked={fulfillmentMethod === "Pickup"}
+                    onChange={() => setFulfillmentMethod("Pickup")}
+                  />
+                  <span>Pick Up</span>
+                </label>
+                <label className="inline-flex cursor-pointer items-center gap-2 text-slate-800">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-brand-orange focus:ring-brand-orange/40"
+                    checked={fulfillmentMethod === "Delivery"}
+                    onChange={() => setFulfillmentMethod("Delivery")}
+                  />
+                  <span>Delivery</span>
+                </label>
+              </div>
             </div>
           </div>
         </section>

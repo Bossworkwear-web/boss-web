@@ -165,7 +165,8 @@ export function XeroConnectionSection({ connection, loadError }: Props) {
           </button>
           <p className="mt-2 text-xs text-slate-500">
             Pushes recent paid orders that have no Xero invoice yet (e.g. orders placed while the connection was down).
-            Safe to run anytime — already-synced orders are skipped, and customers are never charged again.
+            Also updates existing Xero invoice contacts to use Company Name from the customer profile when set.
+            Safe to run anytime — customers are never charged again.
           </p>
         </form>
       ) : null}

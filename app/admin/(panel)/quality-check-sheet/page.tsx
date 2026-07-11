@@ -1,7 +1,12 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { StoreOrderBarcode } from "@/app/components/store-order-barcode";
 import { completeOrdersDocFromSearchParam } from "@/lib/complete-orders-doc-query";
+import {
+  backfillQcQueueListDateIfEmpty,
+  resolveListDateForStoreOrderNumber,
+} from "@/lib/resolve-store-order-list-date";
 import { storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -30,6 +35,46 @@ export default async function AdminQualityCheckSheetPage({
   const listDate = (q.list_date ?? "").trim();
   const customerOrderId = (q.customer_order_id ?? "").trim();
   const completeOrdersDocumentsView = completeOrdersDocFromSearchParam(q.complete_orders_doc);
+
+  let orderScanPayload: string | null = null;
+  let resolvedListDate = "";
+  let storeOrderIdForBackfill: string | null = null;
+
+  if (customerOrderId) {
+    try {
+      const supabase = createSupabaseAdminClient();
+      const { data } = await supabase
+        .from("store_orders")
+        .select("id")
+        .eq("order_number", customerOrderId)
+        .maybeSingle();
+      if (data?.id) {
+        storeOrderIdForBackfill = data.id;
+        orderScanPayload = storeOrderScanPayloadFromId(data.id);
+      }
+
+      // Order ID만 있고 List date가 비어 있으면 큐/supplier 라인에서 복구 (QC 이동 시 list_date 누락 대비).
+      if (!listDate) {
+        resolvedListDate = await resolveListDateForStoreOrderNumber(supabase, customerOrderId);
+        if (resolvedListDate && storeOrderIdForBackfill) {
+          await backfillQcQueueListDateIfEmpty(supabase, storeOrderIdForBackfill, resolvedListDate);
+        }
+      }
+    } catch {
+      /* Supabase not configured or query failed — fall through with empty list date */
+    }
+  }
+
+  if (!listDate && resolvedListDate && customerOrderId) {
+    const next = new URLSearchParams();
+    next.set("list_date", resolvedListDate);
+    next.set("customer_order_id", customerOrderId);
+    if (q.dispatch_move_error) next.set("dispatch_move_error", q.dispatch_move_error);
+    if (q.delivery_move_error) next.set("delivery_move_error", q.delivery_move_error);
+    if (q.complete_orders_doc) next.set("complete_orders_doc", q.complete_orders_doc);
+    redirect(`/admin/quality-check-sheet?${next.toString()}`);
+  }
+
   const hasOrderContext = listDate.length > 0 && customerOrderId.length > 0;
   const dispatchMoveErrorRaw = (q.dispatch_move_error ?? q.delivery_move_error ?? "").trim();
   let dispatchMoveError: string | null = null;
@@ -42,23 +87,6 @@ export default async function AdminQualityCheckSheetPage({
       dispatchMoveError = decodeURIComponent(dispatchMoveErrorRaw.replace(/\+/g, " "));
     } catch {
       dispatchMoveError = dispatchMoveErrorRaw;
-    }
-  }
-
-  let orderScanPayload: string | null = null;
-  if (customerOrderId) {
-    try {
-      const supabase = createSupabaseAdminClient();
-      const { data } = await supabase
-        .from("store_orders")
-        .select("id")
-        .eq("order_number", customerOrderId)
-        .maybeSingle();
-      if (data?.id) {
-        orderScanPayload = storeOrderScanPayloadFromId(data.id);
-      }
-    } catch {
-      /* Supabase not configured or query failed */
     }
   }
 
@@ -127,6 +155,13 @@ export default async function AdminQualityCheckSheetPage({
             <dd className="mt-1 font-mono text-brand-navy">{customerOrderId || "—"}</dd>
           </div>
         </dl>
+        {!listDate && customerOrderId ? (
+          <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            이 주문에 연결된 worksheet 날짜를 자동으로 찾지 못했습니다. Quality Control 목록의{" "}
+            <strong>Open Quality Check sheet</strong>로 다시 열거나, Supplier orders에 해당 Customer order ID 행이
+            있는지 확인하세요.
+          </p>
+        ) : null}
         {orderScanPayload ? (
           <div className="mt-4 border-t border-slate-100 pt-4">
             <StoreOrderBarcode value={orderScanPayload} className="max-w-[min(100%,18rem)]" />

@@ -10,6 +10,10 @@ export type ClickUpOrderFormRow = {
   storeOrderDateDisplay: string;
   organisationName: string;
   customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  /** Pickup vs delivery for the store order. */
+  fulfillmentMethod: "Pickup" | "Delivery";
   /**
    * Where the order sits in the pipeline (read-only): Click up, Production, Quality control, or Dispatch.
    * Completed orders are not listed here.
@@ -34,7 +38,8 @@ export function ClickUpOrderFormSection({
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-sm text-slate-600">
           Supplier 워크시트에 입력된 <strong>Customer order ID</strong>와 스토어 주문·CRM 프로필을 연결한 목록입니다. 표 위 검색으로{" "}
-          <strong>워크시트 날짜</strong>, <strong>스토어 주문일</strong>, <strong>회사명</strong>, <strong>고객명</strong>, 처리 단계 또는 주문
+          <strong>워크시트 날짜</strong>, <strong>스토어 주문일</strong>, <strong>회사명</strong>, <strong>고객명</strong>,{" "}
+          <strong>이메일</strong>, <strong>전화</strong>, <strong>Order Type</strong>, 처리 단계 또는 주문
           ID로 행을 좁힌 뒤, <strong>Open Click up sheet</strong>로 해당 Click up sheet를 엽니다.{" "}
           <strong>Processing Stage</strong> 열은 읽기 전용이며, Production · Quality control · Dispatch 대기열 상태를 보여 줍니다 (스토어 주문이
           없으면 —).

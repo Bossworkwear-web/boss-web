@@ -1,6 +1,10 @@
 import Link from "next/link";
 
 import { getPerthYmd } from "@/lib/perth-calendar";
+import {
+  resolveStoreOrderPickUpByIds,
+  storeOrderFulfillmentLabel,
+} from "@/lib/store-order-fulfillment";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 import { ClickUpOrderFormSection, type ClickUpOrderFormRow } from "./click-up-order-form-section";
@@ -148,6 +152,7 @@ export default async function AdminWorkProcessPage() {
           { id: string; created_at: string; customer_name: string; customer_email: string }
         >();
         const orgByEmail = new Map<string, string>();
+        const phoneByEmail = new Map<string, string>();
 
         if (orderNumbers.length > 0) {
           const { data: storeRows } = await supabase
@@ -170,11 +175,13 @@ export default async function AdminWorkProcessPage() {
           if (emails.size > 0) {
             const { data: profileRows } = await supabase
               .from("customer_profiles")
-              .select("email_address, organisation")
+              .select("email_address, organisation, contact_number")
               .in("email_address", [...emails]);
 
             for (const row of profileRows ?? []) {
-              orgByEmail.set(row.email_address.trim().toLowerCase(), row.organisation?.trim() ?? "");
+              const key = row.email_address.trim().toLowerCase();
+              orgByEmail.set(key, row.organisation?.trim() ?? "");
+              phoneByEmail.set(key, row.contact_number?.trim() ?? "");
             }
           }
         }
@@ -210,6 +217,11 @@ export default async function AdminWorkProcessPage() {
           day: "numeric",
         });
 
+        const pickUpById = await resolveStoreOrderPickUpByIds(
+          supabase,
+          [...storeByNumber.values()].map((s) => s.id),
+        );
+
         clickUpOrderFormRows = pairsForClickUp.map(({ listDate, customerOrderId }) => {
           const so = storeByNumber.get(customerOrderId);
           const storeOrderDateDisplay = so
@@ -219,6 +231,12 @@ export default async function AdminWorkProcessPage() {
           const org = email ? orgByEmail.get(email) : undefined;
           const organisationName = org && org.length > 0 ? org : "—";
           const customerName = so?.customer_name?.trim() || "—";
+          const customerEmail = so?.customer_email?.trim() || "—";
+          const phone = email ? phoneByEmail.get(email) : undefined;
+          const customerPhone = phone && phone.length > 0 ? phone : "—";
+          const fulfillmentMethod = storeOrderFulfillmentLabel(
+            so?.id ? pickUpById.get(so.id) === true : false,
+          );
 
           return {
             listDate,
@@ -227,6 +245,9 @@ export default async function AdminWorkProcessPage() {
             storeOrderDateDisplay,
             organisationName,
             customerName,
+            customerEmail,
+            customerPhone,
+            fulfillmentMethod,
             processingStageLabel: "—",
           };
         });

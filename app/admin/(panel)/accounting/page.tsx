@@ -22,6 +22,7 @@ type Search = {
   xero_msg?: string;
   n?: string;
   f?: string;
+  cn?: string;
 };
 
 export default async function AdminAccountingPage({ searchParams }: { searchParams: Promise<Search> }) {
@@ -109,6 +110,7 @@ export default async function AdminAccountingPage({ searchParams }: { searchPara
   else if (q.xero === "resynced") {
     const n = Number(q.n ?? "0") || 0;
     const f = Number(q.f ?? "0") || 0;
+    const cn = Number(q.cn ?? "0") || 0;
     let detail = "";
     if (f > 0) {
       detail = `, ${f} still pending`;
@@ -124,12 +126,18 @@ export default async function AdminAccountingPage({ searchParams }: { searchPara
     } else {
       detail = ".";
     }
+    if (cn > 0) {
+      detail = detail.replace(/\.$/, "") + `; updated company name on ${cn} Xero contact(s).`;
+    }
     banner = {
       kind: f > 0 ? "err" : "ok",
       text: `Xero resync: ${n} order(s) synced${detail}`,
     };
   } else if (q.xero === "resync_none") {
-    banner = { kind: "ok", text: "No paid orders are missing from Xero." };
+    banner = {
+      kind: "ok",
+      text: "No paid orders are missing from Xero (company names on existing invoices were refreshed if needed).",
+    };
   }
   else if (q.xero_error) {
     try {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { refreshSyncedXeroInvoiceContactNames } from "@/lib/xero/refresh-invoice-contact-names";
 import { resyncFailedXeroOrders } from "@/lib/xero/resync-failed-orders";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,8 @@ export async function GET(request: Request) {
 
   try {
     const result = await resyncFailedXeroOrders({ maxOrders: 50, sinceDays: 30 });
-    return NextResponse.json({ ok: true, ...result });
+    const contactNames = await refreshSyncedXeroInvoiceContactNames({ maxOrders: 50 });
+    return NextResponse.json({ ok: true, ...result, contactNames });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Cron failed";
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });

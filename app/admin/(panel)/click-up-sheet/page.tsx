@@ -32,6 +32,10 @@ export default async function AdminClickUpSheetPage({
   const completeOrdersDocumentsView = completeOrdersDocFromSearchParam(q.complete_orders_doc);
 
   let initialOrganisationName = "";
+  let initialCustomerName = "";
+  let initialCustomerEmail = "";
+  let initialCustomerPhone = "";
+  let initialFulfillmentMethod: "Pickup" | "Delivery" = "Delivery";
   let initialLogoLocations = "";
   let initialCheckoutMemos: StoreOrderCustomerMemoLine[] = [];
   let initialOrderScanPayload: string | null = null;
@@ -41,6 +45,10 @@ export default async function AdminClickUpSheetPage({
       const supabase = createSupabaseAdminClient();
       const detail = await getCustomerDetailForStoreOrderNumber(supabase, initialCustomerOrderId);
       initialOrganisationName = detail.organisationName;
+      initialCustomerName = detail.customerName;
+      initialCustomerEmail = detail.customerEmail;
+      initialCustomerPhone = detail.customerPhone;
+      initialFulfillmentMethod = detail.fulfillmentMethod;
       initialLogoLocations = detail.logoLocations;
       initialCheckoutMemos = detail.checkoutMemos;
       initialOrderScanPayload = detail.storeOrderId ? storeOrderScanPayloadFromId(detail.storeOrderId) : null;
@@ -109,6 +117,10 @@ export default async function AdminClickUpSheetPage({
       initialListDate={initialListDate}
       initialCustomerOrderId={initialCustomerOrderId}
       initialOrganisationName={initialOrganisationName}
+      initialCustomerName={initialCustomerName}
+      initialCustomerEmail={initialCustomerEmail}
+      initialCustomerPhone={initialCustomerPhone}
+      initialFulfillmentMethod={initialFulfillmentMethod}
       initialLogoLocations={initialLogoLocations}
       initialCheckoutMemos={initialCheckoutMemos}
       initialSupplierLines={initialSupplierLines}

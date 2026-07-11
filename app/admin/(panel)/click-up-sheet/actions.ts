@@ -178,11 +178,14 @@ export type LookupStoreOrderCustomerResult =
   | {
       ok: true;
       customerName: string;
+      customerEmail: string;
+      customerPhone: string;
       organisationName: string;
       logoLocations: string;
       checkoutMemos: StoreOrderCustomerMemoLine[];
       /** Code128 payload (32-char hex); same barcode as Production / QC / Dispatch. */
       orderScanPayload: string | null;
+      fulfillmentMethod: "Pickup" | "Delivery";
     }
   | { ok: false; error: string };
 
@@ -201,10 +204,13 @@ export async function lookupCustomerByStoreOrderNumber(
     return {
       ok: true,
       customerName: detail.customerName,
+      customerEmail: detail.customerEmail,
+      customerPhone: detail.customerPhone,
       organisationName: detail.organisationName,
       logoLocations: detail.logoLocations,
       checkoutMemos: detail.checkoutMemos,
       orderScanPayload: detail.storeOrderId ? storeOrderScanPayloadFromId(detail.storeOrderId) : null,
+      fulfillmentMethod: detail.fulfillmentMethod,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Lookup failed";

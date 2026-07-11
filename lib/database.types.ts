@@ -1036,6 +1036,7 @@ export type Database = {
           customer_name: string;
           delivery_address: string;
           delivery_fee_cents: number;
+          pick_up: boolean;
           subtotal_cents: number;
           total_cents: number;
           currency: string;
@@ -1078,6 +1079,7 @@ export type Database = {
           customer_name: string;
           delivery_address: string;
           delivery_fee_cents?: number;
+          pick_up?: boolean;
           subtotal_cents: number;
           total_cents: number;
           currency?: string;
@@ -1120,6 +1122,7 @@ export type Database = {
           customer_name?: string;
           delivery_address?: string;
           delivery_fee_cents?: number;
+          pick_up?: boolean;
           subtotal_cents?: number;
           total_cents?: number;
           currency?: string;

@@ -342,6 +342,7 @@ export async function placeStoreOrderCore(
     customer_name: customerName,
     delivery_address: deliveryAddress,
     delivery_fee_cents: deliveryFeeCents,
+    pick_up: options?.pickUp === true,
     subtotal_cents: subtotalCents,
     total_cents: totalCents,
     store_credit_applied_cents: storeCreditAppliedCents,
@@ -374,18 +375,39 @@ export async function placeStoreOrderCore(
     }
     orderNumber = alloc.orderNumber;
 
-    const { data, error: orderErr } = await supabase
+    const rowToInsert = {
+      ...insertPayload,
+      order_number: orderNumber,
+      // Auto-assign an invoice number so customers can download their tax invoice immediately
+      // after payment, without waiting for an admin to enter one manually.
+      invoice_reference: invoiceNumberFromOrderNumber(orderNumber),
+      ...(reorderedFromResolved ? { reordered_from_store_order_id: reorderedFromResolved } : {}),
+    };
+
+    let { data, error: orderErr } = await supabase
       .from("store_orders")
-      .insert({
-        ...insertPayload,
-        order_number: orderNumber,
-        // Auto-assign an invoice number so customers can download their tax invoice immediately
-        // after payment, without waiting for an admin to enter one manually.
-        invoice_reference: invoiceNumberFromOrderNumber(orderNumber),
-        ...(reorderedFromResolved ? { reordered_from_store_order_id: reorderedFromResolved } : {}),
-      })
+      .insert(rowToInsert)
       .select("id, tracking_token")
       .single();
+
+    const errMsg = orderErr?.message ?? "";
+    const pickUpColMissing =
+      Boolean(errMsg) &&
+      /pick_up/i.test(errMsg) &&
+      (errMsg.includes("schema cache") ||
+        errMsg.toLowerCase().includes("column") ||
+        orderErr?.code === "PGRST204");
+    if (pickUpColMissing) {
+      const { pick_up: _omitPickUp, ...withoutPickUp } = rowToInsert;
+      void _omitPickUp;
+      const retry = await supabase
+        .from("store_orders")
+        .insert(withoutPickUp)
+        .select("id, tracking_token")
+        .single();
+      data = retry.data;
+      orderErr = retry.error;
+    }
 
     if (data && !orderErr) {
       orderRow = data;

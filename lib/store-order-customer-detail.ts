@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/database.types";
+import {
+  resolveStoreOrderPickUpByIds,
+  storeOrderFulfillmentLabel,
+  type StoreOrderFulfillmentMethod,
+} from "@/lib/store-order-fulfillment";
 
 /** Normalizes `store_order_items.placements` (jsonb array of strings). */
 export function placementsFromDb(raw: unknown): string[] {
@@ -57,21 +62,74 @@ export type StoreOrderCustomerMemoLine = {
   notes: string;
 };
 
-/** Resolve display name + organisation (CRM profile) from `store_orders.order_number`. */
+type CustomerProfileContactFields = {
+  organisation: string | null;
+  contact_number: string | null;
+};
+
+async function lookupCustomerProfileByEmail(
+  supabase: SupabaseClient<Database>,
+  emailRaw: string,
+): Promise<CustomerProfileContactFields | null> {
+  const emailLower = emailRaw.toLowerCase();
+  const selectCols = "organisation, contact_number";
+
+  const { data: profEq } = await supabase
+    .from("customer_profiles")
+    .select(selectCols)
+    .eq("email_address", emailLower)
+    .maybeSingle();
+  if (profEq) {
+    return profEq;
+  }
+
+  const { data: profEqOrig } = await supabase
+    .from("customer_profiles")
+    .select(selectCols)
+    .eq("email_address", emailRaw)
+    .maybeSingle();
+  if (profEqOrig) {
+    return profEqOrig;
+  }
+
+  const { data: profIlike } = await supabase
+    .from("customer_profiles")
+    .select(selectCols)
+    .ilike("email_address", emailRaw)
+    .maybeSingle();
+  return profIlike ?? null;
+}
+
+/** Resolve display name, email, phone + organisation (CRM profile) from `store_orders.order_number`. */
 export async function getCustomerDetailForStoreOrderNumber(
   supabase: SupabaseClient<Database>,
   orderNumber: string,
 ): Promise<{
   customerName: string;
+  customerEmail: string;
+  customerPhone: string;
   organisationName: string;
   logoLocations: string;
   checkoutMemos: StoreOrderCustomerMemoLine[];
   /** `store_orders.id` when the order number matches; used for order barcode (scan code). */
   storeOrderId: string | null;
+  /** Pickup vs delivery (from store order / checkout pending). */
+  fulfillmentMethod: StoreOrderFulfillmentMethod;
 }> {
+  const empty = {
+    customerName: "",
+    customerEmail: "",
+    customerPhone: "",
+    organisationName: "",
+    logoLocations: "",
+    checkoutMemos: [] as StoreOrderCustomerMemoLine[],
+    storeOrderId: null as string | null,
+    fulfillmentMethod: "Delivery" as StoreOrderFulfillmentMethod,
+  };
+
   const id = orderNumber.trim();
   if (!id) {
-    return { customerName: "", organisationName: "", logoLocations: "", checkoutMemos: [], storeOrderId: null };
+    return empty;
   }
 
   const { data: so, error } = await supabase
@@ -81,43 +139,21 @@ export async function getCustomerDetailForStoreOrderNumber(
     .maybeSingle();
 
   if (error || !so) {
-    return { customerName: "", organisationName: "", logoLocations: "", checkoutMemos: [], storeOrderId: null };
+    return empty;
   }
 
   const customerName = (so.customer_name ?? "").trim();
-  const emailRaw = (so.customer_email ?? "").trim();
+  const customerEmail = (so.customer_email ?? "").trim();
   let organisationName = "";
+  let customerPhone = "";
 
-  if (emailRaw) {
-    const emailLower = emailRaw.toLowerCase();
-    const { data: profEq } = await supabase
-      .from("customer_profiles")
-      .select("organisation")
-      .eq("email_address", emailLower)
-      .maybeSingle();
-
-    if (profEq?.organisation != null && profEq.organisation.trim()) {
-      organisationName = profEq.organisation.trim();
-    } else {
-      const { data: profEqOrig } = await supabase
-        .from("customer_profiles")
-        .select("organisation")
-        .eq("email_address", emailRaw)
-        .maybeSingle();
-
-      if (profEqOrig?.organisation != null && profEqOrig.organisation.trim()) {
-        organisationName = profEqOrig.organisation.trim();
-      } else {
-        const { data: profIlike } = await supabase
-          .from("customer_profiles")
-          .select("organisation")
-          .ilike("email_address", emailRaw)
-          .maybeSingle();
-
-        if (profIlike?.organisation != null && profIlike.organisation.trim()) {
-          organisationName = profIlike.organisation.trim();
-        }
-      }
+  if (customerEmail) {
+    const profile = await lookupCustomerProfileByEmail(supabase, customerEmail);
+    if (profile?.organisation?.trim()) {
+      organisationName = profile.organisation.trim();
+    }
+    if (profile?.contact_number?.trim()) {
+      customerPhone = profile.contact_number.trim();
     }
   }
 
@@ -142,11 +178,17 @@ export async function getCustomerDetailForStoreOrderNumber(
     }
   }
 
+  const pickUpById = await resolveStoreOrderPickUpByIds(supabase, [so.id]);
+  const fulfillmentMethod = storeOrderFulfillmentLabel(pickUpById.get(so.id) === true);
+
   return {
     customerName,
+    customerEmail,
+    customerPhone,
     organisationName,
     logoLocations,
     checkoutMemos,
     storeOrderId: so.id,
+    fulfillmentMethod,
   };
 }

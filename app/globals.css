@@ -544,16 +544,24 @@ html:has([data-admin-portal]) {
 
   body.click-up-sheet-print-mode .click-up-sheet-print-order-4 {
     gap: 0.35rem !important;
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
-  body.click-up-sheet-print-mode .click-up-sheet-print-order-4 label {
+  body.click-up-sheet-print-mode .click-up-sheet-print-order-4 label,
+  body.click-up-sheet-print-mode .click-up-sheet-print-order-4 [id="cus-order-type-label"] {
     font-size: 0.825rem !important;
   }
 
   body.click-up-sheet-print-mode .click-up-sheet-print-order-4 input {
     padding: 0.2rem 0.35rem !important;
     font-size: 0.9rem !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-order-4 [role="group"] {
+    min-height: 1.6rem !important;
+    padding: 0.2rem 0.35rem !important;
+    font-size: 0.9rem !important;
+    gap: 0.75rem !important;
   }
 
   body.click-up-sheet-print-mode .click-up-sheet-print-order-barcode {

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { assertAdminSessionForPathSegment } from "@/lib/admin-auth";
 import { storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
 import { guardStoreOrderNotInCompleteOrdersQueue } from "@/lib/complete-orders-queue-mutation-block";
+import { resolveListDateForStoreOrderNumber } from "@/lib/resolve-store-order-list-date";
 import { appendClickUpProductionQueueSetupHint } from "@/lib/supabase-click-up-production-queue-hint";
 import { appendClickUpQcQueueSetupHint } from "@/lib/supabase-click-up-qc-queue-hint";
 import { createSupabaseAdminClient } from "@/lib/supabase";
@@ -59,19 +60,30 @@ export async function listClickUpQualityCheckQueue(): Promise<
 
     const orderMap = new Map((orders ?? []).map((o) => [o.id, o]));
 
-    const rows: ClickUpQcQueueRowDto[] = queue.map((q) => {
+    const rows: ClickUpQcQueueRowDto[] = [];
+    for (const q of queue) {
       const o = orderMap.get(q.store_order_id);
-      return {
+      let listDate = (q.list_date ?? "").trim();
+      if (!listDate && o?.order_number) {
+        listDate = await resolveListDateForStoreOrderNumber(supabase, o.order_number);
+        if (listDate) {
+          await supabase
+            .from("click_up_qc_queue")
+            .update({ list_date: listDate })
+            .eq("store_order_id", q.store_order_id);
+        }
+      }
+      rows.push({
         queueId: q.id,
         storeOrderId: q.store_order_id,
-        listDate: q.list_date ?? "",
+        listDate,
         movedAt: q.moved_at,
         orderNumber: o?.order_number ?? "—",
         status: o?.status ?? "—",
         customerName: o?.customer_name ?? "",
         customerEmail: o?.customer_email ?? "",
-      };
-    });
+      });
+    }
 
     return { ok: true, rows };
   } catch (e) {
@@ -109,7 +121,17 @@ export async function moveStoreOrderToQualityControlFromProduction(formData: For
     .select("list_date")
     .eq("store_order_id", storeOrderId)
     .maybeSingle();
-  const listDate = (prodRow?.list_date ?? "").trim();
+  let listDate = (prodRow?.list_date ?? "").trim();
+  if (!listDate) {
+    const { data: order } = await supabase
+      .from("store_orders")
+      .select("order_number")
+      .eq("id", storeOrderId)
+      .maybeSingle();
+    if (order?.order_number) {
+      listDate = await resolveListDateForStoreOrderNumber(supabase, order.order_number);
+    }
+  }
 
   const { error } = await supabase.from("click_up_qc_queue").upsert(
     {

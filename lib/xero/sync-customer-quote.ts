@@ -4,7 +4,7 @@ import { addCalendarDaysYmd, todayPerthYmd } from "@/lib/perth-calendar";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { XeroApiError } from "@/lib/xero/api-client";
 import { connectionHasInvoiceScope } from "@/lib/xero/config";
-import { findOrCreateXeroContact } from "@/lib/xero/contacts";
+import { findOrCreateXeroContact, xeroInvoiceContactDisplayName } from "@/lib/xero/contacts";
 import { getActiveXeroConnection } from "@/lib/xero/connection-db";
 import { createDraftSalesQuote, xeroQuoteViewUrl, type XeroQuoteLineInput } from "@/lib/xero/quotes";
 
@@ -144,7 +144,11 @@ export async function syncCustomerQuoteSheetToXero(
     }
 
     const contactId = await findOrCreateXeroContact(connection, {
-      name: sheet.companyName.trim() || sheet.customerName.trim(),
+      name: xeroInvoiceContactDisplayName({
+        organisation: sheet.companyName,
+        customerName: sheet.customerName,
+        email: sheet.customerEmail,
+      }),
       email: sheet.customerEmail.trim(),
     });
 

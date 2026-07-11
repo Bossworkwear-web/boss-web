@@ -3,6 +3,11 @@ import Link from "next/link";
 import { AdminGoogleMarketingLinks } from "@/app/admin/(panel)/analytics/admin-google-marketing-links";
 import { StorefrontCatalogHealthBanner } from "@/app/admin/(panel)/storefront-catalog-health-banner";
 import { loadDashboardStoreOrderPeriodStats } from "@/lib/admin-dashboard-store-order-stats";
+import {
+  resolveStoreOrderPickUpByIds,
+  storeOrderFulfillmentLabel,
+  type StoreOrderFulfillmentMethod,
+} from "@/lib/store-order-fulfillment";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
@@ -18,6 +23,18 @@ export default async function AdminDashboardPage() {
   let totalUnits = "—";
 
   const orderStatsRes = await loadDashboardStoreOrderPeriodStats();
+
+  type RecentOrderContact = {
+    orderNumber: string;
+    organisationName: string;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+    fulfillmentMethod: StoreOrderFulfillmentMethod;
+    createdAtDisplay: string;
+  };
+  let recentOrderContacts: RecentOrderContact[] = [];
+  let recentOrdersError: string | null = null;
 
   try {
     const supabase = createSupabaseAdminClient();
@@ -43,6 +60,65 @@ export default async function AdminDashboardPage() {
       lowStock = String(stocks.filter((q) => q <= LOW_STOCK).length);
       totalUnits = String(stocks.reduce((a, b) => a + b, 0));
     }
+
+    const { data: recentOrders, error: recentErr } = await supabase
+      .from("store_orders")
+      .select("id, order_number, customer_name, customer_email, created_at")
+      .in("status", ["paid", "processing", "shipped"])
+      .order("created_at", { ascending: false })
+      .limit(8);
+
+    if (recentErr) {
+      recentOrdersError = recentErr.message;
+    } else {
+      const emails = [
+        ...new Set(
+          (recentOrders ?? [])
+            .map((r) => (r.customer_email ?? "").trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      ];
+      const phoneByEmail = new Map<string, string>();
+      const orgByEmail = new Map<string, string>();
+      if (emails.length > 0) {
+        const { data: profiles } = await supabase
+          .from("customer_profiles")
+          .select("email_address, contact_number, organisation")
+          .in("email_address", emails);
+        for (const p of profiles ?? []) {
+          const key = p.email_address.trim().toLowerCase();
+          phoneByEmail.set(key, (p.contact_number ?? "").trim());
+          orgByEmail.set(key, (p.organisation ?? "").trim());
+        }
+      }
+      const pickUpById = await resolveStoreOrderPickUpByIds(
+        supabase,
+        (recentOrders ?? []).map((r) => r.id),
+      );
+      const dateFmt = new Intl.DateTimeFormat("en-AU", {
+        timeZone: "Australia/Perth",
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      recentOrderContacts = (recentOrders ?? []).map((r) => {
+        const email = (r.customer_email ?? "").trim();
+        const emailKey = email.toLowerCase();
+        const phone = email ? phoneByEmail.get(emailKey) ?? "" : "";
+        const org = email ? orgByEmail.get(emailKey) ?? "" : "";
+        return {
+          orderNumber: r.order_number,
+          organisationName: org || "—",
+          customerName: (r.customer_name ?? "").trim() || "—",
+          customerEmail: email || "—",
+          customerPhone: phone || "—",
+          fulfillmentMethod: storeOrderFulfillmentLabel(pickUpById.get(r.id) === true),
+          createdAtDisplay: dateFmt.format(new Date(r.created_at)),
+        };
+      });
+    }
   } catch (e) {
     console.error("[admin dashboard] product stock summary:", e);
   }
@@ -57,6 +133,71 @@ export default async function AdminDashboardPage() {
       </header>
 
       <StorefrontCatalogHealthBanner />
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-medium text-brand-navy">Recent orders — customer contact</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Latest paid store orders: Order ID, company, customer, phone, email, and order type.
+            </p>
+          </div>
+          <Link
+            href="/admin/work-process"
+            className="text-sm font-semibold text-brand-orange hover:underline"
+          >
+            Open Click Up →
+          </Link>
+        </div>
+        {recentOrdersError ? (
+          <p className="mt-4 text-sm text-amber-800">{recentOrdersError}</p>
+        ) : recentOrderContacts.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-600">No recent paid orders yet.</p>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-[48rem] w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="py-2 pr-4">Order ID</th>
+                  <th className="py-2 pr-4">When (Perth)</th>
+                  <th className="py-2 pr-4">Company Name</th>
+                  <th className="py-2 pr-4">Customer name</th>
+                  <th className="py-2 pr-4">Phone</th>
+                  <th className="py-2 pr-4">Email</th>
+                  <th className="py-2">Order Type</th>
+                </tr>
+              </thead>
+              <tbody className="text-slate-800">
+                {recentOrderContacts.map((row) => (
+                  <tr key={row.orderNumber} className="border-b border-slate-100">
+                    <td className="py-2 pr-4 font-mono text-xs text-brand-navy">{row.orderNumber}</td>
+                    <td className="whitespace-nowrap py-2 pr-4 text-slate-600">{row.createdAtDisplay}</td>
+                    <td className="max-w-[10rem] truncate py-2 pr-4" title={row.organisationName}>
+                      {row.organisationName}
+                    </td>
+                    <td className="py-2 pr-4">{row.customerName}</td>
+                    <td className="whitespace-nowrap py-2 pr-4">{row.customerPhone}</td>
+                    <td className="max-w-[14rem] truncate py-2 pr-4" title={row.customerEmail}>
+                      {row.customerEmail}
+                    </td>
+                    <td className="whitespace-nowrap py-2">
+                      <span
+                        className={
+                          row.fulfillmentMethod === "Pickup"
+                            ? "rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-sky-900"
+                            : "rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-700"
+                        }
+                      >
+                        {row.fulfillmentMethod === "Pickup" ? "Pick Up" : "Delivery"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-medium text-brand-navy">Store orders received</h2>
