@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { LOCAL_MINIMUM_DELIVERY_FEE_AUD } from "@/lib/customer-delivery-estimate";
 import {
   STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD,
   cartHasEmbroideryLogoReferenceUploads,
@@ -54,6 +55,8 @@ describe("storefront-cart-checkout-fees", () => {
       isCustomerSignedIn: true,
       hasPriorEmbroideryOrder: false as boolean | null,
     };
+    /** Warehouse suburb (6062) now pays the local minimum band, not $0. */
+    const localDelivery = LOCAL_MINIMUM_DELIVERY_FEE_AUD;
 
     it("shows no delivery or logo fees for guests", () => {
       const result = computeStorefrontCheckoutFees({
@@ -75,6 +78,18 @@ describe("storefront-cart-checkout-fees", () => {
       expect(result.deliveryFeeAud).toBe(0);
     });
 
+    it("charges local minimum delivery for the warehouse postcode (not free)", () => {
+      const result = computeStorefrontCheckoutFees({
+        ...signedInBase,
+        items: [plainItem],
+        deliveryPostcode: "6062",
+        estimatedWeightKg: 2,
+        hasPriorEmbroideryOrder: true,
+      });
+      expect(result.deliveryFeeAud).toBe(localDelivery);
+      expect(result.totalAud).toBe(100 + localDelivery);
+    });
+
     it("adds logo setup for first embroidery order under promo threshold", () => {
       const subtotal = STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD - 1;
       const result = computeStorefrontCheckoutFees({
@@ -85,7 +100,8 @@ describe("storefront-cart-checkout-fees", () => {
       });
       expect(result.logoSetupFeeAud).toBe(66);
       expect(result.logoSetupApplies).toBe(true);
-      expect(result.totalAud).toBe(subtotal + 66);
+      expect(result.deliveryFeeAud).toBe(localDelivery);
+      expect(result.totalAud).toBe(subtotal + 66 + localDelivery);
     });
 
     it("waives logo setup when customer chose saved embroidery logo", () => {
@@ -98,7 +114,7 @@ describe("storefront-cart-checkout-fees", () => {
       });
       expect(result.logoSetupFeeAud).toBe(0);
       expect(result.logoSetupApplies).toBe(false);
-      expect(result.totalAud).toBe(subtotal);
+      expect(result.totalAud).toBe(subtotal + localDelivery);
     });
 
     it("waives logo setup for legacy cart notes that selected saved embroidery logo", () => {
@@ -126,7 +142,7 @@ describe("storefront-cart-checkout-fees", () => {
       });
       expect(result.logoSetupFeeAud).toBe(0);
       expect(result.logoSetupApplies).toBe(false);
-      expect(result.totalAud).toBe(subtotal);
+      expect(result.totalAud).toBe(subtotal + localDelivery);
     });
 
     it("charges logo setup when returning customer uploads new artwork under promo threshold", () => {

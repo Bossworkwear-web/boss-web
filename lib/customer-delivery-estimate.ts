@@ -119,21 +119,29 @@ export function extractAustralianPostcodeFromAddress(address: string): string | 
 }
 
 /**
- * Straight-line km from company base (6062) to the given postcode. `null` postcode → 0 (no estimate).
+ * Straight-line km from company base (6062) to the given postcode.
+ * `null`/empty postcode → 0 (no estimate → no delivery fee until address is known).
+ * Same postcode as the warehouse still counts as a local delivery trip (not free).
  */
 export function distanceKmFromCompanyBase(postcode: string | null): number {
   if (postcode == null || postcode === "") {
     return 0;
   }
   if (postcode === COMPANY_BASE_POSTCODE) {
-    return 0;
+    // Same suburb as the warehouse: treat as a short local run so the minimum band applies.
+    return LOCAL_SAME_POSTCODE_DISTANCE_KM;
   }
   const dest = coordsForAustralianPostcode(postcode);
   if (!dest) {
     return 0;
   }
-  return Number(haversineKm(COMPANY_BASE_COORDS, dest).toFixed(1));
+  const km = Number(haversineKm(COMPANY_BASE_COORDS, dest).toFixed(1));
+  // Centroid math can round to 0.0 for nearby codes in the same WA bucket — still charge local.
+  return km > 0 ? km : LOCAL_SAME_POSTCODE_DISTANCE_KM;
 }
+
+/** Nominal km used when the destination postcode is the warehouse postcode (or rounds to 0). */
+export const LOCAL_SAME_POSTCODE_DISTANCE_KM = 1;
 
 export type DeliveryBand = {
   maxDistanceKm: number;
@@ -153,6 +161,14 @@ export const DELIVERY_FEE_BANDS: DeliveryBand[] = [
   { maxDistanceKm: 200, maxWeightKg: 25, fee: 38.0 },
 ];
 
+/** Lowest delivery band fee (local / same-postcode deliveries). */
+export const LOCAL_MINIMUM_DELIVERY_FEE_AUD = DELIVERY_FEE_BANDS[0]!.fee;
+
+/**
+ * Delivery fee from distance + weight bands.
+ * `distanceKm <= 0` means “no postcode estimate yet” → $0 (guest / incomplete address).
+ * Same-suburb deliveries use a positive local distance so the minimum band ($8.50) applies.
+ */
 export function calculateDeliveryFee(distanceKm: number, totalWeightKg: number): number {
   if (distanceKm <= 0) {
     return 0;
