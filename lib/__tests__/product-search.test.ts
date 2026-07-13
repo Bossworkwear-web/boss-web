@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { productMatchesSearchQuery, scoreProductSearchMatch } from "@/lib/product-search";
+import {
+  levenshteinDistance,
+  productMatchesSearchQuery,
+  scoreProductSearchMatch,
+} from "@/lib/product-search";
 
 describe("productMatchesSearchQuery — word queries", () => {
   it("matches vest in product title", () => {
@@ -45,5 +49,67 @@ describe("productMatchesSearchQuery — style codes", () => {
     expect(
       productMatchesSearchQuery("Biz Collection ZH145 Polo", "bizcollection-zh145", "Polos", "ZH145", null),
     ).toBe(true);
+  });
+});
+
+describe("productMatchesSearchQuery — colour / supplier / size extras", () => {
+  it("matches colour labels such as Pacific Blue", () => {
+    expect(
+      productMatchesSearchQuery(
+        "Endeavour Mens Polos",
+        "ap-1310",
+        "Polos",
+        "pacific",
+        null,
+        null,
+        { colors: ["Pacific Blue/white", "Navy/white"] },
+      ),
+    ).toBe(true);
+  });
+
+  it("matches supplier / brand name", () => {
+    expect(
+      productMatchesSearchQuery(
+        "Endeavour Mens Polos",
+        "ap-1310",
+        "Polos",
+        "aussie",
+        null,
+        null,
+        { supplierName: "Aussie Pacific" },
+      ),
+    ).toBe(true);
+  });
+
+  it("matches size tokens", () => {
+    expect(
+      productMatchesSearchQuery("Endeavour Mens Polos", "ap-1310", "Polos", "2xl", null, null, {
+        sizes: ["S", "M", "L", "XL", "2XL"],
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("productMatchesSearchQuery — typo tolerance", () => {
+  it("matches single-edit typos on longer title words", () => {
+    expect(
+      productMatchesSearchQuery("Fix & Move Soft Shell Vest", "fix-move-vest", "Jackets", "veste", null),
+    ).toBe(true);
+    expect(
+      productMatchesSearchQuery("Premium Work Polo", "premium-work-polo", "Polos", "pollo", null),
+    ).toBe(true);
+  });
+
+  it("does not fuzzy-match very short tokens", () => {
+    expect(
+      productMatchesSearchQuery("Hi Vis Tee", "hi-vis-tee", "T-shirts", "hx", null),
+    ).toBe(false);
+  });
+});
+
+describe("levenshteinDistance", () => {
+  it("counts edits", () => {
+    expect(levenshteinDistance("polo", "pollo")).toBe(1);
+    expect(levenshteinDistance("vest", "vest")).toBe(0);
   });
 });

@@ -8,6 +8,7 @@ import { StoreOrderBarcode } from "@/app/components/store-order-barcode";
 
 import type { StoreOrderCustomerMemoLine } from "@/lib/store-order-customer-detail";
 import { formatMoneyFromCents } from "@/lib/store-order-utils";
+import { notifyRouteLoadingStart, stopRouteLoading } from "@/lib/route-loading";
 import { supplierOrderProductIdHeadTail } from "@/lib/supplier-order-product-id-parts";
 import { normalizeSupplierOrderLineSupplierValue } from "@/lib/supplier-order-supplier-normalize";
 
@@ -347,14 +348,29 @@ export function ClickUpSheetWorkspace({
 
     setSheetActionMessage(null);
     setMoveToProductionBusy(true);
-    const result = await moveClickUpSheetOrderToProduction(id, initialListDate.trim());
-    setMoveToProductionBusy(false);
-    if (!result.ok) {
-      alertMoveToProductionBlocked(result.error);
-      return;
+    notifyRouteLoadingStart({
+      overlay: {
+        title: "Moving to Production...",
+        description: "Opening the production pack for this order.",
+      },
+      immediate: true,
+    });
+    try {
+      const result = await moveClickUpSheetOrderToProduction(id, initialListDate.trim());
+      if (!result.ok) {
+        stopRouteLoading();
+        setMoveToProductionBusy(false);
+        alertMoveToProductionBlocked(result.error);
+        return;
+      }
+      router.push(`/admin/production/${result.productionOrderId}`);
+      router.refresh();
+      // Keep busy/spinner until navigation replaces this page.
+    } catch {
+      stopRouteLoading();
+      setMoveToProductionBusy(false);
+      alertMoveToProductionBlocked("Could not move to Production.");
     }
-    router.refresh();
-    router.push(`/admin/production/${result.productionOrderId}`);
   }
 
   const sheetActionBtnClass =

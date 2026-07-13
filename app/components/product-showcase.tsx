@@ -317,6 +317,11 @@ export function ProductShowcase({
           q,
           p.description,
           p.id,
+          {
+            supplierName: p.supplierName ?? null,
+            colors: p.availableColors ?? null,
+            sizes: p.availableSizes ?? null,
+          },
         ),
       }))
       .filter(({ score }) => score > 0)
@@ -392,7 +397,7 @@ export function ProductShowcase({
                 type="search"
                 name="q"
                 required
-                placeholder="Name or style code"
+                placeholder="Name, colour, brand, or style code"
                 enterKeyHint="search"
                 className="min-w-0 flex-1 rounded-full border border-brand-navy/20 bg-white px-4 py-2.5 text-base text-brand-navy placeholder:text-brand-navy/50 focus:border-brand-orange focus:outline-none"
               />

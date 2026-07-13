@@ -93,7 +93,7 @@ export async function listClickUpQualityCheckQueue(): Promise<
 }
 
 /**
- * Production pack → Move to QC: upsert QC queue row, remove from Production queue, return to Production list.
+ * Production pack → Move to QC: upsert QC queue row, remove from Production queue, open Quality Control list.
  */
 export async function moveStoreOrderToQualityControlFromProduction(formData: FormData): Promise<void> {
   try {
@@ -162,7 +162,7 @@ export async function moveStoreOrderToQualityControlFromProduction(formData: For
   revalidatePath("/admin/production");
   revalidatePath("/admin/quality-control");
   revalidatePath(`/admin/production/${storeOrderId}`);
-  redirect("/admin/production");
+  redirect("/admin/quality-control");
 }
 
 /** `store_orders.order_number` → Code128 payload (UUID without hyphens); admin session required. */

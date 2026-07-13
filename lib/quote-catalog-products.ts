@@ -115,6 +115,10 @@ function productMatchesQuoteCatalogQuery(product: QuoteCatalogProduct, query: st
       query,
       product.description,
       product.id,
+      {
+        supplierName: product.supplierName,
+        colors: product.availableColors,
+      },
     )
   ) {
     return true;

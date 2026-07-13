@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
+import { notifyRouteLoadingStart } from "@/lib/route-loading";
+
 type LoginFormProps = {
   devHint: string | null;
 };
@@ -31,17 +33,25 @@ function LoginFields({ devHint }: LoginFormProps) {
       const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) {
         setError(data.error ?? "Login failed");
+        setLoading(false);
         return;
       }
       const redirectTo =
         from.startsWith("/admin") || from === "/instore_order" || from.startsWith("/instore_order/")
           ? from
           : "/admin";
+      notifyRouteLoadingStart({
+        overlay: {
+          title: "Signing in...",
+          description: "Please wait while we open the dashboard.",
+        },
+        immediate: true,
+      });
       router.push(redirectTo);
       router.refresh();
+      // Keep `loading` true until navigation replaces this page.
     } catch {
       setError("Network error");
-    } finally {
       setLoading(false);
     }
   }

@@ -2131,11 +2131,12 @@ function HeroImageLightbox({
       </button>
       <div className="relative z-10 flex max-h-[min(88dvh,92vh)] max-w-[min(96vw,min(100vw-2rem,56rem))] items-center justify-center">
         <img
+          key={src}
           src={src}
           alt={alt}
           className="h-auto max-h-[min(88dvh,92vh)] w-auto max-w-full cursor-zoom-out object-contain"
           loading="eager"
-          decoding="async"
+          decoding="sync"
           onClick={onClose}
         />
       </div>
@@ -3465,12 +3466,13 @@ export function PremiumWorkPoloClient({
             className="group mx-auto flex min-h-[384px] w-[64.8%] max-w-full cursor-zoom-in items-center justify-center overflow-hidden rounded-3xl bg-white text-left transition hover:bg-brand-surface/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-orange disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[504px] lg:min-h-[624px]"
           >
             <img
+              key={activeImage || "pdp-hero-empty"}
               src={activeImage}
               alt={heroAlt}
               className="pointer-events-none h-auto max-h-[384px] w-full max-w-full rounded-3xl object-contain object-center sm:max-h-[504px] lg:max-h-[624px]"
               loading="eager"
-              decoding="async"
-              suppressHydrationWarning
+              decoding="sync"
+              fetchPriority="high"
             />
           </button>
           <div className="mx-auto flex w-full max-w-full items-center justify-center gap-0.5 sm:gap-1">

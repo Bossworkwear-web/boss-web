@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { moveStoreOrderToQualityControlFromProduction } from "@/app/admin/(panel)/quality-control/actions";
 import { completeOrdersDocFromSearchParam } from "@/lib/complete-orders-doc-query";
 import { serviceTypeColoredContent } from "@/lib/service-type-colored";
 import { createSupabaseAdminClient } from "@/lib/supabase";
@@ -11,6 +10,7 @@ import { normalizeStoreOrderUuidParam, storeOrderScanPayloadFromId } from "@/lib
 
 import { listClickUpMockupsByStoreOrderNumber } from "@/app/admin/(panel)/click-up-sheet/actions";
 import { hasProductionPackForStoreOrder } from "../actions";
+import { MoveToQcButton } from "./move-to-qc-button";
 import { ProductionPackNotStarted } from "./production-pack-not-started";
 import { ProductionWorkspace } from "./production-workspace";
 import { PrintButton } from "../print-button";
@@ -198,17 +198,7 @@ export default async function AdminProductionOrderPage({
               >
                 Print production pack
               </PrintButton>
-              {!completeOrdersDocumentsView ? (
-                <form action={moveStoreOrderToQualityControlFromProduction} className="inline-flex">
-                  <input type="hidden" name="store_order_id" value={orderId} />
-                  <button
-                    type="submit"
-                    className={`${PRODUCTION_PACK_ACTION_BTN_CLASS} border border-brand-orange bg-brand-orange text-brand-navy hover:brightness-95`}
-                  >
-                    Move to QC
-                  </button>
-                </form>
-              ) : null}
+              {!completeOrdersDocumentsView ? <MoveToQcButton storeOrderId={orderId} /> : null}
             </div>
           </div>
         </div>

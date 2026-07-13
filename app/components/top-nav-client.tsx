@@ -2,11 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { RefObject } from "react";
 import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { CartDrawer } from "@/app/components/cart-drawer";
+import { HeaderSearchAutocomplete } from "@/app/components/header-search-autocomplete";
 import { CartIcon, MenuIcon, SearchIcon, UserIcon } from "@/app/components/icons";
 import { LoadingRingSpinner } from "@/app/components/loading-ring-spinner";
 import { LOGO_SRC } from "@/app/generated/logo";
@@ -19,7 +20,6 @@ import {
 import { customerFirstName } from "@/lib/customer-display-name";
 import type { StorefrontNavSub } from "@/lib/catalog";
 import { readSidebarNavClient } from "@/lib/sidebar-nav";
-import { notifyProductSearchLoadingStart } from "@/lib/route-loading";
 import { SITE_PAGE_INSET_X_CLASS } from "@/lib/site-layout";
 
 /** Sign signed-in customers out after this much inactivity. */
@@ -330,8 +330,7 @@ const HEADER_SEARCH_INPUT_CLASS =
   "min-w-0 w-full appearance-none rounded-full border-0 bg-white px-4 py-2.5 text-base leading-snug text-brand-navy shadow-none placeholder:text-brand-navy/50 focus:border-0 focus:outline-none focus:ring-0 sm:py-3 sm:text-lg";
 
 /**
- * Same DOM for Suspense fallback and hydrated tree — avoids `<div>` placeholder vs `<form>` mismatch.
- * Fallback uses native GET to `/search`; hydrated form uses `router.push` so `?q=` is always applied reliably.
+ * Same DOM for Suspense fallback — native GET to `/search` (no autocomplete until hydrated).
  */
 function HeaderSearchFormView({ inputRef }: { inputRef?: RefObject<HTMLInputElement | null> }) {
   return (
@@ -342,7 +341,7 @@ function HeaderSearchFormView({ inputRef }: { inputRef?: RefObject<HTMLInputElem
         name="q"
         defaultValue=""
         enterKeyHint="search"
-        placeholder="Name or style code"
+        placeholder="Name, colour, brand, or style code"
         suppressHydrationWarning
         className={HEADER_SEARCH_INPUT_CLASS}
       />
@@ -358,51 +357,13 @@ function HeaderSearchFormView({ inputRef }: { inputRef?: RefObject<HTMLInputElem
 }
 
 function HeaderSearchFormInner({ onClose }: { onClose?: () => void }) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const inputRef = useRef<HTMLInputElement>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    const el = inputRef.current;
-    if (!el) {
-      return;
-    }
-    el.value = searchParams.get("q") ?? "";
-  }, [searchParams]);
+  }, []);
 
-  return (
-    <form
-      className="flex w-full items-center gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const v = (inputRef.current?.value ?? "").trim();
-        onClose?.();
-        notifyProductSearchLoadingStart();
-        router.push(v.length > 0 ? `/search?q=${encodeURIComponent(v)}` : "/search");
-      }}
-    >
-      <input
-        ref={inputRef}
-        type="search"
-        name="q"
-        defaultValue=""
-        enterKeyHint="search"
-        placeholder="Name or style code"
-        suppressHydrationWarning
-        className={HEADER_SEARCH_INPUT_CLASS}
-        autoFocus={mounted}
-      />
-      <button
-        type="submit"
-        aria-label="Search"
-        className="inline-flex shrink-0 items-center justify-center rounded-full p-2 text-brand-navy transition hover:bg-brand-surface sm:p-2.5"
-      >
-        <SearchIcon className="h-5 w-5 sm:h-6 sm:w-6" />
-      </button>
-    </form>
-  );
+  return <HeaderSearchAutocomplete onClose={onClose} autoFocus={mounted} />;
 }
 
 function HeaderSearchPopup({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -434,7 +395,7 @@ function HeaderSearchPopup({ open, onClose }: { open: boolean; onClose: () => vo
       onClick={onClose}
     >
       <div
-        className="store-header-search-popup w-[min(100%,24rem)] rounded-2xl border border-brand-navy/12 bg-white px-4 py-2 shadow-2xl sm:px-5 sm:py-2.5"
+        className="store-header-search-popup w-[min(100%,32rem)] rounded-2xl border border-brand-navy/12 bg-white px-4 py-2 shadow-2xl sm:px-5 sm:py-2.5"
         onClick={(e) => e.stopPropagation()}
       >
         <Suspense fallback={<HeaderSearchFormView />}>
