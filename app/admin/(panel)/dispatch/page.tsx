@@ -6,6 +6,7 @@ import { storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
 
 import { completeDispatchQueueRow, listClickUpDispatchQueue, type ClickUpDispatchQueueRowDto } from "./actions";
 import { DispatchCarrierLabelsCell } from "./dispatch-carrier-labels";
+import { DispatchDeliveryStatusHorizontal } from "./dispatch-delivery-status";
 import { DispatchExpandableBarcode } from "./dispatch-expandable-barcode";
 import { PrintDocketButton } from "./print-docket-button";
 import { PrintOrderDetailButton } from "./print-order-detail-button";
@@ -89,7 +90,7 @@ export default async function AdminDispatchPage({ searchParams }: PageProps) {
           </div>
         ) : null}
         <div className="mt-4 overflow-x-auto rounded-lg border border-slate-100">
-          <table className="min-w-[900px] w-full border-collapse text-left text-sm">
+          <table className="min-w-[1100px] w-full border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
                 <th className="px-4 py-3">Order</th>
@@ -98,7 +99,7 @@ export default async function AdminDispatchPage({ searchParams }: PageProps) {
                 <th className="px-4 py-3">Perth sheet date</th>
                 <th className="px-4 py-3">Sent to dispatch</th>
                 <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="min-w-[26rem] px-4 py-3">Delivery status</th>
                 <th className="min-w-[28rem] px-4 py-3"></th>
               </tr>
             </thead>
@@ -118,6 +119,7 @@ export default async function AdminDispatchPage({ searchParams }: PageProps) {
                 <tr key={r.queueId} className="border-b border-slate-100 align-top">
                   <td className="px-4 py-3">
                     <p className="font-mono font-semibold text-brand-navy">{r.orderNumber}</p>
+                    <p className="mt-1 text-xs capitalize text-slate-500">{r.status}</p>
                   </td>
                   <td className="px-2 py-2 align-middle">
                     <DispatchExpandableBarcode
@@ -140,7 +142,21 @@ export default async function AdminDispatchPage({ searchParams }: PageProps) {
                     <p className="font-medium">{r.customerName}</p>
                     <p className="text-xs text-slate-600">{r.customerEmail}</p>
                   </td>
-                  <td className="px-4 py-3 capitalize">{r.status}</td>
+                  <td className="px-4 py-3">
+                    {r.createdAt ? (
+                      <DispatchDeliveryStatusHorizontal
+                        payload={{
+                          status: r.status,
+                          created_at: r.createdAt,
+                          shipped_at: r.shippedAt,
+                          tracking_number: r.trackingNumber,
+                          carrier: r.carrier,
+                        }}
+                      />
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="mx-auto flex w-4/5 min-w-0 max-w-full flex-wrap items-stretch gap-2">
                       <Link

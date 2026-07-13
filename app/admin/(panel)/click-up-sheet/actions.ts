@@ -186,6 +186,8 @@ export type LookupStoreOrderCustomerResult =
       /** Code128 payload (32-char hex); same barcode as Production / QC / Dispatch. */
       orderScanPayload: string | null;
       fulfillmentMethod: "Pickup" | "Delivery";
+      deliveryAddress: string;
+      deliveryFeeCents: number;
     }
   | { ok: false; error: string };
 
@@ -211,6 +213,8 @@ export async function lookupCustomerByStoreOrderNumber(
       checkoutMemos: detail.checkoutMemos,
       orderScanPayload: detail.storeOrderId ? storeOrderScanPayloadFromId(detail.storeOrderId) : null,
       fulfillmentMethod: detail.fulfillmentMethod,
+      deliveryAddress: detail.deliveryAddress,
+      deliveryFeeCents: detail.deliveryFeeCents,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Lookup failed";

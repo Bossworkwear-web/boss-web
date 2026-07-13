@@ -18,6 +18,11 @@ export type ClickUpDispatchQueueRowDto = {
   status: string;
   customerName: string;
   customerEmail: string;
+  /** For customer Delivery status timeline (same payload shape as track page). */
+  createdAt: string;
+  shippedAt: string | null;
+  trackingNumber: string | null;
+  carrier: string;
   /** Public URLs of carrier label images (AusPost etc.) attached on Dispatch. */
   carrierLabelImageUrls: string[];
 };
@@ -51,7 +56,7 @@ export async function listClickUpDispatchQueue(): Promise<
     const ids = [...new Set(queue.map((r) => r.store_order_id).filter(Boolean))];
     const { data: orders, error: oErr } = await supabase
       .from("store_orders")
-      .select("id, order_number, status, customer_name, customer_email")
+      .select("id, order_number, status, customer_name, customer_email, created_at, shipped_at, tracking_number, carrier")
       .in("id", ids);
 
     if (oErr) {
@@ -76,6 +81,10 @@ export async function listClickUpDispatchQueue(): Promise<
         status: o?.status ?? "—",
         customerName: o?.customer_name ?? "",
         customerEmail: o?.customer_email ?? "",
+        createdAt: o?.created_at ?? "",
+        shippedAt: o?.shipped_at ?? null,
+        trackingNumber: o?.tracking_number ?? null,
+        carrier: (o?.carrier ?? "").trim() || "Australia Post",
         carrierLabelImageUrls,
       };
     });

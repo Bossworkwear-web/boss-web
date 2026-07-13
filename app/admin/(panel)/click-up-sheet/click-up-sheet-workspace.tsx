@@ -7,6 +7,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { StoreOrderBarcode } from "@/app/components/store-order-barcode";
 
 import type { StoreOrderCustomerMemoLine } from "@/lib/store-order-customer-detail";
+import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { supplierOrderProductIdHeadTail } from "@/lib/supplier-order-product-id-parts";
 import { normalizeSupplierOrderLineSupplierValue } from "@/lib/supplier-order-supplier-normalize";
 
@@ -97,6 +98,8 @@ type Props = {
   initialCustomerEmail: string;
   initialCustomerPhone: string;
   initialFulfillmentMethod?: "Pickup" | "Delivery";
+  initialDeliveryAddress?: string;
+  initialDeliveryFeeCents?: number;
   initialLogoLocations: string;
   initialCheckoutMemos: StoreOrderCustomerMemoLine[];
   initialSupplierLines: ClickUpSupplierLineRow[];
@@ -117,6 +120,8 @@ export function ClickUpSheetWorkspace({
   initialCustomerEmail,
   initialCustomerPhone,
   initialFulfillmentMethod = "Delivery",
+  initialDeliveryAddress = "",
+  initialDeliveryFeeCents = 0,
   initialLogoLocations,
   initialCheckoutMemos,
   initialSupplierLines,
@@ -133,6 +138,8 @@ export function ClickUpSheetWorkspace({
   const [customerEmail, setCustomerEmail] = useState(initialCustomerEmail);
   const [customerPhone, setCustomerPhone] = useState(initialCustomerPhone);
   const [fulfillmentMethod, setFulfillmentMethod] = useState<"Pickup" | "Delivery">(initialFulfillmentMethod);
+  const [deliveryAddress, setDeliveryAddress] = useState(initialDeliveryAddress);
+  const [deliveryFeeCents, setDeliveryFeeCents] = useState(initialDeliveryFeeCents);
   const [supplierLines, setSupplierLines] = useState<ClickUpSupplierLineRow[]>(initialSupplierLines);
   const [logoLocations, setLogoLocations] = useState(initialLogoLocations);
   const [checkoutMemos, setCheckoutMemos] = useState<StoreOrderCustomerMemoLine[]>(initialCheckoutMemos);
@@ -182,6 +189,8 @@ export function ClickUpSheetWorkspace({
           setCustomerEmail("");
           setCustomerPhone("");
           setFulfillmentMethod("Delivery");
+          setDeliveryAddress("");
+          setDeliveryFeeCents(0);
           setLogoLocations("");
           setCheckoutMemos([]);
           setOrderScanPayload(null);
@@ -204,6 +213,8 @@ export function ClickUpSheetWorkspace({
         setOrderScanPayload(result.orderScanPayload);
         setCheckoutMemos(result.checkoutMemos);
         setFulfillmentMethod(result.fulfillmentMethod);
+        setDeliveryAddress(result.deliveryAddress);
+        setDeliveryFeeCents(result.deliveryFeeCents);
         if (skipCustomerLookupOnceRef.current) {
           skipCustomerLookupOnceRef.current = false;
           return;
@@ -529,6 +540,32 @@ export function ClickUpSheetWorkspace({
                   <span>Delivery</span>
                 </label>
               </div>
+            </div>
+            <div className="min-w-0">
+              <label htmlFor="cus-delivery-address" className="text-[1.125rem] font-medium text-slate-600">
+                Delivery address
+              </label>
+              <textarea
+                id="cus-delivery-address"
+                rows={2}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[1.3125rem] leading-snug"
+                placeholder="Delivery address"
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
+              />
+            </div>
+            <div className="min-w-0">
+              <label htmlFor="cus-delivery-fee" className="text-[1.125rem] font-medium text-slate-600">
+                Delivery fee paid
+              </label>
+              <input
+                id="cus-delivery-fee"
+                readOnly
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[1.3125rem] tabular-nums text-slate-800"
+                value={
+                  deliveryFeeCents <= 0 ? "Free / $0.00" : formatMoneyFromCents(deliveryFeeCents, "AUD")
+                }
+              />
             </div>
           </div>
         </section>

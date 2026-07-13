@@ -5,6 +5,7 @@ import {
   resolveStoreOrderPickUpByIds,
   storeOrderFulfillmentLabel,
 } from "@/lib/store-order-fulfillment";
+import { formatMoneyFromCents } from "@/lib/store-order-utils";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 import { ClickUpOrderFormSection, type ClickUpOrderFormRow } from "./click-up-order-form-section";
@@ -149,7 +150,14 @@ export default async function AdminWorkProcessPage() {
         const orderNumbers = [...new Set(pairs.map((p) => p.customerOrderId))];
         const storeByNumber = new Map<
           string,
-          { id: string; created_at: string; customer_name: string; customer_email: string }
+          {
+            id: string;
+            created_at: string;
+            customer_name: string;
+            customer_email: string;
+            delivery_address: string;
+            delivery_fee_cents: number;
+          }
         >();
         const orgByEmail = new Map<string, string>();
         const phoneByEmail = new Map<string, string>();
@@ -157,7 +165,9 @@ export default async function AdminWorkProcessPage() {
         if (orderNumbers.length > 0) {
           const { data: storeRows } = await supabase
             .from("store_orders")
-            .select("id, order_number, created_at, customer_name, customer_email")
+            .select(
+              "id, order_number, created_at, customer_name, customer_email, delivery_address, delivery_fee_cents",
+            )
             .in("order_number", orderNumbers);
 
           const emails = new Set<string>();
@@ -167,6 +177,8 @@ export default async function AdminWorkProcessPage() {
               created_at: row.created_at,
               customer_name: row.customer_name ?? "",
               customer_email: row.customer_email ?? "",
+              delivery_address: row.delivery_address ?? "",
+              delivery_fee_cents: Math.max(0, Number(row.delivery_fee_cents) || 0),
             });
             const e = row.customer_email.trim().toLowerCase();
             if (e) emails.add(e);
@@ -237,6 +249,10 @@ export default async function AdminWorkProcessPage() {
           const fulfillmentMethod = storeOrderFulfillmentLabel(
             so?.id ? pickUpById.get(so.id) === true : false,
           );
+          const deliveryAddress = so?.delivery_address?.trim() || "—";
+          const feeCents = so?.delivery_fee_cents ?? 0;
+          const deliveryFeeDisplay =
+            feeCents <= 0 ? "Free / $0.00" : formatMoneyFromCents(feeCents, "AUD");
 
           return {
             listDate,
@@ -248,6 +264,8 @@ export default async function AdminWorkProcessPage() {
             customerEmail,
             customerPhone,
             fulfillmentMethod,
+            deliveryAddress,
+            deliveryFeeDisplay,
             processingStageLabel: "—",
           };
         });

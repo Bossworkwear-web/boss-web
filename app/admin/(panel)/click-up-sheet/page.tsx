@@ -36,6 +36,8 @@ export default async function AdminClickUpSheetPage({
   let initialCustomerEmail = "";
   let initialCustomerPhone = "";
   let initialFulfillmentMethod: "Pickup" | "Delivery" = "Delivery";
+  let initialDeliveryAddress = "";
+  let initialDeliveryFeeCents = 0;
   let initialLogoLocations = "";
   let initialCheckoutMemos: StoreOrderCustomerMemoLine[] = [];
   let initialOrderScanPayload: string | null = null;
@@ -49,6 +51,8 @@ export default async function AdminClickUpSheetPage({
       initialCustomerEmail = detail.customerEmail;
       initialCustomerPhone = detail.customerPhone;
       initialFulfillmentMethod = detail.fulfillmentMethod;
+      initialDeliveryAddress = detail.deliveryAddress;
+      initialDeliveryFeeCents = detail.deliveryFeeCents;
       initialLogoLocations = detail.logoLocations;
       initialCheckoutMemos = detail.checkoutMemos;
       initialOrderScanPayload = detail.storeOrderId ? storeOrderScanPayloadFromId(detail.storeOrderId) : null;
@@ -121,6 +125,8 @@ export default async function AdminClickUpSheetPage({
       initialCustomerEmail={initialCustomerEmail}
       initialCustomerPhone={initialCustomerPhone}
       initialFulfillmentMethod={initialFulfillmentMethod}
+      initialDeliveryAddress={initialDeliveryAddress}
+      initialDeliveryFeeCents={initialDeliveryFeeCents}
       initialLogoLocations={initialLogoLocations}
       initialCheckoutMemos={initialCheckoutMemos}
       initialSupplierLines={initialSupplierLines}

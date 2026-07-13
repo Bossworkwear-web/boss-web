@@ -115,6 +115,10 @@ export async function getCustomerDetailForStoreOrderNumber(
   storeOrderId: string | null;
   /** Pickup vs delivery (from store order / checkout pending). */
   fulfillmentMethod: StoreOrderFulfillmentMethod;
+  /** Ship-to address from `store_orders.delivery_address`. */
+  deliveryAddress: string;
+  /** Delivery fee the customer paid at checkout (`store_orders.delivery_fee_cents`). */
+  deliveryFeeCents: number;
 }> {
   const empty = {
     customerName: "",
@@ -125,6 +129,8 @@ export async function getCustomerDetailForStoreOrderNumber(
     checkoutMemos: [] as StoreOrderCustomerMemoLine[],
     storeOrderId: null as string | null,
     fulfillmentMethod: "Delivery" as StoreOrderFulfillmentMethod,
+    deliveryAddress: "",
+    deliveryFeeCents: 0,
   };
 
   const id = orderNumber.trim();
@@ -134,7 +140,7 @@ export async function getCustomerDetailForStoreOrderNumber(
 
   const { data: so, error } = await supabase
     .from("store_orders")
-    .select("id, customer_name, customer_email")
+    .select("id, customer_name, customer_email, delivery_address, delivery_fee_cents")
     .eq("order_number", id)
     .maybeSingle();
 
@@ -144,6 +150,8 @@ export async function getCustomerDetailForStoreOrderNumber(
 
   const customerName = (so.customer_name ?? "").trim();
   const customerEmail = (so.customer_email ?? "").trim();
+  const deliveryAddress = (so.delivery_address ?? "").trim();
+  const deliveryFeeCents = Math.max(0, Math.round(Number(so.delivery_fee_cents) || 0));
   let organisationName = "";
   let customerPhone = "";
 
@@ -190,5 +198,7 @@ export async function getCustomerDetailForStoreOrderNumber(
     checkoutMemos,
     storeOrderId: so.id,
     fulfillmentMethod,
+    deliveryAddress,
+    deliveryFeeCents,
   };
 }

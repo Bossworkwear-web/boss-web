@@ -552,7 +552,8 @@ html:has([data-admin-portal]) {
     font-size: 0.825rem !important;
   }
 
-  body.click-up-sheet-print-mode .click-up-sheet-print-order-4 input {
+  body.click-up-sheet-print-mode .click-up-sheet-print-order-4 input,
+  body.click-up-sheet-print-mode .click-up-sheet-print-order-4 textarea {
     padding: 0.2rem 0.35rem !important;
     font-size: 0.9rem !important;
   }

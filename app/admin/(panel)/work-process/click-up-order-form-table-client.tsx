@@ -27,6 +27,8 @@ function rowSearchBlob(row: ClickUpOrderFormRow): string {
     row.customerName,
     row.customerPhone,
     row.customerEmail,
+    row.deliveryAddress,
+    row.deliveryFeeDisplay,
     row.fulfillmentMethod === "Pickup" ? "pick up pickup" : "delivery",
     row.customerOrderId,
     row.processingStageLabel,
@@ -96,7 +98,7 @@ export function ClickUpOrderFormTableClient({ rows }: { rows: ClickUpOrderFormRo
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="w-full min-w-[1100px] text-left text-sm">
+          <table className="w-full min-w-[1280px] text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="whitespace-nowrap px-4 py-3" title="Supplier 워크시트 날짜 (Click up sheet URL의 list_date)">
@@ -109,6 +111,8 @@ export function ClickUpOrderFormTableClient({ rows }: { rows: ClickUpOrderFormRo
                 <th className="px-4 py-3">Customer name</th>
                 <th className="px-4 py-3">Phone</th>
                 <th className="px-4 py-3">Email</th>
+                <th className="min-w-[12rem] px-4 py-3">Delivery address</th>
+                <th className="px-4 py-3">Delivery fee paid</th>
                 <th className="px-4 py-3">Order Type</th>
                 <th
                   className="min-w-[10rem] whitespace-nowrap px-4 py-3"
@@ -148,6 +152,12 @@ export function ClickUpOrderFormTableClient({ rows }: { rows: ClickUpOrderFormRo
                   </td>
                   <td className="max-w-[220px] truncate px-4 py-3 text-slate-700" title={row.customerEmail}>
                     {row.customerEmail}
+                  </td>
+                  <td className="max-w-[240px] truncate px-4 py-3 text-slate-700" title={row.deliveryAddress}>
+                    {row.deliveryAddress}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 tabular-nums text-slate-700">
+                    {row.deliveryFeeDisplay}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3">
                     <span

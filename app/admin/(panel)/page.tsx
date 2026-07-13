@@ -31,6 +31,8 @@ export default async function AdminDashboardPage() {
     customerEmail: string;
     customerPhone: string;
     fulfillmentMethod: StoreOrderFulfillmentMethod;
+    deliveryAddress: string;
+    deliveryFeeDisplay: string;
     createdAtDisplay: string;
   };
   let recentOrderContacts: RecentOrderContact[] = [];
@@ -63,7 +65,7 @@ export default async function AdminDashboardPage() {
 
     const { data: recentOrders, error: recentErr } = await supabase
       .from("store_orders")
-      .select("id, order_number, customer_name, customer_email, created_at")
+      .select("id, order_number, customer_name, customer_email, delivery_address, delivery_fee_cents, created_at")
       .in("status", ["paid", "processing", "shipped"])
       .order("created_at", { ascending: false })
       .limit(8);
@@ -115,6 +117,11 @@ export default async function AdminDashboardPage() {
           customerEmail: email || "—",
           customerPhone: phone || "—",
           fulfillmentMethod: storeOrderFulfillmentLabel(pickUpById.get(r.id) === true),
+          deliveryAddress: (r.delivery_address ?? "").trim() || "—",
+          deliveryFeeDisplay:
+            Math.max(0, Number(r.delivery_fee_cents) || 0) <= 0
+              ? "Free / $0.00"
+              : formatMoneyFromCents(Math.max(0, Number(r.delivery_fee_cents) || 0), "AUD"),
           createdAtDisplay: dateFmt.format(new Date(r.created_at)),
         };
       });
@@ -139,7 +146,7 @@ export default async function AdminDashboardPage() {
           <div>
             <h2 className="text-lg font-medium text-brand-navy">Recent orders — customer contact</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Latest paid store orders: Order ID, company, customer, phone, email, and order type.
+              Latest paid store orders with contact, order type, delivery address, and delivery fee paid.
             </p>
           </div>
           <Link
@@ -155,7 +162,7 @@ export default async function AdminDashboardPage() {
           <p className="mt-4 text-sm text-slate-600">No recent paid orders yet.</p>
         ) : (
           <div className="mt-4 overflow-x-auto">
-            <table className="min-w-[48rem] w-full border-collapse text-sm">
+            <table className="min-w-[56rem] w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <th className="py-2 pr-4">Order ID</th>
@@ -164,6 +171,8 @@ export default async function AdminDashboardPage() {
                   <th className="py-2 pr-4">Customer name</th>
                   <th className="py-2 pr-4">Phone</th>
                   <th className="py-2 pr-4">Email</th>
+                  <th className="py-2 pr-4">Delivery address</th>
+                  <th className="py-2 pr-4">Delivery fee paid</th>
                   <th className="py-2">Order Type</th>
                 </tr>
               </thead>
@@ -177,9 +186,13 @@ export default async function AdminDashboardPage() {
                     </td>
                     <td className="py-2 pr-4">{row.customerName}</td>
                     <td className="whitespace-nowrap py-2 pr-4">{row.customerPhone}</td>
-                    <td className="max-w-[14rem] truncate py-2 pr-4" title={row.customerEmail}>
+                    <td className="max-w-[12rem] truncate py-2 pr-4" title={row.customerEmail}>
                       {row.customerEmail}
                     </td>
+                    <td className="max-w-[14rem] truncate py-2 pr-4" title={row.deliveryAddress}>
+                      {row.deliveryAddress}
+                    </td>
+                    <td className="whitespace-nowrap py-2 pr-4 tabular-nums">{row.deliveryFeeDisplay}</td>
                     <td className="whitespace-nowrap py-2">
                       <span
                         className={

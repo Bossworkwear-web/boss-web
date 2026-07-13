@@ -67,9 +67,11 @@ export type RepriceResult<T extends RepriceableLine> = {
 };
 
 /**
- * Re-price quote lines using current product unit prices. The decoration/extra portion captured
- * at quote time is preserved; only the product portion moves with current supplier pricing. The
- * cart-level volume discount is then re-applied across the lines from current rules.
+ * Re-price quote lines using current product unit prices from the catalog DB.
+ * Decoration/extras captured at quote time are preserved when `productBaseUnit` was
+ * snapshotted; when it was not, the live product unit replaces the stored list unit
+ * so Order → cart always tracks current shelf pricing (quote totals are not guaranteed).
+ * Cart-level volume discount is then re-applied from current rules.
  */
 export function repriceQuoteLines<T extends RepriceableLine>(
   lines: T[],
@@ -81,11 +83,17 @@ export function repriceQuoteLines<T extends RepriceableLine>(
     const storedUnit = storedListUnit(line);
     const productId = (line.productId ?? "").trim();
     const currentProductUnit = productId ? currentUnitByProductId.get(productId) : undefined;
-    const snapshotBase = typeof line.productBaseUnit === "number" ? line.productBaseUnit : null;
+    const snapshotBase =
+      typeof line.productBaseUnit === "number" && Number.isFinite(line.productBaseUnit)
+        ? line.productBaseUnit
+        : null;
 
     let currentListUnit = storedUnit;
-    if (snapshotBase != null && currentProductUnit != null) {
-      const decorationExtra = Math.max(0, storedUnit - snapshotBase);
+    if (currentProductUnit != null) {
+      // Keep embroidery/print extras when we know the product-only portion at quote time;
+      // otherwise bind the whole list unit to today's product price.
+      const decorationExtra =
+        snapshotBase != null ? Math.max(0, storedUnit - snapshotBase) : 0;
       currentListUnit = Math.round((currentProductUnit + decorationExtra) * 100) / 100;
     }
     if (Math.round(currentListUnit * 100) !== Math.round(storedUnit * 100)) {

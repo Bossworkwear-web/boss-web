@@ -14,6 +14,9 @@ export type ClickUpOrderFormRow = {
   customerPhone: string;
   /** Pickup vs delivery for the store order. */
   fulfillmentMethod: "Pickup" | "Delivery";
+  deliveryAddress: string;
+  /** Formatted delivery fee the customer paid (e.g. `$8.50` or `Free / $0.00`). */
+  deliveryFeeDisplay: string;
   /**
    * Where the order sits in the pipeline (read-only): Click up, Production, Quality control, or Dispatch.
    * Completed orders are not listed here.

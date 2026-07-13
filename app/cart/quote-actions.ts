@@ -275,11 +275,11 @@ export async function getQuoteLinesForCart(quoteId: string): Promise<GetQuoteLin
       return { ok: false, error: "This quote has no items." };
     }
 
-    // Re-price the cart from current product prices + system rules so saved quotes are not a
-    // guaranteed price (see Terms & Conditions §7).
+    // Always re-price product units from the live catalog (quote totals are indicative only).
+    // Decoration/extras stay when productBaseUnit was snapshotted at save time.
     const currentUnitByProductId = await loadCurrentProductUnitMap(supabase, lines);
     const repriced = repriceQuoteLines(lines, currentUnitByProductId);
-    const outLines: StoreOrderCartLine[] = repriced.lines.map(({ productBaseUnit, ...line }) => line);
+    const outLines: StoreOrderCartLine[] = repriced.lines.map(({ productBaseUnit: _base, ...line }) => line);
     return { ok: true, lines: outLines };
   } catch {
     return { ok: false, error: "Something went wrong." };
