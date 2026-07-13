@@ -160,8 +160,25 @@ function safeParse(value: string | null): CartItem[] {
   }
 }
 
+/** Stable empty list for `useSyncExternalStore` server / pre-hydrate snapshot. */
+const EMPTY_CART_ITEMS: CartItem[] = [];
+
+let cachedCartItemsSnapshot: CartItem[] = EMPTY_CART_ITEMS;
+let cartItemsSnapshotReady = false;
+
+function refreshCachedCartItemsSnapshot() {
+  if (typeof window === "undefined") {
+    cachedCartItemsSnapshot = EMPTY_CART_ITEMS;
+    cartItemsSnapshotReady = true;
+    return;
+  }
+  cachedCartItemsSnapshot = getCartItems();
+  cartItemsSnapshotReady = true;
+}
+
 function emitCartUpdated() {
   if (typeof window !== "undefined") {
+    refreshCachedCartItemsSnapshot();
     window.dispatchEvent(new CustomEvent(CART_UPDATED_EVENT));
   }
 }
@@ -327,6 +344,7 @@ export function subscribeCartUpdates(listener: () => void) {
       event.key === CART_REORDER_MOCKUPS_KEY ||
       event.key === CART_REORDER_SOURCE_ORDER_ID_KEY
     ) {
+      refreshCachedCartItemsSnapshot();
       listener();
     }
   };
@@ -356,4 +374,20 @@ function cartCountServerSnapshot(): number {
  */
 export function useCartCount(): number {
   return useSyncExternalStore(subscribeCartUpdates, cartCountSnapshot, cartCountServerSnapshot);
+}
+
+function cartItemsSnapshot(): CartItem[] {
+  if (!cartItemsSnapshotReady) {
+    refreshCachedCartItemsSnapshot();
+  }
+  return cachedCartItemsSnapshot;
+}
+
+function cartItemsServerSnapshot(): CartItem[] {
+  return EMPTY_CART_ITEMS;
+}
+
+/** Cart line list for drawers / client UI (SSR + first paint = empty array). */
+export function useCartItems(): CartItem[] {
+  return useSyncExternalStore(subscribeCartUpdates, cartItemsSnapshot, cartItemsServerSnapshot);
 }

@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { RefObject } from "react";
 import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { CartDrawer } from "@/app/components/cart-drawer";
 import { CartIcon, MenuIcon, SearchIcon, UserIcon } from "@/app/components/icons";
 import { LoadingRingSpinner } from "@/app/components/loading-ring-spinner";
 import { LOGO_SRC } from "@/app/generated/logo";
@@ -485,6 +486,7 @@ export function TopNavClient({
   const [logoutOverlay, setLogoutOverlay] = useState<"signing-out" | "signed-out" | null>(null);
   const [signedOutByIdle, setSignedOutByIdle] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [productSidebarNav, setProductSidebarNav] = useState<ProductSidebarNav | null>(null);
   const [headerElevated, setHeaderElevated] = useState(false);
@@ -546,6 +548,12 @@ export function TopNavClient({
     }
     setHeaderElevated(window.scrollY > 6);
   }, []);
+
+  useEffect(() => {
+    if (pathname === "/cart") {
+      setCartDrawerOpen(false);
+    }
+  }, [pathname]);
 
   useEffect(() => {
     const syncCustomerName = () => {
@@ -751,7 +759,10 @@ export function TopNavClient({
             <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2 lg:flex-none lg:justify-self-start">
               <button
                 type="button"
-                onClick={() => setMobileNavOpen(true)}
+                onClick={() => {
+                  setCartDrawerOpen(false);
+                  setMobileNavOpen(true);
+                }}
                 className="inline-flex shrink-0 items-center justify-center rounded-lg border border-brand-navy/25 p-1.5 text-brand-navy lg:hidden"
                 aria-expanded={mobileNavOpen}
                 aria-controls="mobile-store-menu"
@@ -826,16 +837,30 @@ export function TopNavClient({
                   <UserIcon className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
                 </Link>
               )}
-              <Link
-                href="/cart"
+              <button
+                type="button"
+                disabled={pathname === "/cart"}
+                onClick={() => {
+                  if (pathname === "/cart") return;
+                  setSearchOpen(false);
+                  setMobileNavOpen(false);
+                  setCartDrawerOpen(true);
+                }}
                 className={`relative inline-flex items-center justify-center rounded-full p-1.5 sm:p-2 lg:p-2.5 ${
-                  pathname === "/cart" ? "bg-brand-orange text-brand-navy" : "text-brand-navy hover:bg-brand-surface"
+                  pathname === "/cart"
+                    ? "cursor-default text-brand-navy/35"
+                    : cartDrawerOpen
+                      ? "bg-brand-orange text-brand-navy"
+                      : "text-brand-navy hover:bg-brand-surface"
                 }`}
-                aria-label="Cart"
+                aria-label={pathname === "/cart" ? "Cart (current page)" : "Cart"}
+                aria-expanded={pathname === "/cart" ? undefined : cartDrawerOpen}
+                aria-controls={pathname === "/cart" ? undefined : "store-cart-drawer"}
+                aria-disabled={pathname === "/cart"}
               >
                 <span
                   className={
-                    pathname !== "/cart" && cartCount > 0
+                    pathname !== "/cart" && !cartDrawerOpen && cartCount > 0
                       ? "store-cart-icon-animate shrink-0"
                       : "inline-flex shrink-0"
                   }
@@ -843,14 +868,23 @@ export function TopNavClient({
                   <CartIcon className="h-5 w-5 shrink-0 sm:h-6 sm:w-6 lg:h-[1.815rem] lg:w-[1.815rem]" />
                 </span>
                 {cartCount > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 inline-flex min-h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-brand-navy px-1 text-[0.625rem] font-medium leading-none text-white sm:min-h-[1.25rem] sm:min-w-[1.25rem] sm:text-xs">
+                  <span
+                    className={`absolute -right-0.5 -top-0.5 inline-flex min-h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full px-1 text-[0.625rem] font-medium leading-none sm:min-h-[1.25rem] sm:min-w-[1.25rem] sm:text-xs ${
+                      pathname === "/cart"
+                        ? "bg-brand-navy/30 text-white"
+                        : "bg-brand-navy text-white"
+                    }`}
+                  >
                     {cartCount}
                   </span>
                 )}
-              </Link>
+              </button>
               <HeaderSearchToggle
                 open={searchOpen}
-                onOpen={() => setSearchOpen(true)}
+                onOpen={() => {
+                  setCartDrawerOpen(false);
+                  setSearchOpen(true);
+                }}
                 onClose={() => setSearchOpen(false)}
               />
               </div>
@@ -858,6 +892,8 @@ export function TopNavClient({
           </div>
         </nav>
       </section>
+
+      <CartDrawer open={cartDrawerOpen} onClose={() => setCartDrawerOpen(false)} />
 
       {mobileNavOpen ? (
         <div
