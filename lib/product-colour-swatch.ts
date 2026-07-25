@@ -48,6 +48,10 @@ const COLOUR_HEX_ENTRIES = ([
   ["p grey", "#6b7280"],
   ["pgrey", "#6b7280"],
   ["charcoal", "#36454f"],
+  /** JB's / workwear gunmetal — dark blue-grey (not hash fallback purple). */
+  ["gun metal", "#53565a"],
+  ["gun-metal", "#53565a"],
+  ["gunmetal", "#53565a"],
   ["bottle green", "#0a391b"],
   ["burgundy", "#800020"],
   ["maroon", "#7f1d1d"],

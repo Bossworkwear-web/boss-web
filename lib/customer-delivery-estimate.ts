@@ -155,7 +155,7 @@ export type DeliveryBand = {
  * generous caps vs “road km” intuition.
  */
 export const DELIVERY_FEE_BANDS: DeliveryBand[] = [
-  { maxDistanceKm: 10, maxWeightKg: 5, fee: 8.5 },
+  { maxDistanceKm: 10, maxWeightKg: 5, fee: 9.95 },
   { maxDistanceKm: 25, maxWeightKg: 10, fee: 14.0 },
   { maxDistanceKm: 100, maxWeightKg: 20, fee: 24.0 },
   { maxDistanceKm: 200, maxWeightKg: 25, fee: 38.0 },
@@ -167,7 +167,7 @@ export const LOCAL_MINIMUM_DELIVERY_FEE_AUD = DELIVERY_FEE_BANDS[0]!.fee;
 /**
  * Delivery fee from distance + weight bands.
  * `distanceKm <= 0` means “no postcode estimate yet” → $0 (guest / incomplete address).
- * Same-suburb deliveries use a positive local distance so the minimum band ($8.50) applies.
+ * Same-suburb deliveries use a positive local distance so the minimum band ($9.95) applies.
  */
 export function calculateDeliveryFee(distanceKm: number, totalWeightKg: number): number {
   if (distanceKm <= 0) {
