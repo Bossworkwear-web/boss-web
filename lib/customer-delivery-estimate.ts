@@ -164,20 +164,44 @@ export const DELIVERY_FEE_BANDS: DeliveryBand[] = [
 /** Lowest delivery band fee (local / same-postcode deliveries). */
 export const LOCAL_MINIMUM_DELIVERY_FEE_AUD = DELIVERY_FEE_BANDS[0]!.fee;
 
+/** Applied on top of the band fee when the delivery postcode is outside Western Australia. */
+export const INTERSTATE_DELIVERY_FEE_MULTIPLIER = 1.5;
+
+function roundDeliveryFeeAud(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+/** Australian postcodes 6000–6797 (WA). */
+export function isWesternAustraliaPostcode(postcode: string | null | undefined): boolean {
+  const pc = String(postcode ?? "").trim();
+  if (!/^\d{4}$/.test(pc)) {
+    return false;
+  }
+  const n = Number.parseInt(pc, 10);
+  return n >= 6000 && n <= 6797;
+}
+
 /**
  * Delivery fee from distance + weight bands.
  * `distanceKm <= 0` means “no postcode estimate yet” → $0 (guest / incomplete address).
  * Same-suburb deliveries use a positive local distance so the minimum band ($9.95) applies.
+ * When `postcode` is provided and is outside WA, the band fee is increased by 50%.
  */
-export function calculateDeliveryFee(distanceKm: number, totalWeightKg: number): number {
+export function calculateDeliveryFee(
+  distanceKm: number,
+  totalWeightKg: number,
+  postcode?: string | null,
+): number {
   if (distanceKm <= 0) {
     return 0;
   }
   const matched = DELIVERY_FEE_BANDS.find(
     (band) => distanceKm <= band.maxDistanceKm && totalWeightKg <= band.maxWeightKg,
   );
-  if (matched) {
-    return matched.fee;
+  let fee = matched ? matched.fee : 48.0;
+  const pc = postcode == null ? "" : String(postcode).trim();
+  if (pc && !isWesternAustraliaPostcode(pc)) {
+    fee = roundDeliveryFeeAud(fee * INTERSTATE_DELIVERY_FEE_MULTIPLIER);
   }
-  return 48.0;
+  return fee;
 }

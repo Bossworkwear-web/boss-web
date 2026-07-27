@@ -90,6 +90,26 @@ describe("storefront-cart-checkout-fees", () => {
       expect(result.totalAud).toBe(100 + localDelivery);
     });
 
+    it("adds 50% delivery surcharge for interstate (non-WA) postcodes", () => {
+      const wa = computeStorefrontCheckoutFees({
+        ...signedInBase,
+        items: [plainItem],
+        deliveryPostcode: "6065",
+        estimatedWeightKg: 5,
+        hasPriorEmbroideryOrder: true,
+      });
+      const nsw = computeStorefrontCheckoutFees({
+        ...signedInBase,
+        items: [plainItem],
+        deliveryPostcode: "2000",
+        estimatedWeightKg: 5,
+        hasPriorEmbroideryOrder: true,
+      });
+      // NSW is far enough to hit the top band ($48), then ×1.5 → $72.
+      expect(nsw.deliveryFeeAud).toBe(72);
+      expect(nsw.deliveryFeeAud).toBeGreaterThan(wa.deliveryFeeAud);
+    });
+
     it("adds logo setup for first embroidery order under promo threshold", () => {
       const subtotal = STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD - 1;
       const result = computeStorefrontCheckoutFees({

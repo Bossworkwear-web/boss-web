@@ -119,7 +119,7 @@ export function computeStorefrontCheckoutFees(input: StorefrontCheckoutFeesInput
   } = input;
 
   const distanceKm = distanceKmFromCompanyBase(deliveryPostcode);
-  const baseDelivery = calculateDeliveryFee(distanceKm, estimatedWeightKg);
+  const baseDelivery = calculateDeliveryFee(distanceKm, estimatedWeightKg, deliveryPostcode);
 
   let deliveryFeeAud = 0;
 

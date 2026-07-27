@@ -49,7 +49,7 @@ export function OrderFromQuoteButton({ quoteId }: OrderFromQuoteButtonProps) {
         onClick={() => void handleOrder()}
         className="text-[1.26rem] font-semibold text-brand-orange hover:underline disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {pending ? "Loading…" : "Order"}
+        {pending ? "Loading…" : "Edit or Order"}
       </button>
       {error ? <span className="max-w-[14.5rem] text-[1.08rem] text-red-600">{error}</span> : null}
     </div>

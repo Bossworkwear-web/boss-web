@@ -438,7 +438,7 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
                   ·
                 </span>
                 <span>
-                  Use <span className="font-medium text-brand-navy/80">Order</span> to load a quote into your cart, then
+                  Use <span className="font-medium text-brand-navy/80">Edit or Order</span> to load a quote into your cart, then
                   continue to payment.
                 </span>
               </p>
@@ -480,7 +480,7 @@ export default async function CustomerPage({ searchParams }: CustomerPageProps) 
                       <th className="px-4 py-3">Items</th>
                       <th className="px-4 py-3">Lines</th>
                       <th className="px-4 py-3">Total</th>
-                      <th className="px-4 py-3">Order</th>
+                      <th className="px-4 py-3">Edit or Order</th>
                       <th className="px-4 py-3">Delete</th>
                     </tr>
                   </thead>
