@@ -102,9 +102,6 @@ export default async function OrderTrackPage({ params }: Props) {
             </header>
 
             <div className="rounded-2xl border border-brand-navy/15 bg-brand-surface/40 p-6">
-              <h2 className="text-[1.3125rem] font-semibold uppercase tracking-[0.08em] text-brand-navy/70">
-                Delivery status
-              </h2>
               <OrderDeliveryStatusTracker
                 trackingToken={trimmed}
                 initialPayload={{

@@ -5,7 +5,7 @@ import { qualityCheckSheetHref } from "@/lib/quality-check-sheet-href";
 import { storeOrderScanPayloadFromId } from "@/lib/store-order-scan-code";
 
 import { completeDispatchQueueRow, listClickUpDispatchQueue, type ClickUpDispatchQueueRowDto } from "./actions";
-import { DispatchCarrierLabelsCell } from "./dispatch-carrier-labels";
+import { DispatchCarrierCell } from "./dispatch-carrier-cell";
 import { DispatchDeliveryStatusHorizontal } from "./dispatch-delivery-status";
 import { DispatchExpandableBarcode } from "./dispatch-expandable-barcode";
 import { PrintDocketButton } from "./print-docket-button";
@@ -95,7 +95,7 @@ export default async function AdminDispatchPage({ searchParams }: PageProps) {
               <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
                 <th className="px-4 py-3">Order</th>
                 <th className="min-w-[9rem] px-2 py-3">Order barcode</th>
-                <th className="min-w-[11rem] px-2 py-3">Carrier labels</th>
+                <th className="min-w-[13rem] px-2 py-3">Carrier</th>
                 <th className="px-4 py-3">Perth sheet date</th>
                 <th className="px-4 py-3">Sent to dispatch</th>
                 <th className="px-4 py-3">Customer</th>
@@ -128,10 +128,10 @@ export default async function AdminDispatchPage({ searchParams }: PageProps) {
                     />
                   </td>
                   <td className="px-2 py-2 align-top">
-                    <DispatchCarrierLabelsCell
-                      queueId={r.queueId}
-                      orderNumber={r.orderNumber}
-                      carrierLabelImageUrls={r.carrierLabelImageUrls}
+                    <DispatchCarrierCell
+                      storeOrderId={r.storeOrderId}
+                      initialCarrier={r.carrier}
+                      initialTrackingNumber={r.trackingNumber}
                     />
                   </td>
                   <td className="px-4 py-3 font-mono text-slate-800">{r.listDate || "—"}</td>

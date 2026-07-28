@@ -86,9 +86,20 @@ export function OrderDeliveryStatusTracker({ trackingToken, initialPayload }: Pr
   const steps = buildDeliveryTimeline(payload);
   const cancelled = payload.status.trim().toLowerCase() === "cancelled";
   const trackUrl = carrierTrackLinkUrl(payload);
+  const trackingNumber = payload.tracking_number?.trim() ?? "";
 
   return (
-    <div className="mt-4">
+    <div>
+      <h2 className="text-[1.3125rem] font-semibold uppercase tracking-[0.08em] text-brand-navy/70">
+        Delivery status
+        {trackingNumber ? (
+          <>
+            {" : "}
+            <span className="font-mono normal-case tracking-normal text-brand-navy">{trackingNumber}</span>
+          </>
+        ) : null}
+      </h2>
+      <div className="mt-4">
       {cancelled ? (
         <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[1.125rem] text-amber-950">
           This order has been cancelled. If you think this is a mistake, please contact us.
@@ -150,6 +161,7 @@ export function OrderDeliveryStatusTracker({ trackingToken, initialPayload }: Pr
           );
         })}
       </ol>
+      </div>
     </div>
   );
 }

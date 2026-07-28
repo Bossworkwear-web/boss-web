@@ -9,6 +9,8 @@ import { appendClickUpCompleteOrdersQueueSetupHint } from "@/lib/supabase-click-
 import { appendClickUpDispatchQueueSetupHint } from "@/lib/supabase-click-up-dispatch-queue-hint";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
+import { normalizeDispatchCarrierOption } from "./dispatch-carrier";
+
 export type ClickUpDispatchQueueRowDto = {
   queueId: string;
   storeOrderId: string;
@@ -23,8 +25,6 @@ export type ClickUpDispatchQueueRowDto = {
   shippedAt: string | null;
   trackingNumber: string | null;
   carrier: string;
-  /** Public URLs of carrier label images (AusPost etc.) attached on Dispatch. */
-  carrierLabelImageUrls: string[];
 };
 
 /** Orders sent to Dispatch from Quality Check sheet (Move to Dispatch). */
@@ -41,7 +41,7 @@ export async function listClickUpDispatchQueue(): Promise<
     const supabase = createSupabaseAdminClient();
     const { data: qrows, error: qErr } = await supabase
       .from("click_up_dispatch_queue")
-      .select("id, store_order_id, list_date, moved_at, carrier_label_image_urls")
+      .select("id, store_order_id, list_date, moved_at")
       .order("moved_at", { ascending: false });
 
     if (qErr) {
@@ -67,11 +67,6 @@ export async function listClickUpDispatchQueue(): Promise<
 
     const rows: ClickUpDispatchQueueRowDto[] = queue.map((q) => {
       const o = orderMap.get(q.store_order_id);
-      const labelUrlsRaw = (q as { carrier_label_image_urls?: unknown }).carrier_label_image_urls;
-      const carrierLabelImageUrls = Array.isArray(labelUrlsRaw)
-        ? labelUrlsRaw.filter((u): u is string => typeof u === "string" && u.trim().length > 0)
-        : [];
-
       return {
         queueId: q.id,
         storeOrderId: q.store_order_id,
@@ -84,8 +79,7 @@ export async function listClickUpDispatchQueue(): Promise<
         createdAt: o?.created_at ?? "",
         shippedAt: o?.shipped_at ?? null,
         trackingNumber: o?.tracking_number ?? null,
-        carrier: (o?.carrier ?? "").trim() || "Australia Post",
-        carrierLabelImageUrls,
+        carrier: (o?.carrier ?? "").trim(),
       };
     });
 
@@ -97,6 +91,58 @@ export async function listClickUpDispatchQueue(): Promise<
 }
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
+
+export type UpdateDispatchCarrierResult = { ok: true } | { ok: false; error: string };
+
+/** Persist carrier + tracking number from the Dispatch queue row editor. */
+export async function updateDispatchOrderCarrierAndTracking(input: {
+  storeOrderId: string;
+  carrier: string;
+  trackingNumber: string;
+}): Promise<UpdateDispatchCarrierResult> {
+  try {
+    await assertAdminSessionForPathSegment("/admin/dispatch");
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const storeOrderId = (input.storeOrderId ?? "").trim();
+  if (!UUID_RE.test(storeOrderId)) {
+    return { ok: false, error: "Invalid order." };
+  }
+
+  const carrierRaw = (input.carrier ?? "").trim();
+  const carrier = normalizeDispatchCarrierOption(carrierRaw);
+  if (carrierRaw && !carrier) {
+    return { ok: false, error: "Choose Auspost, ARAMEX, or Quick Lee." };
+  }
+
+  const trackingNumber = (input.trackingNumber ?? "").trim() || null;
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const patch: { tracking_number: string | null; carrier?: string } = {
+      tracking_number: trackingNumber,
+    };
+    if (carrier) {
+      patch.carrier = carrier;
+    }
+
+    const { error } = await supabase.from("store_orders").update(patch).eq("id", storeOrderId);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    revalidatePath("/admin/dispatch");
+    revalidatePath("/admin/store-orders");
+    revalidatePath("/admin/complete-orders");
+    revalidatePath("/customer");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Save failed" };
+  }
+}
 
 function looksLikeMissingMoveToCompleteRpc(err: { message?: string }): boolean {
   const m = (err.message ?? "").toLowerCase();
