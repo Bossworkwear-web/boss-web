@@ -15,6 +15,11 @@ import {
   type CustomerDetailsDraft,
 } from "@/lib/customer-details-draft";
 import { applyCustomerPasswordChange } from "@/lib/customer-password-update";
+import {
+  composeCustomerAddress,
+  parseCustomerAddress,
+  type CustomerAddressParts,
+} from "@/lib/customer-address";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
 
@@ -40,45 +45,14 @@ function isNextRedirectError(error: unknown) {
   );
 }
 
-type AddressParts = {
-  address1: string;
-  address2: string;
-  suburb: string;
-  postcode: string;
-  state: string;
-  country: string;
-};
+type AddressParts = CustomerAddressParts;
 
 function toAddressParts(rawAddress: string | null | undefined): AddressParts {
-  const parts = (rawAddress ?? "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-
-  if (parts.length === 5) {
-    return {
-      address1: parts[0] ?? "",
-      address2: "",
-      suburb: parts[1] ?? "",
-      postcode: parts[2] ?? "",
-      state: parts[3] ?? "",
-      country: parts[4] ?? "",
-    };
-  }
-  return {
-    address1: parts[0] ?? "",
-    address2: parts[1] ?? "",
-    suburb: parts[2] ?? "",
-    postcode: parts[3] ?? "",
-    state: parts[4] ?? "",
-    country: parts[5] ?? "",
-  };
+  return parseCustomerAddress(rawAddress);
 }
 
 function composeAddress(parts: AddressParts) {
-  return [parts.address1, parts.address2, parts.suburb, parts.postcode, parts.state, parts.country]
-    .map((item) => String(item ?? "").trim())
-    .join(", ");
+  return composeCustomerAddress(parts);
 }
 
 function buildCustomerDetailsDraft(formData: FormData): CustomerDetailsDraft {

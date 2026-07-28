@@ -20,6 +20,8 @@ import {
   type CustomerListRow,
 } from "./actions";
 
+const CUSTOMERS_PER_PAGE = 15;
+
 function audFromCents(cents: number): string {
   const n = Number(cents ?? 0) / 100;
   return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(n);
@@ -160,14 +162,22 @@ function openCustomerAccount(email: string) {
   if (!emailNorm) {
     return;
   }
-  if (
-    !window.confirm(
-      `Open the storefront My account page signed in as ${emailNorm}?\n\nThis opens a new browser tab. Your admin session stays open in this tab.`,
-    )
-  ) {
+  const url = customerImpersonateUrl(emailNorm);
+  // Open on the click gesture (no prior `confirm()` — that often blocks popups).
+  // Do not pass `noopener` in the features string: it makes `window.open` return `null`
+  // even when the tab opens, so we cannot detect a real popup block.
+  const win = window.open(url, "_blank", "noreferrer");
+  if (win) {
+    win.opener = null;
     return;
   }
-  window.open(customerImpersonateUrl(emailNorm), "_blank", "noopener,noreferrer");
+  if (
+    window.confirm(
+      `Popup blocked. Open My account signed in as ${emailNorm} in this tab instead?\n\n(Your admin tab will leave Customer info.)`,
+    )
+  ) {
+    window.location.assign(url);
+  }
 }
 
 type CustomerInfoClientProps = {
@@ -191,6 +201,7 @@ export function CustomerInfoClient({
   >([]);
   const [allCustomers, setAllCustomers] = useState<CustomerListRow[]>([]);
   const [listLoaded, setListLoaded] = useState(false);
+  const [listPage, setListPage] = useState(1);
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
   const [payload, setPayload] = useState<CustomerInfoPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -265,7 +276,7 @@ export function CustomerInfoClient({
 
   useEffect(() => {
     refreshCustomerList();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
+     
   }, []);
 
   useEffect(() => {
@@ -279,7 +290,7 @@ export function CustomerInfoClient({
       return;
     }
     loadCustomer(initialEmail.trim().toLowerCase());
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once from redirect query
+     
   }, [initialEmail]);
 
   function runSearch() {
@@ -328,7 +339,8 @@ export function CustomerInfoClient({
     });
   }
 
-  function loadCustomer(email: string) {
+  function loadCustomer(email: string, opts?: { scrollToDetail?: boolean }) {
+    const scrollToDetail = opts?.scrollToDetail !== false;
     setSelectedEmail(email);
     setError(null);
     setMasterLogoFile(null);
@@ -341,6 +353,14 @@ export function CustomerInfoClient({
           return;
         }
         setPayload(res.payload);
+        if (scrollToDetail) {
+          window.setTimeout(() => {
+            document.getElementById("customer-info-detail")?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          }, 50);
+        }
       })();
     });
   }
@@ -356,7 +376,7 @@ export function CustomerInfoClient({
           return;
         }
         if (selectedEmail) {
-          loadCustomer(selectedEmail);
+          loadCustomer(selectedEmail, { scrollToDetail: false });
         }
       })();
     });
@@ -373,7 +393,7 @@ export function CustomerInfoClient({
           setError(res.error);
           return;
         }
-        loadCustomer(email);
+        loadCustomer(email, { scrollToDetail: false });
       })();
     });
   }
@@ -389,7 +409,7 @@ export function CustomerInfoClient({
           setError(res.error);
           return;
         }
-        loadCustomer(email);
+        loadCustomer(email, { scrollToDetail: false });
       })();
     });
   }
@@ -405,7 +425,7 @@ export function CustomerInfoClient({
           setError(res.error);
           return;
         }
-        loadCustomer(email);
+        loadCustomer(email, { scrollToDetail: false });
       })();
     });
   }
@@ -423,7 +443,7 @@ export function CustomerInfoClient({
           return;
         }
         setMasterLogoFile(null);
-        loadCustomer(email);
+        loadCustomer(email, { scrollToDetail: false });
       })();
     });
   }
@@ -435,6 +455,25 @@ export function CustomerInfoClient({
         return hay.includes(listFilter);
       })
     : allCustomers;
+
+  const listTotalPages = Math.max(1, Math.ceil(filteredCustomers.length / CUSTOMERS_PER_PAGE));
+  const safeListPage = Math.min(listPage, listTotalPages);
+  const listPageStart = (safeListPage - 1) * CUSTOMERS_PER_PAGE;
+  const pagedCustomers = filteredCustomers.slice(listPageStart, listPageStart + CUSTOMERS_PER_PAGE);
+  const listRangeLabel =
+    filteredCustomers.length === 0
+      ? "0 customers"
+      : `Showing ${listPageStart + 1}–${Math.min(listPageStart + CUSTOMERS_PER_PAGE, filteredCustomers.length)} of ${filteredCustomers.length}`;
+
+  useEffect(() => {
+    setListPage(1);
+  }, [listFilter]);
+
+  useEffect(() => {
+    if (listPage > listTotalPages) {
+      setListPage(listTotalPages);
+    }
+  }, [listPage, listTotalPages]);
 
   return (
     <div className="space-y-6">
@@ -448,111 +487,12 @@ export function CustomerInfoClient({
           </p>
           <h1 className="mt-1 text-3xl font-medium text-brand-navy">Customer info</h1>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            Search by <strong>name</strong>, <strong>email</strong>, or <strong>phone</strong>. Then view/update profile, master logo,
-            order history, mock-up history, and special requests.
+            Search by <strong>name</strong>, <strong>email</strong>, or <strong>phone</strong>.{" "}
+            <strong>View details</strong> loads profile / logo / orders on this page.{" "}
+            <strong>Log in as customer</strong> opens My account in a new tab as that customer.
           </p>
         </div>
       </header>
-
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">All customers</h2>
-            <p className="mt-1 text-xs text-slate-600">
-              {listLoaded
-                ? `${allCustomers.length} customer${allCustomers.length === 1 ? "" : "s"} (profiles and checkout emails).`
-                : "Loading…"}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={refreshCustomerList}
-            disabled={pending}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            Refresh list
-          </button>
-        </div>
-        {listLoaded && filteredCustomers.length > 0 ? (
-          <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Email</th>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Organisation</th>
-                  <th className="px-4 py-3">Phone</th>
-                  <th className="px-4 py-3">Marketing</th>
-                  <th className="px-4 py-3 text-right">Orders</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredCustomers.map((c) => (
-                  <tr
-                    key={c.email}
-                    className={selectedEmail === c.email ? "bg-brand-orange/5" : "hover:bg-slate-50/80"}
-                  >
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => loadCustomer(c.email)}
-                        className="font-medium text-brand-navy hover:underline"
-                      >
-                        {c.email}
-                      </button>
-                      {!c.hasProfile ? (
-                        <span className="ml-2 text-[0.65rem] font-semibold uppercase text-amber-700">Orders only</span>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{(c.name ?? "").trim() || "—"}</td>
-                    <td className="px-4 py-3 text-slate-700">{(c.organisation ?? "").trim() || "—"}</td>
-                    <td className="px-4 py-3 text-slate-700">{(c.phone ?? "").trim() || "—"}</td>
-                    <td className="px-4 py-3">
-                      <MarketingConsentBadge
-                        optedIn={c.hasProfile ? c.marketingOptIn : null}
-                        optedInAt={c.marketingOptInAt}
-                        compact
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-slate-700">{c.orderCount}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openCustomerAccount(c.email)}
-                          disabled={pending}
-                          className="rounded-lg border border-brand-navy/15 bg-brand-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-navy/90 disabled:opacity-50"
-                        >
-                          Log in as customer
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => loadCustomer(c.email)}
-                          disabled={pending}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                        >
-                          Open
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteCustomerRow(c)}
-                          disabled={pending}
-                          className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : listLoaded ? (
-          <p className="mt-4 text-sm text-slate-600">No customers yet.</p>
-        ) : null}
-      </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Search</h2>
@@ -600,8 +540,153 @@ export function CustomerInfoClient({
         ) : null}
       </section>
 
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">All customers</h2>
+            <p className="mt-1 text-xs text-slate-600">
+              {listLoaded
+                ? `${allCustomers.length} customer${allCustomers.length === 1 ? "" : "s"} (profiles and checkout emails). ${CUSTOMERS_PER_PAGE} per page.`
+                : "Loading…"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={refreshCustomerList}
+            disabled={pending}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Refresh list
+          </button>
+        </div>
+        {listLoaded && filteredCustomers.length > 0 ? (
+          <>
+          <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Organisation</th>
+                  <th className="px-4 py-3">Phone</th>
+                  <th className="px-4 py-3">Marketing</th>
+                  <th className="px-4 py-3 text-right">Orders</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {pagedCustomers.map((c) => (
+                  <tr
+                    key={c.email}
+                    className={selectedEmail === c.email ? "bg-brand-orange/5" : "hover:bg-slate-50/80"}
+                  >
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => loadCustomer(c.email)}
+                        className="font-medium text-brand-navy hover:underline"
+                      >
+                        {c.email}
+                      </button>
+                      {!c.hasProfile ? (
+                        <span className="ml-2 text-[0.65rem] font-semibold uppercase text-amber-700">Orders only</span>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">{(c.name ?? "").trim() || "—"}</td>
+                    <td className="px-4 py-3 text-slate-700">{(c.organisation ?? "").trim() || "—"}</td>
+                    <td className="px-4 py-3 text-slate-700">{(c.phone ?? "").trim() || "—"}</td>
+                    <td className="px-4 py-3">
+                      <MarketingConsentBadge
+                        optedIn={c.hasProfile ? c.marketingOptIn : null}
+                        optedInAt={c.marketingOptInAt}
+                        compact
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-slate-700">{c.orderCount}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openCustomerAccount(c.email)}
+                          disabled={pending}
+                          className="rounded-lg border border-brand-navy/15 bg-brand-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-navy/90 disabled:opacity-50"
+                        >
+                          Log in as customer
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => loadCustomer(c.email)}
+                          disabled={pending}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          View details
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteCustomerRow(c)}
+                          disabled={pending}
+                          className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-sm text-slate-700">
+              <span className="font-semibold text-brand-navy">
+                Page {safeListPage} / {listTotalPages}
+              </span>
+              <span className="mx-2 text-slate-300">·</span>
+              <span className="text-slate-600">{listRangeLabel}</span>
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setListPage(1)}
+                disabled={safeListPage <= 1}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-brand-navy transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                First
+              </button>
+              <button
+                type="button"
+                onClick={() => setListPage((p) => Math.max(1, p - 1))}
+                disabled={safeListPage <= 1}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-brand-navy transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => setListPage((p) => Math.min(listTotalPages, p + 1))}
+                disabled={safeListPage >= listTotalPages}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-brand-navy transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+              <button
+                type="button"
+                onClick={() => setListPage(listTotalPages)}
+                disabled={safeListPage >= listTotalPages}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-brand-navy transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Last
+              </button>
+            </div>
+          </div>
+          </>
+        ) : listLoaded ? (
+          <p className="mt-4 text-sm text-slate-600">No customers yet.</p>
+        ) : null}
+      </section>
+
       {payload ? (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div id="customer-info-detail" className="scroll-mt-6 grid gap-6 lg:grid-cols-2">
           <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Master logo</h2>
             {payload.masterLogo ? (
@@ -847,7 +932,7 @@ export function CustomerInfoClient({
                                 }
                                 const email = selectedEmail ?? payload?.email ?? "";
                                 if (email) {
-                                  loadCustomer(email);
+                                  loadCustomer(email, { scrollToDetail: false });
                                 }
                               })();
                             });

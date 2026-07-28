@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { NotesIcon, XCircleIcon } from "@/app/components/icons";
+import { formatCustomerAddressForDisplay } from "@/lib/customer-address";
 
 import { submitChangePassword } from "./actions";
 
@@ -135,11 +136,15 @@ export function CustomerDetailPasswordPopovers({
                       </div>
                       <div className="sm:col-span-2">
                         <dt className="font-semibold text-brand-navy/70">Delivery address</dt>
-                        <dd className="mt-1 whitespace-pre-wrap text-brand-navy">{profile.delivery_address}</dd>
+                        <dd className="mt-1 whitespace-pre-wrap text-brand-navy">
+                          {formatCustomerAddressForDisplay(profile.delivery_address) || "—"}
+                        </dd>
                       </div>
                       <div className="sm:col-span-2">
                         <dt className="font-semibold text-brand-navy/70">Billing address</dt>
-                        <dd className="mt-1 whitespace-pre-wrap text-brand-navy">{profile.billing_address}</dd>
+                        <dd className="mt-1 whitespace-pre-wrap text-brand-navy">
+                          {formatCustomerAddressForDisplay(profile.billing_address) || "—"}
+                        </dd>
                       </div>
                     </dl>
                   ) : (
