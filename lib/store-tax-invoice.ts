@@ -68,6 +68,47 @@ export type TaxInvoiceLine = {
   size: string | null;
 };
 
+/**
+ * One-off invoice lines for orders where `total_cents` includes an amount not stored as
+ * `store_order_items` (e.g. Stripe logo-setup charge). Without these, the PDF GST total
+ * is inflated because it is computed as total − ex-GST line sum.
+ */
+const TAX_INVOICE_ONE_OFF_CREDIT_BY_ORDER: Readonly<Record<string, string>> = {
+  BOS_20260901_001: "Credit",
+};
+
+/** Append a balancing GST-inclusive line when configured for this order number. */
+export function withTaxInvoiceOneOffBalancingLines(
+  order: Pick<TaxInvoiceOrder, "order_number" | "total_cents" | "delivery_fee_cents">,
+  lines: TaxInvoiceLine[],
+): TaxInvoiceLine[] {
+  const orderNumber = String(order.order_number ?? "").trim().toUpperCase();
+  const label = TAX_INVOICE_ONE_OFF_CREDIT_BY_ORDER[orderNumber];
+  if (!label) {
+    return lines;
+  }
+
+  const linesSum = lines.reduce((sum, row) => sum + (Number(row.line_total_cents) || 0), 0);
+  const delivery = Math.max(0, Math.round(Number(order.delivery_fee_cents) || 0));
+  const residual = Math.round(Number(order.total_cents) || 0) - linesSum - delivery;
+  if (residual <= 0) {
+    return lines;
+  }
+
+  return [
+    ...lines,
+    {
+      product_name: label,
+      quantity: 1,
+      unit_price_cents: residual,
+      line_total_cents: residual,
+      service_type: null,
+      color: null,
+      size: null,
+    },
+  ];
+}
+
 /** Coerce Supabase / loose JSON into a safe shape for PDFKit (avoids runtime throws on bad types). */
 export function sanitizeTaxInvoiceOrderForPdf(order: TaxInvoiceOrder | Record<string, unknown>): TaxInvoiceOrder {
   const o = order as Record<string, unknown>;
@@ -150,8 +191,9 @@ export function buildStoreTaxInvoiceHtml(
   });
   const gstTotalCents = gstIncludedFromTotalCents(order.total_cents);
   const currency = order.currency || "AUD";
+  const invoiceLines = withTaxInvoiceOneOffBalancingLines(order, lines);
 
-  const lineRows = lines
+  const lineRows = invoiceLines
     .map((row) => {
       const bits = [row.service_type, row.color, row.size]
         .map((x) => String(x ?? "").trim())

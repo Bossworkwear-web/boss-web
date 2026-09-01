@@ -9,6 +9,7 @@ import {
   sanitizeTaxInvoiceOrderForPdf,
   sellerBankBlockLines,
   TAX_INVOICE_PENDING_INVOICE_NUMBER_NOTE,
+  withTaxInvoiceOneOffBalancingLines,
   type TaxInvoiceLine,
   type TaxInvoiceOrder,
   type TaxInvoiceSeller,
@@ -36,7 +37,10 @@ export function buildStoreTaxInvoicePdfBuffer(
   linesInput: TaxInvoiceLine[],
 ): Promise<Buffer> {
   const order = sanitizeTaxInvoiceOrderForPdf(orderInput);
-  const lines = sanitizeTaxInvoiceLinesForPdf(linesInput);
+  const lines = withTaxInvoiceOneOffBalancingLines(
+    order,
+    sanitizeTaxInvoiceLinesForPdf(linesInput),
+  );
 
   return new Promise((resolve, reject) => {
     try {
