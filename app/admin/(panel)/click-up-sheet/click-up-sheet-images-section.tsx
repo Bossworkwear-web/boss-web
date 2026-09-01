@@ -18,6 +18,11 @@ import {
   type MockupBuilderEditTarget,
   type MockupPngReadyOptions,
 } from "./click-up-sheet-mockup-builder-modal";
+import {
+  ClickUpSheetShowHideBody,
+  ClickUpSheetShowHideHeading,
+  useClickUpSheetShowHide,
+} from "./click-up-sheet-show-hide";
 import { MockupApprovalControls, type ApprovalMockup } from "./mockup-approval-controls";
 
 const ACCEPT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
@@ -92,6 +97,7 @@ export function ClickUpSheetImagesSection({
   readOnly = false,
 }: Props) {
   const isMockup = variant === "mockup";
+  const referenceShowHide = useClickUpSheetShowHide();
   const assetFilter: ClickUpSheetImageFilter = isMockup ? "mockup" : "reference";
   const [images, setImages] = useState<ClickUpSheetImageDto[]>(() =>
     isMockup ? sortClickUpSheetMockupsForDisplay(initialImages ?? []) : (initialImages ?? []),
@@ -401,8 +407,14 @@ export function ClickUpSheetImagesSection({
     if (!isMockup) {
       return (
         <section className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 p-6 shadow-sm print:bg-white print:shadow-none">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
-          <p className="click-up-sheet-print-hide mt-2 text-sm text-slate-600">워크시트 날짜가 있을 때만 파일을 저장할 수 있습니다.</p>
+          <ClickUpSheetShowHideHeading
+            title={title}
+            open={referenceShowHide.open}
+            onToggle={referenceShowHide.toggle}
+          />
+          <ClickUpSheetShowHideBody open={referenceShowHide.open}>
+            <p className="click-up-sheet-print-hide mt-2 text-sm text-slate-600">워크시트 날짜가 있을 때만 파일을 저장할 수 있습니다.</p>
+          </ClickUpSheetShowHideBody>
         </section>
       );
     }
@@ -442,7 +454,16 @@ export function ClickUpSheetImagesSection({
 
   return (
     <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
+      {isMockup ? (
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
+      ) : (
+        <ClickUpSheetShowHideHeading
+          title={title}
+          open={referenceShowHide.open}
+          onToggle={referenceShowHide.toggle}
+        />
+      )}
+      <ClickUpSheetShowHideBody open={isMockup || referenceShowHide.open}>
       <p className="click-up-sheet-print-hide mt-1 text-xs text-slate-600">
         {isMockup ? (
           <>
@@ -811,6 +832,7 @@ export function ClickUpSheetImagesSection({
         src={lightboxSrc ?? ""}
         ariaLabel="Full size mock-up image"
       />
+      </ClickUpSheetShowHideBody>
     </section>
   );
 }

@@ -539,12 +539,36 @@ html:has([data-admin-portal]) {
     grid-column: 1 / -1 !important;
     display: grid !important;
     gap: 1.25rem !important;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-memo-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-memo-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Screen memo body 1.3125rem / size 3.75rem / qty 1.875rem → −30% for print. */
+  body.click-up-sheet-print-mode .click-up-sheet-print-memo-card .click-up-sheet-print-memo-body {
+    font-size: 0.91875rem !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-memo-card .click-up-sheet-print-memo-size {
+    font-size: 2.625rem !important;
+  }
+
+  body.click-up-sheet-print-mode .click-up-sheet-print-memo-card .click-up-sheet-print-memo-qty {
+    font-size: 1.3125rem !important;
   }
 
   body.click-up-sheet-print-mode .click-up-sheet-print-order-4 {
     gap: 0.35rem !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 
   body.click-up-sheet-print-mode .click-up-sheet-print-order-4 label,

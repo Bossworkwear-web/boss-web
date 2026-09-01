@@ -6,6 +6,11 @@ import {
   loadStoreOrderLogoFileLinks,
   saveStoreOrderLogoFileLinks,
 } from "./actions";
+import {
+  ClickUpSheetShowHideBody,
+  ClickUpSheetShowHideHeading,
+  useClickUpSheetShowHide,
+} from "./click-up-sheet-show-hide";
 
 const MAX_LINKS = 12;
 
@@ -98,6 +103,7 @@ function LogoLinkFieldList({
 }
 
 export function ClickUpSheetLogoFileLinksSection({ customerOrderId, readOnly = false }: Props) {
+  const showHide = useClickUpSheetShowHide();
   const [embroidery, setEmbroidery] = useState<string[]>([""]);
   const [printing, setPrinting] = useState<string[]>([""]);
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
@@ -155,7 +161,12 @@ export function ClickUpSheetLogoFileLinksSection({ customerOrderId, readOnly = f
 
   return (
     <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:hidden">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Logo file links</h2>
+      <ClickUpSheetShowHideHeading
+        title="Logo file links"
+        open={showHide.open}
+        onToggle={showHide.toggle}
+      />
+      <ClickUpSheetShowHideBody open={showHide.open}>
       <p className="mt-1 text-xs text-slate-600">
         Add one or more embroidery / printing logo file paths or URLs (e.g. front, back, sleeve). Saved to this order
         and shown on <strong>Production pack</strong>.
@@ -205,6 +216,7 @@ export function ClickUpSheetLogoFileLinksSection({ customerOrderId, readOnly = f
           ) : null}
         </div>
       ) : null}
+      </ClickUpSheetShowHideBody>
     </section>
   );
 }

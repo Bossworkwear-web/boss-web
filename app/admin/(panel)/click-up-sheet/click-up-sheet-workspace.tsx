@@ -7,7 +7,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { StoreOrderBarcode } from "@/app/components/store-order-barcode";
 
 import type { StoreOrderCustomerMemoLine } from "@/lib/store-order-customer-detail";
-import { formatMoneyFromCents } from "@/lib/store-order-utils";
+import { checkoutMemoServicesForNotes } from "@/lib/store-order-customer-detail";
+import { productColourLabelToSwatches } from "@/lib/product-colour-swatch";
 import { notifyRouteLoadingStart, stopRouteLoading } from "@/lib/route-loading";
 import { supplierOrderProductIdHeadTail } from "@/lib/supplier-order-product-id-parts";
 import { normalizeSupplierOrderLineSupplierValue } from "@/lib/supplier-order-supplier-normalize";
@@ -24,10 +25,112 @@ import {
 import { ClickUpSheetCustomerReferenceSection } from "./click-up-sheet-customer-reference-section";
 import { ClickUpSheetImagesSection } from "./click-up-sheet-images-section";
 import { ClickUpSheetLogoFileLinksSection } from "./click-up-sheet-logo-file-links-section";
+import {
+  ClickUpSheetShowHideBody,
+  ClickUpSheetShowHideHeading,
+  useClickUpSheetShowHide,
+} from "./click-up-sheet-show-hide";
 
 const aud = new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" });
 
 const CLICK_UP_SHEET_DRAFT_PREFIX = "bossww:click-up-sheet-draft:v1";
+
+function colourHexToAlphaBackground(hex: string, alpha: number): string {
+  const trimmed = hex.trim();
+  const rgb = trimmed.match(/^#([0-9a-f]{6})$/i);
+  if (rgb?.[1]) {
+    const n = parseInt(rgb[1], 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+  }
+  const hsl = trimmed.match(/^hsl\(\s*([\d.]+)\s+([\d.]+%)\s+([\d.]+%)\s*\)$/i);
+  if (hsl) {
+    return `hsl(${hsl[1]} ${hsl[2]} ${hsl[3]} / ${alpha})`;
+  }
+  return trimmed;
+}
+
+/** First segment of a combo colour (e.g. Yellow from Yellow/Navy) at 30% opacity. */
+function checkoutMemoFrontColourBackground(color: string | null | undefined): string | undefined {
+  const label = String(color ?? "").trim();
+  if (!label) {
+    return undefined;
+  }
+  const front = productColourLabelToSwatches(label)[0];
+  if (!front?.hex) {
+    return undefined;
+  }
+  return colourHexToAlphaBackground(front.hex, 0.3);
+}
+
+function renderCheckoutMemoLineText(line: string) {
+  if (line.length === 0) {
+    return "\u00a0";
+  }
+  // Right-chest name lines: bold the person name after `RC - `.
+  const rcName = line.match(/^(RC\s*[-–—:]\s*)(.+)$/i);
+  if (rcName) {
+    return (
+      <>
+        <span>{rcName[1]}</span>
+        <strong className="font-bold">{rcName[2]}</strong>
+      </>
+    );
+  }
+  return line;
+}
+
+function ClickUpCheckoutMemoBody({ row }: { row: StoreOrderCustomerMemoLine }) {
+  const bodyNotes = String(row.notes ?? "");
+  const lines = bodyNotes.split("\n");
+  const services = checkoutMemoServicesForNotes(
+    bodyNotes,
+    row.placementServices ?? [],
+    row.lineService ?? null,
+  );
+  const size = String(row.size ?? "").trim();
+  const productName = String(row.productName ?? "").trim();
+  const quantity = Math.max(0, Math.round(Number(row.quantity) || 0));
+
+  return (
+    <div className="click-up-sheet-print-memo-body text-[1.3125rem] leading-snug text-slate-800">
+      {productName ? <p className="m-0 mb-2 text-slate-900">{productName}</p> : null}
+      <div className={`flex gap-4 ${size ? "items-center" : ""}`}>
+        {size ? (
+          <div className="flex shrink-0 items-center justify-center self-stretch px-1">
+            <span className="click-up-sheet-print-memo-size select-none text-[3.75rem] font-bold leading-none tracking-tight text-slate-900">
+              {size}
+            </span>
+            {quantity > 0 ? (
+              <span className="click-up-sheet-print-memo-qty ml-1 select-none text-[1.875rem] font-bold leading-none tracking-tight text-slate-900">
+                {" x "}
+                {quantity}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="min-w-0 flex-1">
+          {lines.map((line, lineIdx) => {
+            const service = services[lineIdx] ?? null;
+            return (
+              <p key={`memo-line-${lineIdx}`} className="m-0 whitespace-pre-wrap">
+                <span>{renderCheckoutMemoLineText(line)}</span>
+                {service ? (
+                  <span
+                    className={`ml-2 font-semibold ${
+                      service === "Printing" ? "text-red-600" : "text-green-600"
+                    }`}
+                  >
+                    {service}
+                  </span>
+                ) : null}
+              </p>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function clickUpDraftStorageKey(listDateYmd: string, customerOrderId: string): string {
   const ld = listDateYmd.trim();
@@ -132,6 +235,7 @@ export function ClickUpSheetWorkspace({
   initialOrderScanPayload = null,
   completeOrdersDocumentsView = false,
 }: Props) {
+  const supplierListShowHide = useClickUpSheetShowHide();
   const [orderId, setOrderId] = useState(initialCustomerOrderId);
   const [orderScanPayload, setOrderScanPayload] = useState<string | null>(initialOrderScanPayload);
   const [organisationName, setOrganisationName] = useState(initialOrganisationName);
@@ -466,7 +570,7 @@ export function ClickUpSheetWorkspace({
 
         <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Order</h2>
-          <div className="click-up-sheet-print-order-4 mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+          <div className="click-up-sheet-print-order-4 mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-start">
             <div className="min-w-0">
               <label htmlFor="cus-order-id" className="text-[1.125rem] font-medium text-slate-600">
                 Order ID
@@ -516,19 +620,6 @@ export function ClickUpSheetWorkspace({
               />
             </div>
             <div className="min-w-0">
-              <label htmlFor="cus-email" className="text-[1.125rem] font-medium text-slate-600">
-                Email
-              </label>
-              <input
-                id="cus-email"
-                type="email"
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[1.3125rem]"
-                placeholder="Email"
-                value={customerEmail}
-                onChange={(e) => setCustomerEmail(e.target.value)}
-              />
-            </div>
-            <div className="min-w-0">
               <p id="cus-order-type-label" className="text-[1.125rem] font-medium text-slate-600">
                 Order Type
               </p>
@@ -570,27 +661,17 @@ export function ClickUpSheetWorkspace({
                 onChange={(e) => setDeliveryAddress(e.target.value)}
               />
             </div>
-            <div className="min-w-0">
-              <label htmlFor="cus-delivery-fee" className="text-[1.125rem] font-medium text-slate-600">
-                Delivery fee paid
-              </label>
-              <input
-                id="cus-delivery-fee"
-                readOnly
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[1.3125rem] tabular-nums text-slate-800"
-                value={
-                  deliveryFeeCents <= 0 ? "Free / $0.00" : formatMoneyFromCents(deliveryFeeCents, "AUD")
-                }
-              />
-            </div>
           </div>
         </section>
         </div>
 
         <section className="click-up-sheet-print-supplier-section rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Customer order list &amp; quantity
-          </h2>
+          <ClickUpSheetShowHideHeading
+            title="Customer order list & quantity"
+            open={supplierListShowHide.open}
+            onToggle={supplierListShowHide.toggle}
+          />
+          <ClickUpSheetShowHideBody open={supplierListShowHide.open}>
           <p className="click-up-sheet-print-hide mt-1 text-xs text-slate-600">
             <strong>Supplier orders</strong> 워크시트(같은 Perth <span className="font-mono">list_date</span>)와 동일한 행입니다.
             Order ID가 있으면 그 주문 번호가 일치하는 행만 표시합니다. 읽기 전용입니다.
@@ -661,44 +742,38 @@ export function ClickUpSheetWorkspace({
               </table>
             )}
           </div>
+          </ClickUpSheetShowHideBody>
         </section>
 
-        <div className="click-up-sheet-print-logo-ref-row grid min-w-0 grid-cols-1 gap-6 lg:col-span-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <div className="click-up-sheet-print-logo-ref-row grid min-w-0 grid-cols-1 gap-6 lg:col-span-2">
         <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Logo &amp; artwork</h2>
           <div className="mt-4">
-            <label htmlFor="logo-loc" className="text-xs font-medium text-slate-600">
-              Logo locations
-            </label>
-            <textarea
-              id="logo-loc"
-              rows={9}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              placeholder="Chest left, back, sleeve…"
-              value={logoLocations}
-              onChange={(e) => setLogoLocations(e.target.value)}
-            />
-          </div>
-          <div className="mt-6 border-t border-slate-100 pt-6">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Memo</h3>
             <p className="click-up-sheet-print-hide mt-1 text-xs text-slate-600" suppressHydrationWarning>
-              체크아웃 시 고객이 라인별로 입력한 내용(<span className="font-mono">store_order_items.notes</span>)입니다. 내용이 같은
-              메모는 한 번만 표시합니다. 읽기 전용입니다.
+              체크아웃 시 고객이 라인별로 입력한 내용(<span className="font-mono">store_order_items.notes</span>)입니다. 사이즈는
+              왼쪽 큰 글씨, 색상은 모델명 뒤에 표시합니다. 내용·사이즈·제품명이 같은 메모는 한 번만 표시합니다. 읽기
+              전용입니다.
             </p>
             {!orderId.trim() ? (
               <p className="click-up-sheet-print-hide mt-3 text-sm text-slate-500">Order ID가 있으면 표시됩니다.</p>
             ) : checkoutMemos.length === 0 ? (
               <p className="click-up-sheet-print-hide mt-3 text-sm text-slate-500">이 주문에 저장된 메모가 없습니다.</p>
             ) : (
-              <ul className="mt-3 space-y-3">
-                {checkoutMemos.map((row, idx) => (
+              <ul className="click-up-sheet-print-memo-grid mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+                {checkoutMemos.map((row, idx) => {
+                  const tint = checkoutMemoFrontColourBackground(row.color);
+                  return (
                   <li
                     key={`memo-${idx}`}
-                    className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-800"
+                    className={`click-up-sheet-print-memo-card min-w-0 rounded-lg border border-slate-200 px-3 py-2 text-slate-800 ${
+                      tint ? "" : "bg-slate-50/80"
+                    }`}
+                    style={tint ? { backgroundColor: tint } : undefined}
                   >
-                    <p className="whitespace-pre-wrap text-slate-800">{row.notes ?? ""}</p>
+                    <ClickUpCheckoutMemoBody row={row} />
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </div>

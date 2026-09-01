@@ -8,6 +8,11 @@ import {
   setCustomerMasterCompanyLogoFromOrderAsset,
   type CustomerReferenceVisualDto,
 } from "./actions";
+import {
+  ClickUpSheetShowHideBody,
+  ClickUpSheetShowHideHeading,
+  useClickUpSheetShowHide,
+} from "./click-up-sheet-show-hide";
 
 function isPdfUrl(url: string): boolean {
   return /\.pdf(\?|$)/i.test(url);
@@ -19,6 +24,7 @@ type Props = {
 };
 
 export function ClickUpSheetCustomerReferenceSection({ customerOrderId, initialItems }: Props) {
+  const showHide = useClickUpSheetShowHide();
   const [items, setItems] = useState<CustomerReferenceVisualDto[]>(initialItems);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -114,9 +120,12 @@ export function ClickUpSheetCustomerReferenceSection({ customerOrderId, initialI
 
   return (
     <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:shadow-none">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-        Order assets (checkout / production)
-      </h2>
+      <ClickUpSheetShowHideHeading
+        title="Order assets (checkout / production)"
+        open={showHide.open}
+        onToggle={showHide.toggle}
+      />
+      <ClickUpSheetShowHideBody open={showHide.open}>
       <p className="click-up-sheet-print-hide mt-1 text-xs text-slate-600">
         이 주문(<span className="font-mono">store_orders</span>)에 연결된{" "}
         <span className="font-mono">production_order_assets</span> 전체, 체크아웃 라인의{" "}
@@ -197,6 +206,7 @@ export function ClickUpSheetCustomerReferenceSection({ customerOrderId, initialI
           ))}
         </ul>
       )}
+      </ClickUpSheetShowHideBody>
     </section>
   );
 }
