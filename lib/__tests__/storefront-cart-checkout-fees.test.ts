@@ -137,6 +137,25 @@ describe("storefront-cart-checkout-fees", () => {
       expect(result.totalAud).toBe(subtotal + localDelivery);
     });
 
+    it("defaults to charging logo setup when embroideryLogoSetup is omitted (must not strip at Stripe checkout)", () => {
+      const subtotal = STOREFRONT_CART_PROMO_SUBTOTAL_MIN_AUD - 1;
+      const strippedLikeOldStripeCheckout = computeStorefrontCheckoutFees({
+        ...signedInBase,
+        subtotalAud: subtotal,
+        hasPriorEmbroideryOrder: false,
+        items: [{ serviceType: "Embroidery" }],
+      });
+      expect(strippedLikeOldStripeCheckout.logoSetupFeeAud).toBe(66);
+
+      const withSavedChoice = computeStorefrontCheckoutFees({
+        ...signedInBase,
+        subtotalAud: subtotal,
+        hasPriorEmbroideryOrder: false,
+        items: [{ serviceType: "Embroidery", embroideryLogoSetup: "saved" }],
+      });
+      expect(withSavedChoice.logoSetupFeeAud).toBe(0);
+    });
+
     it("waives logo setup for legacy cart notes that selected saved embroidery logo", () => {
       const result = computeStorefrontCheckoutFees({
         ...signedInBase,

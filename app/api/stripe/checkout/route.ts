@@ -116,14 +116,12 @@ export async function POST(req: Request) {
     return Response.json({ ok: false, error: "Checkout is temporarily unavailable." }, { status: 503 });
   }
 
-  const feeItems = items.map((it) => ({
-    serviceType: typeof it.serviceType === "string" ? it.serviceType : "",
-    referenceImageUrls: Array.isArray(it.referenceImageUrls) ? it.referenceImageUrls : undefined,
-  }));
   const pickUp = body.pickUp === true;
+  // Pass full line fee fields (especially embroideryLogoSetup / notes). Stripping them
+  // defaults logo setup to "new" and incorrectly charges $66 when the customer chose saved logo.
   const fees = computeStorefrontCheckoutFees({
     subtotalAud: subtotal,
-    items: feeItems,
+    items,
     deliveryPostcode: postcode,
     estimatedWeightKg,
     isCustomerSignedIn: true,
