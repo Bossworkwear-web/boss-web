@@ -235,7 +235,7 @@ export function ClickUpSheetWorkspace({
   initialOrderScanPayload = null,
   completeOrdersDocumentsView = false,
 }: Props) {
-  const supplierListShowHide = useClickUpSheetShowHide();
+  const supplierListShowHide = useClickUpSheetShowHide(true);
   const [orderId, setOrderId] = useState(initialCustomerOrderId);
   const [orderScanPayload, setOrderScanPayload] = useState<string | null>(initialOrderScanPayload);
   const [organisationName, setOrganisationName] = useState(initialOrganisationName);

@@ -101,6 +101,7 @@ export function ClickUpOrderFormTableClient({ rows }: { rows: ClickUpOrderFormRo
           <table className="w-full min-w-[1280px] text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
+                <th className="px-4 py-3 text-left">Action</th>
                 <th className="whitespace-nowrap px-4 py-3" title="Supplier 워크시트 날짜 (Click up sheet URL의 list_date)">
                   Worksheet date
                 </th>
@@ -120,12 +121,19 @@ export function ClickUpOrderFormTableClient({ rows }: { rows: ClickUpOrderFormRo
                 >
                   Processing Stage
                 </th>
-                <th className="px-4 py-3 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((row) => (
                 <tr key={rowKey(row)} className="bg-white hover:bg-slate-50/80">
+                  <td className="whitespace-nowrap px-4 py-3 text-left">
+                    <Link
+                      href={clickUpSheetHref(row)}
+                      className="inline-flex rounded-lg bg-brand-orange px-3 py-2 text-xs font-semibold text-brand-navy transition hover:brightness-95"
+                    >
+                      Open Click up sheet
+                    </Link>
+                  </td>
                   <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-800">{row.listDate}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-slate-800">{row.storeOrderDateDisplay}</td>
                   <td className="px-4 py-3 font-mono text-xs text-brand-navy">{row.customerOrderId}</td>
@@ -172,14 +180,6 @@ export function ClickUpOrderFormTableClient({ rows }: { rows: ClickUpOrderFormRo
                   </td>
                   <td className={`whitespace-nowrap px-4 py-3 ${processingStageCellClass(row.processingStageLabel)}`}>
                     {row.processingStageLabel}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right">
-                    <Link
-                      href={clickUpSheetHref(row)}
-                      className="inline-flex rounded-lg bg-brand-orange px-3 py-2 text-xs font-semibold text-brand-navy transition hover:brightness-95"
-                    >
-                      Open Click up sheet
-                    </Link>
                   </td>
                 </tr>
               ))}
