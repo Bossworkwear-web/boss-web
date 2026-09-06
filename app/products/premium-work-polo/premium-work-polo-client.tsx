@@ -34,6 +34,7 @@ import {
   compactColorKey,
   normalizeSupplierColorSynonyms,
 } from "@/lib/storefront-color-match-key";
+import { orderBwC91GalleryImageUrls } from "@/lib/bw-c91-gallery";
 import { filterAp3309ColorOptions, isStorefrontAp3309Slug } from "@/lib/ap-3309-storefront";
 import {
   apColorImageCountsAlignWithColors,
@@ -788,6 +789,20 @@ function scoreGalleryUrlForColor(color: string, url: string): number {
     if (colorLower.includes("bottle") || colorLower.includes("green")) score += 140;
     if (colorLower.includes("navy")) score -= 25;
   }
+  // C91 studio asset (`public/C91_Yellow.png`) — preferred Yellow/Navy hero over FYN supplier shots.
+  if (/c91[_-]?yellow\.(png|jpe?g|webp)$/i.test(file) || /\/c91_yellow\./i.test(pathLower)) {
+    if (colorLower.includes("yellow")) score += 220;
+    if (colorLower.includes("orange")) score -= 50;
+  }
+  // C91 studio full front (`public/C91_Orange.png`) — preferred Orange/Navy hero.
+  // `C91_Orange_2.png` is the underarm vent close-up (lower score than full front).
+  if (/c91[_-]?orange_2\.(png|jpe?g|webp)$/i.test(file) || /\/c91_orange_2\./i.test(pathLower)) {
+    if (colorLower.includes("orange")) score += 80;
+    if (colorLower.includes("yellow")) score -= 50;
+  } else if (/c91[_-]?orange\.(png|jpe?g|webp)$/i.test(file) || /\/c91_orange\./i.test(pathLower)) {
+    if (colorLower.includes("orange")) score += 220;
+    if (colorLower.includes("yellow")) score -= 50;
+  }
 
   const shotMatch = file.match(/_(?:Product|Talent)_([A-Za-z0-9_-]+)_/i);
   if (shotMatch) {
@@ -1048,6 +1063,21 @@ function pickPrimaryImageForColor(color: string, urls: string[], opts?: GalleryC
   const trimmed = color.trim();
   if (!trimmed) {
     return list[0]!;
+  }
+
+  // C91: Safety Yellow/Navy → public studio shot (`/C91_Yellow.png`) as colour hero.
+  if (/yellow/i.test(trimmed)) {
+    const c91Yellow = list.find((u) => /(?:^|\/)C91_Yellow\.(png|jpe?g|webp)(?:\?|#|$)/i.test(u));
+    if (c91Yellow) {
+      return c91Yellow;
+    }
+  }
+  // C91: Safety Orange/Navy → public studio full front (`/C91_Orange.png`) as colour hero.
+  if (/orange/i.test(trimmed)) {
+    const c91Orange = list.find((u) => /(?:^|\/)C91_Orange\.(png|jpe?g|webp)(?:\?|#|$)/i.test(u));
+    if (c91Orange) {
+      return c91Orange;
+    }
   }
 
   const colOpts = opts?.colorOptions;
@@ -2308,6 +2338,10 @@ export function PremiumWorkPoloClient({
         product.displayProductCode ?? null,
       ).imageUrls;
     }
+    // C91: Yellow front → Yellow vent → Yellow model → Orange front → Orange vent → Back vent.
+    if (slugLower === "bw-c91" || /\(\s*c91\s*\)/i.test(String(product.name ?? ""))) {
+      return orderBwC91GalleryImageUrls(raw);
+    }
     if (!bisleySlugUsesPositionalColorGallery(slugLower) || raw.length < 2) {
       return raw;
     }
@@ -2320,6 +2354,7 @@ export function PremiumWorkPoloClient({
     product.category,
     product.displayProductCode,
     product.imageUrls,
+    product.name,
     product.slug,
     product.supplierName,
   ]);
@@ -2598,6 +2633,13 @@ export function PremiumWorkPoloClient({
         : isDnc
           ? dncInferPrefixCountFromGallery(pickUrls, dncStyleCodeFromSlug(product.slug), initialColors.length)
           : 0;
+    const c91YellowHero = g.find((u) => /(?:^|\/)C91_Yellow\.(png|jpe?g|webp)(?:\?|#|$)/i.test(u));
+    if (
+      c91YellowHero &&
+      (slugLower === "bw-c91" || /\(\s*c91\s*\)/i.test(String(product.name ?? "")))
+    ) {
+      return c91YellowHero;
+    }
     return pickPrimaryImageForColor(initialColors[0] ?? "", g, {
       colorOptions: initialColors,
       jbPrefixCount: prefixCount,

@@ -27,6 +27,7 @@ import {
 import { productPathSegment, slugifyProductNameForPath } from "@/lib/product-path-slug";
 import { storefrontDescriptionForDisplay, storefrontLeadingSupplierBrand } from "@/lib/product-display-name";
 import { resolveStorefrontImageUrlList } from "@/lib/storefront-image-url";
+import { orderBwC91GalleryImageUrls } from "@/lib/bw-c91-gallery";
 import { createSupabaseClient } from "@/lib/supabase";
 import { syzmikDescriptionBodyFromCsv } from "@/lib/syzmik-description-fallback";
 
@@ -970,6 +971,11 @@ async function getDetailDataInternal(
       }
     }
 
+    // C91: fixed gallery — Yellow front, Yellow vent, Yellow model, Orange front, Orange vent, Back vent.
+    if (productCodeUpper === "C91" || productSlugLower === "bw-c91") {
+      normalizedImageUrls = orderBwC91GalleryImageUrls(normalizedImageUrls);
+    }
+
     // JB's Wear 4P: hide second gallery image (requested).
     {
       const supplierLcJb = supplierNameRaw.trim().toLowerCase();
@@ -1271,6 +1277,25 @@ async function getDetailDataInternal(
       const hasOrange = colorOptionsEffective.some((c) => /\borange\b/i.test(c));
       const firstLooksYellow = firstUpper.includes("FYN") || firstUpper.includes("YELLOW");
       if (hasYellow && hasOrange && firstLooksYellow) {
+        colorOptionsEffective = [
+          ...colorOptionsEffective.filter((c) => /\byellow\b/i.test(c)),
+          ...colorOptionsEffective.filter((c) => !/\byellow\b/i.test(c)),
+        ];
+      }
+    }
+
+    // C91: fixed gallery + drop bare "Orange" chip only (keep Safety Orange/Navy blue).
+    if (productCodeUpper === "C91" || productSlugLower === "bw-c91") {
+      normalizedImageUrls = orderBwC91GalleryImageUrls(normalizedImageUrls);
+      colorOptionsEffective = colorOptionsEffective.filter((c) => {
+        const label = String(c).trim();
+        // Bare "Orange" (no slash / navy combo) — not a sold colourway.
+        if (/^orange$/i.test(label)) return false;
+        const key = label.toLowerCase().replace(/[^a-z0-9]+/g, "");
+        if (key === "orange") return false;
+        return true;
+      });
+      if (colorOptionsEffective.some((c) => /\byellow\b/i.test(c))) {
         colorOptionsEffective = [
           ...colorOptionsEffective.filter((c) => /\byellow\b/i.test(c)),
           ...colorOptionsEffective.filter((c) => !/\byellow\b/i.test(c)),
