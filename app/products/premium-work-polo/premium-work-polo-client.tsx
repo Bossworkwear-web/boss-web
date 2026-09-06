@@ -28,6 +28,12 @@ import {
   filterAp2311ColorOptions,
   isStorefrontAp2311Slug,
 } from "@/lib/ap-2311-storefront";
+import {
+  colorMatchKey,
+  colorMatchKeysCompatible,
+  compactColorKey,
+  normalizeSupplierColorSynonyms,
+} from "@/lib/storefront-color-match-key";
 import { filterAp3309ColorOptions, isStorefrontAp3309Slug } from "@/lib/ap-3309-storefront";
 import {
   apColorImageCountsAlignWithColors,
@@ -596,10 +602,6 @@ function bisleyColorNameFromCode(raw: string): string | null {
   return map[key] ?? null;
 }
 
-function compactColorKey(input: string) {
-  return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
-}
-
 /** Loose label match vs DB / API (spacing, unicode); keep in sync with `apColourNormKey` in sync-aussie-pacific-api.mjs. */
 function pdpColourNormKey(input: string): string {
   return String(input ?? "")
@@ -757,58 +759,6 @@ function supplierDisplayColorLabelFromFileNoQuery(fileNoQuery: string): string |
 }
 
 /** Normalize supplier quirks so `Black / P Grey` matches storefront `Black / Grey`. */
-function normalizeSupplierColorSynonyms(label: string): string {
-  let s = label.replace(/\s+/g, " ").trim();
-  // Blue Whale / generic: ignore marketing qualifiers when matching filenames.
-  s = s.replace(/\bSafety\b/gi, "").replace(/\bFluoro\b/gi, "").replace(/\s+/g, " ").trim();
-  s = s.replace(/\bnavy\s*blue\b/gi, "navy");
-  // Some supplier-media filenames split "navy blue" into separate tokens; treat lone "blue" as part of navy.
-  if (/\bnavy\b/i.test(s)) {
-    s = s.replace(/\bblue\b/gi, "").replace(/\s+/g, " ").trim();
-  }
-  s = s.replace(/\byello\b/gi, "yellow");
-  // Blue Whale image tokens like `FYN` / `FON` appear in filenames; map them to the labelled combos.
-  s = s.replace(/\bfyn\b/gi, "yellow navy");
-  s = s.replace(/\bfon\b/gi, "orange navy");
-  s = s.replace(/\bfybt\b/gi, "yellow bottle green");
-  // Bisley Apex / taped combos sometimes use TT01/TT02 tokens in filenames.
-  // Keep the `/` so `colorMatchKey("Yellow/Navy")` matches too (it strips `/ Navy` combos).
-  s = s.replace(/\btt01\b/gi, "yellow / navy");
-  s = s.replace(/\btt02\b/gi, "orange / navy");
-  // Some Bisley media uses TT04 for the Yellow/Navy combo (e.g. BJ6730T).
-  s = s.replace(/\btt04\b/gi, "yellow / navy");
-  // Some Bisley media uses TT05 for the Orange/Navy combo (e.g. BJ6934T).
-  s = s.replace(/\btt05\b/gi, "orange / navy");
-  // Some Bisley media uses TT21 for the Pink/Navy combo (e.g. BKL6975).
-  s = s.replace(/\btt21\b/gi, "pink / navy");
-  // Blue Whale: some SKUs have mis-linked supplier-media images from nearby styles; normalize those too.
-  s = s.replace(/\bc82\b/gi, "");
-  s = s.replace(/\bc83\b/gi, "");
-  s = s.replace(/\s+/g, " ").trim();
-  s = s.replace(/\bBlack\s+P\s+Grey\b/gi, "Black / Grey");
-  if (s.includes("/")) {
-    const parts = s
-      .split(/\s*\/\s*/)
-      .map((seg) => seg.trim())
-      .filter(Boolean)
-      .map((seg) => seg.replace(/\bnavy\b/gi, "navy").trim());
-    const kept = parts
-      .filter((p) => compactColorKey(p) !== "navy")
-      .map((p) => {
-        if (/^p\s*grey$/i.test(p) || compactColorKey(p) === "pgrey") {
-          return "Grey";
-        }
-        return p;
-      });
-    return (kept.length > 0 ? kept : parts).join(" / ");
-  }
-  return s;
-}
-
-function colorMatchKey(label: string): string {
-  return compactColorKey(normalizeSupplierColorSynonyms(label));
-}
-
 /** Single URL vs colour — same rules as gallery hero pick (for reverse lookup from thumbnails). */
 function scoreGalleryUrlForColor(color: string, url: string): number {
   const trimmed = color.trim();
@@ -1197,6 +1147,7 @@ function pickPrimaryImageForColor(color: string, urls: string[], opts?: GalleryC
     const wantKey = colorMatchKey(trimmed);
     if (wantKey.length >= 3) {
       const pickStructuredMatch = (productFlatLayOnly: boolean) => {
+        let best: { url: string; score: number } | null = null;
         for (const u of list) {
           const fn = (galleryFilenameTail(u).split("?")[0] ?? "").trim();
           // Match `sync-supplier-catalog.mjs`: flat lays are `_Product_` and not on-model `Talent` shots.
@@ -1204,11 +1155,20 @@ function pickPrimaryImageForColor(color: string, urls: string[], opts?: GalleryC
             continue;
           }
           const der = supplierDisplayColorLabelFromFileNoQuery(fn);
-          if (der && colorMatchKey(der) === wantKey) {
-            return u;
+          if (!der || !colorMatchKeysCompatible(colorMatchKey(der), wantKey)) {
+            continue;
+          }
+          let score = scoreGalleryUrlForColor(trimmed, u);
+          const up = fn.toUpperCase();
+          // Prefer primary colourways over back/vent detail shots when both match.
+          if (/\bBACK\b/.test(up) || /\bVENT\b/.test(up)) {
+            score -= 40;
+          }
+          if (!best || score > best.score) {
+            best = { url: u, score };
           }
         }
-        return null;
+        return best?.url ?? null;
       };
       const flatLay = pickStructuredMatch(true);
       if (flatLay) {
@@ -1425,7 +1385,7 @@ function scoreColorLabelAgainstFileToken(colorLabel: string, tokenRaw: string): 
   if (labelCompact === fileCompact) {
     return 100;
   }
-  if (colorMatchKey(colorLabel) === colorMatchKey(fromFile)) {
+  if (colorMatchKeysCompatible(colorMatchKey(colorLabel), colorMatchKey(fromFile))) {
     return 98;
   }
   if (!isCombo && (fileCompact.includes(labelCompact) || labelCompact.includes(fileCompact))) {
@@ -1596,7 +1556,7 @@ function inferBestColorForGalleryImage(
     if (supplierDerived) {
       const key = colorMatchKey(supplierDerived);
       if (key.length >= 3) {
-        const byKey = colors.find((c) => colorMatchKey(c) === key);
+        const byKey = colors.find((c) => colorMatchKeysCompatible(colorMatchKey(c), key));
         if (byKey) {
           return byKey;
         }
