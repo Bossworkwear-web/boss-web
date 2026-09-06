@@ -28,6 +28,11 @@ import { productPathSegment, slugifyProductNameForPath } from "@/lib/product-pat
 import { storefrontDescriptionForDisplay, storefrontLeadingSupplierBrand } from "@/lib/product-display-name";
 import { resolveStorefrontImageUrlList } from "@/lib/storefront-image-url";
 import { orderBwC91GalleryImageUrls } from "@/lib/bw-c91-gallery";
+import { jbOrderTogetherSpecForProduct, jbStorefrontSlugForStyleCode } from "@/lib/jb-order-together";
+import {
+  alignBisleyYellowOrangeGalleryToColorChips,
+  isBisleyYellowOrangeNavyPair,
+} from "@/lib/bisley-yellow-orange-navy-gallery";
 import { createSupabaseClient } from "@/lib/supabase";
 import { syzmikDescriptionBodyFromCsv } from "@/lib/syzmik-description-fallback";
 
@@ -898,6 +903,61 @@ async function getDetailDataInternal(
       return rows;
     })();
 
+    const orderTogether = await (async () => {
+      const spec = jbOrderTogetherSpecForProduct({
+        name: product.name,
+        slug: product.slug ?? slug,
+      });
+      if (!spec) {
+        return null;
+      }
+      const wantedSlugs = spec.companions.map((c) => jbStorefrontSlugForStyleCode(c.styleCode));
+      if (!wantedSlugs.length) {
+        return null;
+      }
+      const extractStyle = (n: string): string | null => {
+        const mm = String(n)
+          .trim()
+          .match(/\(([A-Za-z0-9][A-Za-z0-9/_-]*)\)\s*$/);
+        return mm ? mm[1].toUpperCase() : null;
+      };
+      const { data, error } = await supabase
+        .from("products")
+        .select("id, name, slug, image_urls, storefront_hidden, is_active")
+        .in("slug", wantedSlugs);
+      if (error) {
+        return null;
+      }
+      const byStyle = new Map<
+        string,
+        { id: string; name: string; slug: string; imageUrl: string | null }
+      >();
+      for (const r of data ?? []) {
+        if (!r || r.id === product.id) continue;
+        if (r.is_active === false) continue;
+        const style = extractStyle(String(r.name)) ?? String(r.slug ?? "").replace(/^jb-/i, "").toUpperCase();
+        if (!style) continue;
+        const slugVal = String(r.slug ?? "").trim();
+        if (!slugVal) continue;
+        byStyle.set(style, {
+          id: String(r.id),
+          name: String(r.name),
+          slug: slugVal,
+          imageUrl:
+            Array.isArray(r.image_urls) && r.image_urls.length > 0
+              ? resolveStorefrontImageUrlList(r.image_urls)[0] ?? null
+              : null,
+        });
+      }
+      const ordered = spec.companions
+        .map((c) => byStyle.get(c.styleCode.toUpperCase()))
+        .filter((r): r is NonNullable<typeof r> => Boolean(r));
+      if (!ordered.length) {
+        return null;
+      }
+      return { note: spec.note, products: ordered };
+    })();
+
     const wantsBizCareUnisexHero = (() => {
       if (!isBizCareCatalogProduct(product.name, { slug: product.slug ?? null, category: product.category ?? null })) {
         return false;
@@ -1303,96 +1363,36 @@ async function getDetailDataInternal(
       }
     }
 
-    // Bisley Apex TT01/TT02 images: align gallery order to colour chips to avoid swapped hero images.
-    if (isBisleyCatalog && colorOptionsEffective.length === 2 && normalizedImageUrls.length >= 2) {
-      const a = colorOptionsEffective[0]?.toLowerCase() ?? "";
-      const b = colorOptionsEffective[1]?.toLowerCase() ?? "";
-      const hasOrange = a.includes("orange") || b.includes("orange");
-      const hasYellow = a.includes("yellow") || b.includes("yellow");
-      const hasNavyPair =
-        colorOptionsEffective.every((c) => /\/\s*navy\b/i.test(c)) &&
-        normalizedImageUrls.some((u) => /_TT01/i.test(String(u))) &&
-        normalizedImageUrls.some((u) => /_TT02/i.test(String(u)));
-      if (hasOrange && hasYellow && hasNavyPair) {
-        const tt01 = normalizedImageUrls.find((u) => /_TT01/i.test(String(u)));
-        const tt02 = normalizedImageUrls.find((u) => /_TT02/i.test(String(u)));
-        if (tt01 && tt02) {
-          // Observed in catalog: TT01 is Yellow/Navy and TT02 is Orange/Navy.
-          const first = a.includes("orange") ? tt02 : tt01;
-          const second = a.includes("orange") ? tt01 : tt02;
-          const rest = normalizedImageUrls.filter((u) => u !== tt01 && u !== tt02);
-          normalizedImageUrls = [first, second, ...rest];
-        }
-      }
+    // Bisley Yellow/Orange (/Navy): align gallery heroes to colour chips via TT01/02/04/05
+    // (and colour words). Prevents swapped chip↔image orders that mis-route customer orders.
+    // Use `treatAsBisley` (slug/supplier) so SKUs are covered even when name-based catalog detect is thin.
+    const treatAsBisleyForYoAlign =
+      isBisleyCatalog || supplierLc.includes("bisley") || productSlugLower.startsWith("bis-");
+    if (treatAsBisleyForYoAlign && colorOptionsEffective.length === 2 && normalizedImageUrls.length >= 2) {
+      normalizedImageUrls = alignBisleyYellowOrangeGalleryToColorChips(
+        colorOptionsEffective,
+        normalizedImageUrls,
+      );
     }
 
-    // Bisley Apex / taped combos sometimes mix TT tokens and literal colour words (e.g. `...TT04...` + `...-ORANGE-...`).
-    // When the chips are Orange/Navy + Yellow/Navy, force the two images to follow that chip order.
-    if (isBisleyCatalog && colorOptionsEffective.length === 2 && normalizedImageUrls.length === 2) {
-      const wantsOrangeFirst = /orange/i.test(colorOptionsEffective[0] ?? "");
-      const wantsYellowFirst = /yellow/i.test(colorOptionsEffective[0] ?? "");
-      const isNavyCombo = colorOptionsEffective.every((c) => /\/\s*navy\b/i.test(String(c)));
-      if (isNavyCombo && (wantsOrangeFirst || wantsYellowFirst)) {
-        const classify = (u: string): "orange" | "yellow" | null => {
-          const tail = String(u).split("/").pop() ?? String(u);
-          let file = tail;
-          try {
-            file = decodeURIComponent(tail);
-          } catch {
-            file = tail;
-          }
-          const up = (file.split("?")[0] ?? file).toUpperCase();
-          if (/\bORANGE\b/.test(up)) return "orange";
-          if (/\bYELLOW\b/.test(up)) return "yellow";
-          if (/\bTT02\b/.test(up)) return "orange";
-          if (/\bTT01\b/.test(up)) return "yellow";
-          if (/\bTT04\b/.test(up)) return "yellow";
-          return null;
-        };
-        const aKind = classify(normalizedImageUrls[0] ?? "");
-        const bKind = classify(normalizedImageUrls[1] ?? "");
-        if (aKind && bKind && aKind !== bKind) {
-          const correctFirst = wantsOrangeFirst ? "orange" : "yellow";
-          if (aKind !== correctFirst) {
-            normalizedImageUrls = [normalizedImageUrls[1]!, normalizedImageUrls[0]!];
-          }
-        }
-      }
-    }
-
-    // Bisley BJ6730T/BJ6934T/BJL6078T/BK6989/BK6571: first image must be Yellow/Navy, second Orange/Navy.
+    // Prefer Yellow(/Navy) chip first when both Yellow + Orange colourways exist.
     if (
-      isBisleyCatalog &&
-      (productSlugLower.includes("bj6730t") ||
-        productSlugLower.includes("bj6934t") ||
-        productSlugLower.includes("bjl6078t") ||
-        productSlugLower.includes("bk6987t") ||
-        productSlugLower.includes("bk6989") ||
-        productSlugLower.includes("bk6571")) &&
-      normalizedImageUrls.length === 2
+      treatAsBisleyForYoAlign &&
+      colorOptionsEffective.length === 2 &&
+      normalizedImageUrls.length >= 2
     ) {
-      colorOptionsEffective = ["Yellow/Navy", "Orange/Navy"];
-      const classify = (u: string): "orange" | "yellow" | null => {
-        const tail = String(u).split("/").pop() ?? String(u);
-        let file = tail;
-        try {
-          file = decodeURIComponent(tail);
-        } catch {
-          file = tail;
-        }
-        const up = (file.split("?")[0] ?? file).toUpperCase();
-        if (/\bORANGE\b/.test(up)) return "orange";
-        if (/\bYELLOW\b/.test(up)) return "yellow";
-        if (/\bTT02\b/.test(up)) return "orange";
-        if (/\bTT01\b/.test(up)) return "yellow";
-        if (/\bTT04\b/.test(up)) return "yellow";
-        if (/\bTT05\b/.test(up)) return "orange";
-        return null;
-      };
-      const aKind = classify(normalizedImageUrls[0] ?? "");
-      const bKind = classify(normalizedImageUrls[1] ?? "");
-      if (aKind && bKind && aKind !== bKind && aKind !== "yellow") {
-        normalizedImageUrls = [normalizedImageUrls[1]!, normalizedImageUrls[0]!];
+      const hasYellow = colorOptionsEffective.some((c) => /\byellow\b/i.test(c));
+      const hasOrange = colorOptionsEffective.some((c) => /\borange\b/i.test(c));
+      const hasBlack = colorOptionsEffective.some((c) => /\bblack\b/i.test(c));
+      if (hasYellow && hasOrange && !hasBlack) {
+        colorOptionsEffective = [
+          ...colorOptionsEffective.filter((c) => /\byellow\b/i.test(c)),
+          ...colorOptionsEffective.filter((c) => !/\byellow\b/i.test(c)),
+        ];
+        normalizedImageUrls = alignBisleyYellowOrangeGalleryToColorChips(
+          colorOptionsEffective,
+          normalizedImageUrls,
+        );
       }
     }
 
@@ -1418,8 +1418,8 @@ async function getDetailDataInternal(
         if (hasNavy && hasOrange) return "navy_orange";
         if (hasBlack && hasYellow) return "black_yellow";
         // BP6412T on myadmin.pipanz.com uses TT09 (Navy/Orange) and TT05 (Black/Yellow).
-        if (/\bTT09\b/.test(up)) return "navy_orange";
-        if (/\bTT05\b/.test(up)) return "black_yellow";
+        if (/(?:^|[^A-Z0-9])TT09(?:[^A-Z0-9]|$)/.test(up)) return "navy_orange";
+        if (/(?:^|[^A-Z0-9])TT05(?:[^A-Z0-9]|$)/.test(up)) return "black_yellow";
         return null;
       };
       const buckets = new Map<"navy_orange" | "black_yellow", string>();
@@ -1445,24 +1445,10 @@ async function getDetailDataInternal(
     // Bisley BJ6979T: first image must be Yellow, second Orange.
     if (isBisleyCatalog && productSlugLower.includes("bj6979t") && normalizedImageUrls.length === 2) {
       colorOptionsEffective = ["Yellow", "Orange"];
-      const classify = (u: string): "orange" | "yellow" | null => {
-        const tail = String(u).split("/").pop() ?? String(u);
-        let file = tail;
-        try {
-          file = decodeURIComponent(tail);
-        } catch {
-          file = tail;
-        }
-        const up = (file.split("?")[0] ?? file).toUpperCase();
-        if (/\bORANGE\b/.test(up)) return "orange";
-        if (/\bYELLOW\b/.test(up)) return "yellow";
-        return null;
-      };
-      const aKind = classify(normalizedImageUrls[0] ?? "");
-      const bKind = classify(normalizedImageUrls[1] ?? "");
-      if (aKind && bKind && aKind !== bKind && aKind !== "yellow") {
-        normalizedImageUrls = [normalizedImageUrls[1]!, normalizedImageUrls[0]!];
-      }
+      normalizedImageUrls = alignBisleyYellowOrangeGalleryToColorChips(
+        colorOptionsEffective,
+        normalizedImageUrls,
+      );
     }
 
     // Bisley BKL6975: first image Yellow/Navy, second Orange/Navy, third Pink/Navy.
@@ -1481,11 +1467,9 @@ async function getDetailDataInternal(
         if (/\bORANGE\b/.test(up)) return "orange";
         if (/\bYELLOW\b/.test(up)) return "yellow";
         if (/\bPINK\b/.test(up)) return "pink";
-        if (/\bTT02\b/.test(up)) return "orange";
-        if (/\bTT01\b/.test(up)) return "yellow";
-        if (/\bTT04\b/.test(up)) return "yellow";
-        if (/\bTT05\b/.test(up)) return "orange";
-        if (/\bTT21\b/.test(up)) return "pink";
+        if (/(?:^|[^A-Z0-9])TT(?:02|05)(?:[^A-Z0-9]|$)/.test(up)) return "orange";
+        if (/(?:^|[^A-Z0-9])TT(?:01|04)(?:[^A-Z0-9]|$)/.test(up)) return "yellow";
+        if (/(?:^|[^A-Z0-9])TT21(?:[^A-Z0-9]|$)/.test(up)) return "pink";
         return null;
       };
       const buckets = new Map<string, string>();
@@ -1530,7 +1514,11 @@ async function getDetailDataInternal(
 
     // Bisley simple code filenames (e.g. BBEAN55_BBLK_…): reorder gallery to match colorOptions.
     if (isBisleyCatalog && normalizedImageUrls.length >= 2 && colorOptionsEffective.length >= 2) {
-      const skipSimpleBisleyReorder = bisleyPositionalStyleUpper !== "";
+      const skipSimpleBisleyReorder =
+        bisleyPositionalStyleUpper !== "" ||
+        // Yellow/Orange pairs are already locked by alignBisleyYellowOrangeGalleryToColorChips —
+        // do not re-sort chips to the raw supplier URL order (that reintroduces swaps).
+        isBisleyYellowOrangeNavyPair(colorOptionsEffective);
       if (!skipSimpleBisleyReorder) {
         const colorByKey = new Map(colorOptionsEffective.map((c) => [compactColorDedupeKey(c), c]));
         const mapped: Array<{ url: string; key: string }> = [];
@@ -1827,6 +1815,7 @@ async function getDetailDataInternal(
       ...(dbFeatures ? { features: dbFeatures } : {}),
       ...(dbSpecifications ? { specifications: dbSpecifications } : {}),
       ...(relatedProducts.length ? { relatedProducts } : {}),
+      ...(orderTogether ? { orderTogether } : {}),
     };
 
     const { productName: displayProductName, productCode: displayProductCode } = productCardDisplayLines(

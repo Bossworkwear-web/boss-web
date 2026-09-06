@@ -26,6 +26,43 @@ const PPE_HEAD_WEAR_LEADING_RANK = new Map<string, number>(
   PPE_HEAD_WEAR_LEADING_STYLE_CODES.map((code, index) => [code, index]),
 );
 
+/**
+ * Chef → Jackets: JB chef jacket product lines kept adjacent within each family.
+ * Each family shares one A–Z sort anchor (first style) so cards stay together.
+ */
+const CHEF_JACKETS_PRODUCT_FAMILIES: readonly {
+  codes: readonly string[];
+  sortAnchor: string;
+}[] = [
+  {
+    codes: ["5CJ", "5CJ1", "5CJ2", "5CJ21"],
+    sortAnchor: "JB's Wear JB's L/S CHEFS JACKET (5CJ)",
+  },
+  {
+    codes: ["5CJL", "5CJL1", "5CJS", "5CJS1"],
+    sortAnchor: "JB's Wear JB's L/S SNAP BUTTON CHEFS JACKET (5CJL)",
+  },
+  {
+    codes: ["5MP", "5LP"],
+    sortAnchor: "JB's Wear JB's CHEF POLO (5MP)",
+  },
+];
+
+type ChefJacketsFamilyPlacement = {
+  familyIndex: number;
+  rank: number;
+  sortAnchor: string;
+};
+
+const CHEF_JACKETS_FAMILY_PLACEMENT_BY_STYLE = new Map<string, ChefJacketsFamilyPlacement>(
+  CHEF_JACKETS_PRODUCT_FAMILIES.flatMap((family, familyIndex) =>
+    family.codes.map((code, rank) => [
+      code,
+      { familyIndex, rank, sortAnchor: family.sortAnchor },
+    ]),
+  ),
+);
+
 const TRAILING_STYLE_PAREN_RE = /\s*\(([A-Za-z0-9][A-Za-z0-9/_-]*)\)\s*$/;
 
 export type CategoryBrowseSortItem = {
@@ -166,6 +203,31 @@ function jbWearPoloLeadingRank(
   return rank === undefined ? null : rank;
 }
 
+function chefJacketsFamilyPlacement(
+  mainSlug: string,
+  subSlug: string | undefined,
+  item: CategoryBrowseSortItem,
+): ChefJacketsFamilyPlacement | null {
+  if (mainSlug !== "chef" || subSlug !== "jackets") {
+    return null;
+  }
+  const code = jbStyleCodeFromListing(item.name, item.slug);
+  if (!code) {
+    return null;
+  }
+  return CHEF_JACKETS_FAMILY_PLACEMENT_BY_STYLE.get(code) ?? null;
+}
+
+function categoryBrowseNameSortKey(
+  item: CategoryBrowseSortItem,
+  chefFamily: ChefJacketsFamilyPlacement | null,
+): string {
+  if (chefFamily) {
+    return chefFamily.sortAnchor;
+  }
+  return item.name;
+}
+
 /** Default category browse order: JB's Wear first (on selected mains), then name A–Z. */
 export function compareCategoryBrowseDefaultSort<T extends CategoryBrowseSortItem>(
   mainSlug: string,
@@ -227,7 +289,14 @@ export function compareCategoryBrowseDefaultSort<T extends CategoryBrowseSortIte
       return aJb ? -1 : 1;
     }
   }
-  return a.name.localeCompare(b.name);
+
+  const aChefFam = chefJacketsFamilyPlacement(mainSlug, subSlug, a);
+  const bChefFam = chefJacketsFamilyPlacement(mainSlug, subSlug, b);
+  if (aChefFam && bChefFam && aChefFam.familyIndex === bChefFam.familyIndex && aChefFam.rank !== bChefFam.rank) {
+    return aChefFam.rank - bChefFam.rank;
+  }
+
+  return categoryBrowseNameSortKey(a, aChefFam).localeCompare(categoryBrowseNameSortKey(b, bChefFam));
 }
 
 export function sortCategoryBrowseDefault<T extends CategoryBrowseSortItem>(

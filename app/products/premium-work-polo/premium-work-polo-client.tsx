@@ -35,6 +35,10 @@ import {
   normalizeSupplierColorSynonyms,
 } from "@/lib/storefront-color-match-key";
 import { orderBwC91GalleryImageUrls } from "@/lib/bw-c91-gallery";
+import {
+  alignBisleyYellowOrangeGalleryToColorChips,
+  isBisleyYellowOrangeNavyPair,
+} from "@/lib/bisley-yellow-orange-navy-gallery";
 import { filterAp3309ColorOptions, isStorefrontAp3309Slug } from "@/lib/ap-3309-storefront";
 import {
   apColorImageCountsAlignWithColors,
@@ -263,6 +267,16 @@ export type ProductDetailData = {
     slug: string;
     imageUrl: string | null;
   }>;
+  /** Hard-coded companions (e.g. JB apron body → strap). Shown under DESCRIPTION. */
+  orderTogether?: {
+    note: string;
+    products: Array<{
+      id: string;
+      name: string;
+      slug: string;
+      imageUrl: string | null;
+    }>;
+  };
 };
 
 export type PremiumWorkPoloClientProps = {
@@ -788,6 +802,16 @@ function scoreGalleryUrlForColor(color: string, url: string): number {
   if (/\bfybt\b/i.test(file)) {
     if (colorLower.includes("bottle") || colorLower.includes("green")) score += 140;
     if (colorLower.includes("navy")) score -= 25;
+  }
+  // Bisley Apex / taped: TT01/TT04 = Yellow(/Navy), TT02/TT05 = Orange(/Navy).
+  // Underscores in filenames (`_TT04_1`) are word chars — do not use `\bTT04\b`.
+  if (/(?:^|[^a-z0-9])tt(?:01|04)(?:[^a-z0-9]|$)/i.test(file)) {
+    if (colorLower.includes("yellow")) score += 160;
+    if (colorLower.includes("orange")) score -= 40;
+  }
+  if (/(?:^|[^a-z0-9])tt(?:02|05)(?:[^a-z0-9]|$)/i.test(file)) {
+    if (colorLower.includes("orange")) score += 160;
+    if (colorLower.includes("yellow")) score -= 40;
   }
   // C91 studio asset (`public/C91_Yellow.png`) — preferred Yellow/Navy hero over FYN supplier shots.
   if (/c91[_-]?yellow\.(png|jpe?g|webp)$/i.test(file) || /\/c91_yellow\./i.test(pathLower)) {
@@ -2326,6 +2350,7 @@ export function PremiumWorkPoloClient({
   const cartLabel = pdpProductTitle ? `${pdpProductTitle} (${productCode})` : productCode;
   const heroAlt = cartLabel;
   const related = product.relatedProducts ?? [];
+  const orderTogether = product.orderTogether ?? null;
 
   const productImageUrlsForGallery = useMemo((): string[] => {
     const raw = product.imageUrls ?? [];
@@ -2341,6 +2366,14 @@ export function PremiumWorkPoloClient({
     // C91: Yellow front → Yellow vent → Yellow model → Orange front → Orange vent → Back vent.
     if (slugLower === "bw-c91" || /\(\s*c91\s*\)/i.test(String(product.name ?? ""))) {
       return orderBwC91GalleryImageUrls(raw);
+    }
+    // Bisley Yellow/Orange: keep gallery heroes locked to colour-chip order (order-safety).
+    if (
+      (slugLower.startsWith("bis-") || /\bbisley\b/i.test(product.supplierName ?? "")) &&
+      isBisleyYellowOrangeNavyPair(colorOptions) &&
+      raw.length >= 2
+    ) {
+      return alignBisleyYellowOrangeGalleryToColorChips(colorOptions, raw);
     }
     if (!bisleySlugUsesPositionalColorGallery(slugLower) || raw.length < 2) {
       return raw;
@@ -3593,6 +3626,51 @@ export function PremiumWorkPoloClient({
                   ))}
               </div>
             </div>
+          ) : null}
+          {orderTogether?.products.length ? (
+            <section className="mt-4 w-full max-w-[36rem] mx-auto space-y-3 border-t border-brand-navy/10 pt-4 text-left">
+              <div className="space-y-1.5">
+                <h2 className="text-[1.02rem] font-semibold uppercase tracking-[0.1em] text-brand-navy/80">
+                  Order Together
+                </h2>
+                {orderTogether.note ? (
+                  <p className="text-[1.02rem] leading-relaxed text-brand-navy/70 sm:text-[1.08rem]">
+                    {orderTogether.note}
+                  </p>
+                ) : null}
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {orderTogether.products.map((item) => {
+                  const href = `/products/${encodeURIComponent(productPathSegment({ name: item.name, slug: item.slug }))}`;
+                  return (
+                    <Link
+                      key={item.id}
+                      href={href}
+                      className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-brand-navy/10 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+                    >
+                      <div className="flex aspect-square w-full items-center justify-center overflow-hidden border-b border-brand-navy/10 bg-white p-3">
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt=""
+                            className="max-h-full w-full object-contain object-center"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        ) : (
+                          <div className="h-full w-full bg-brand-surface" aria-hidden />
+                        )}
+                      </div>
+                      <div className="min-w-0 space-y-1 px-3 py-2">
+                        <p className="line-clamp-2 text-[0.98rem] font-medium leading-snug text-brand-navy">
+                          {item.name}
+                        </p>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
           ) : null}
           {related.length ? (
             <section className="mt-4 w-full max-w-[36rem] mx-auto space-y-3 border-t border-brand-navy/10 pt-4 text-left">

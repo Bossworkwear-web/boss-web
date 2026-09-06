@@ -29,14 +29,14 @@ describe("apron storefront placements", () => {
     const options = buildApronStorefrontPlacementOptions("al-am");
     expect(options.map((o) => o.diagramAbbr)).toEqual(["AL", "AM"]);
     expect(options[0]).toMatchObject({ embroideryCost: 9.95, printingCost: 9.95 });
-    expect(options[1]).toMatchObject({ embroideryCost: 24.95, printingCost: 24.95 });
+    expect(options[1]).toMatchObject({ embroideryCost: 24.95, printingCost: 19.95 });
   });
 
   it("exposes SAM and SAB with requested pricing", () => {
     const options = buildApronStorefrontPlacementOptions("sam-sab");
     expect(options.map((o) => o.diagramAbbr)).toEqual(["SAM", "SAB"]);
     expect(options[0]).toMatchObject({ embroideryCost: 9.95, printingCost: 9.95 });
-    expect(options[1]).toMatchObject({ embroideryCost: 24.95, printingCost: 24.95 });
+    expect(options[1]).toMatchObject({ embroideryCost: 24.95, printingCost: 19.95 });
   });
 
   it("maps apron placements to Logo_Location diagrams", () => {

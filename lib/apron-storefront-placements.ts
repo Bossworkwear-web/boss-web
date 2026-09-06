@@ -165,7 +165,7 @@ export function buildApronStorefrontPlacementOptions(
         short: "SAB",
         diagramAbbr: "SAB",
         embroideryCost: 24.95,
-        printingCost: 24.95,
+        printingCost: 19.95,
       },
     ];
   }
@@ -184,7 +184,7 @@ export function buildApronStorefrontPlacementOptions(
       short: "AM",
       diagramAbbr: "AM",
       embroideryCost: 24.95,
-      printingCost: 24.95,
+      printingCost: 19.95,
     },
   ];
 }

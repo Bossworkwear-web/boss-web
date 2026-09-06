@@ -25,6 +25,7 @@ import {
   subscribeCartUpdates,
   type CartItem,
 } from "@/lib/cart";
+import { confirmJbApronStraplessCheckoutIfNeeded } from "@/lib/jb-apron-strap-checkout-guard";
 import { STORE_MAIN_SHELL_CLASS } from "@/lib/store-main-shell";
 import { parseStoredJsonOrNull, readResponseJson } from "@/lib/safe-json-parse";
 import { SITE_PAGE_ROW_CLASS } from "@/lib/site-layout";
@@ -301,6 +302,9 @@ export default function PaymentPage() {
     setPayError(null);
     if (items.length === 0) {
       setPayError("Your cart is empty.");
+      return;
+    }
+    if (!confirmJbApronStraplessCheckoutIfNeeded(items)) {
       return;
     }
     startPayTransition(async () => {

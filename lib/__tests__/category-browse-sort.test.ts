@@ -86,3 +86,70 @@ describe("sortCategoryBrowseDefault — workwear Blue Whale C91 / C81", () => {
     expect(sorted.map((r) => r.slug)).toEqual(["blue-whale-c91", "blue-whale-c81", "jb-7pip"]);
   });
 });
+
+describe("sortCategoryBrowseDefault — Chef Jackets snap-button family", () => {
+  const brandOf = () => "JB's Wear";
+
+  it("keeps 5CJL, 5CJL1, 5CJS, 5CJS1 adjacent in that order on chef/jackets", () => {
+    const rows: Row[] = [
+      { name: "JB's Wear JB's S/S SNAP BUTTON CHEFS JACKET (5CJS)", slug: "jb-5cjs" },
+      { name: "JB's Wear Other Jacket (5CJX)", slug: "jb-5cjx" },
+      { name: "JB's Wear JB's LADIES S/S SNAP BUTTON CHEFS JACKET (5CJS1)", slug: "jb-5cjs1" },
+      { name: "JB's Wear Alpha Coat (AAA)", slug: "jb-aaa" },
+      { name: "JB's Wear JB's LADIES L/S SNAP BUTTON CHEFS JACKET (5CJL1)", slug: "jb-5cjl1" },
+      { name: "JB's Wear JB's L/S SNAP BUTTON CHEFS JACKET (5CJL)", slug: "jb-5cjl" },
+      { name: "JB's Wear Zebra Jacket (ZZZ)", slug: "jb-zzz" },
+    ];
+    const sorted = sortCategoryBrowseDefault("chef", rows, brandOf, "jackets");
+    const familyIdx = sorted.findIndex((r) => r.slug === "jb-5cjl");
+    expect(sorted.slice(familyIdx, familyIdx + 4).map((r) => r.slug)).toEqual([
+      "jb-5cjl",
+      "jb-5cjl1",
+      "jb-5cjs",
+      "jb-5cjs1",
+    ]);
+  });
+
+  it("keeps 5CJ, 5CJ1, 5CJ2, 5CJ21 adjacent in that order on chef/jackets", () => {
+    const rows: Row[] = [
+      { name: "JB's Wear JB's S/S CHEFS JACKET (5CJ2)", slug: "jb-5cj2" },
+      { name: "JB's Wear Other Jacket (AAA)", slug: "jb-aaa" },
+      { name: "JB's Wear JB's LADIES S/S CHEF'S JACKET (5CJ21)", slug: "jb-5cj21" },
+      { name: "JB's Wear JB's LADIES L/S CHEF'S JACKET (5CJ1)", slug: "jb-5cj1" },
+      { name: "JB's Wear JB's L/S CHEFS JACKET (5CJ)", slug: "jb-5cj" },
+      { name: "JB's Wear Zebra Jacket (ZZZ)", slug: "jb-zzz" },
+    ];
+    const sorted = sortCategoryBrowseDefault("chef", rows, brandOf, "jackets");
+    const familyIdx = sorted.findIndex((r) => r.slug === "jb-5cj");
+    expect(sorted.slice(familyIdx, familyIdx + 4).map((r) => r.slug)).toEqual([
+      "jb-5cj",
+      "jb-5cj1",
+      "jb-5cj2",
+      "jb-5cj21",
+    ]);
+  });
+
+  it("keeps 5MP and 5LP adjacent on chef/Tops (jackets slug)", () => {
+    const rows: Row[] = [
+      { name: "JB's Wear JB's LADIES CHEF POLO (5LP)", slug: "jb-5lp" },
+      { name: "JB's Wear Other Top (AAA)", slug: "jb-aaa" },
+      { name: "JB's Wear JB's CHEF POLO (5MP)", slug: "jb-5mp" },
+      { name: "JB's Wear Zebra Top (ZZZ)", slug: "jb-zzz" },
+    ];
+    const sorted = sortCategoryBrowseDefault("chef", rows, brandOf, "jackets");
+    const familyIdx = sorted.findIndex((r) => r.slug === "jb-5mp");
+    expect(sorted.slice(familyIdx, familyIdx + 2).map((r) => r.slug)).toEqual(["jb-5mp", "jb-5lp"]);
+  });
+
+  it("does not cluster the family on other chef subcategories", () => {
+    const rows: Row[] = [
+      { name: "JB's Wear JB's S/S SNAP BUTTON CHEFS JACKET (5CJS)", slug: "jb-5cjs" },
+      { name: "JB's Wear JB's L/S SNAP BUTTON CHEFS JACKET (5CJL)", slug: "jb-5cjl" },
+      { name: "JB's Wear JB's LADIES S/S SNAP BUTTON CHEFS JACKET (5CJS1)", slug: "jb-5cjs1" },
+      { name: "JB's Wear JB's LADIES L/S SNAP BUTTON CHEFS JACKET (5CJL1)", slug: "jb-5cjl1" },
+    ];
+    // Pure A–Z by name (LADIES S/S before mens S/S) — not the jackets family order.
+    const sorted = sortCategoryBrowseDefault("chef", rows, brandOf, "pants");
+    expect(sorted.map((r) => r.slug)).toEqual(["jb-5cjl", "jb-5cjl1", "jb-5cjs1", "jb-5cjs"]);
+  });
+});
