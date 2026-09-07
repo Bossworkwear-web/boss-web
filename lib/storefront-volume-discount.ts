@@ -1,7 +1,8 @@
 /**
  * Storefront volume discount:
  * - Default apparel: by cart product subtotal (AUD, incl. GST).
- * - Headwear: by total unit quantity per product (`hw-*`, supplier Headwear).
+ * - Headwear: by total unit quantity per product (`hw-*` / supplier Headwear / Head wear category).
+ *   Grouping is per productId (or supplier+slug) — never by shared numeric style name across suppliers.
  */
 
 import { isHeadwearStorefrontProduct } from "@/lib/headwear-pdp-gallery";
@@ -74,42 +75,9 @@ export function isHeadwearVolumeDiscountCartLine(line: {
   category?: string | null;
   productName?: string;
 }): boolean {
-  if (isHeadwearStorefrontProduct(line.productPathSlug, line.supplierName, line.category)) {
-    return true;
-  }
-  // Legacy cart lines only: trailing numeric `(2653)` with no non-Headwear identity.
-  // Aussie Pacific / JB / DNC (and many others) also use numeric style codes — never treat those as Headwear.
-  if (hasNonHeadwearCartIdentity(line)) {
-    return false;
-  }
-  return headwearNumericStyleCodeFromProductName(line.productName) != null;
-}
-
-function hasNonHeadwearCartIdentity(line: {
-  supplierName?: string | null;
-  productPathSlug?: string | null;
-  category?: string | null;
-}): boolean {
-  const slug = String(line.productPathSlug ?? "")
-    .trim()
-    .toLowerCase();
-  if (slug && !slug.startsWith("hw-")) {
-    return true;
-  }
-  const supplier = String(line.supplierName ?? "")
-    .trim()
-    .toLowerCase();
-  if (supplier && supplier !== "headwear" && supplier !== "head wear") {
-    return true;
-  }
-  const cat = String(line.category ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
-  if (cat && cat !== "head wear" && cat !== "headwear") {
-    return true;
-  }
-  return false;
+  // Only explicit Headwear identity — never infer from trailing `(1311)` style codes.
+  // Numeric codes are shared across suppliers (Aussie Pacific, Headwear, …) and must not mix pricing.
+  return isHeadwearStorefrontProduct(line.productPathSlug, line.supplierName, line.category);
 }
 
 function headwearNumericStyleCodeFromProductName(productName?: string): string | null {
@@ -121,7 +89,10 @@ function headwearNumericStyleCodeFromProductName(productName?: string): string |
   return /^\d{3,5}$/.test(code) ? code : null;
 }
 
-/** Backfill Headwear metadata on legacy cart lines (numeric style codes like (2653)). */
+/**
+ * Backfill Headwear metadata only for true Headwear / ambiguous legacy lines.
+ * Never rewrite another supplier’s numeric style (e.g. Aussie Pacific `ap-1311`) to `hw-1311`.
+ */
 export function inferHeadwearCartLineFields(line: {
   productName?: string;
   productPathSlug?: string | null;
@@ -135,18 +106,40 @@ export function inferHeadwearCartLineFields(line: {
   if (isHeadwearStorefrontProduct(line.productPathSlug, line.supplierName, line.category)) {
     return {};
   }
-  if (hasNonHeadwearCartIdentity(line)) {
+  const slug = String(line.productPathSlug ?? "")
+    .trim()
+    .toLowerCase();
+  if (slug) {
+    // Any existing non-hw slug belongs to another supplier/catalog — leave it alone.
     return {};
   }
-  const code = headwearNumericStyleCodeFromProductName(line.productName);
-  if (!code) {
+  const supplier = String(line.supplierName ?? "")
+    .trim()
+    .toLowerCase();
+  if (supplier && supplier !== "headwear" && supplier !== "head wear") {
     return {};
   }
-  return {
-    productPathSlug: `hw-${code}`,
-    supplierName: line.supplierName?.trim() || "Headwear",
-    category: line.category?.trim() || "Head wear",
-  };
+  const cat = String(line.category ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+  if (cat && cat !== "head wear" && cat !== "headwear") {
+    return {};
+  }
+  // Legacy Headwear-only lines (no slug/supplier): allow numeric code → hw-* backfill.
+  if (supplier === "headwear" || supplier === "head wear" || cat === "head wear" || cat === "headwear") {
+    const code = headwearNumericStyleCodeFromProductName(line.productName);
+    if (!code) {
+      return {};
+    }
+    return {
+      productPathSlug: `hw-${code}`,
+      supplierName: line.supplierName?.trim() || "Headwear",
+      category: line.category?.trim() || "Head wear",
+    };
+  }
+  // Name-only numeric codes are ambiguous across suppliers — do not infer Headwear.
+  return {};
 }
 
 /** Stable sort: apparel lines first (add order), then Headwear lines (add order). */
@@ -286,7 +279,29 @@ function applySubtotalVolumeDiscountToLines<T extends VolumeCartLine>(
   });
 }
 
-/** Headwear: discount rate from combined quantity per `productId`. */
+/** Headwear: discount rate from combined quantity per product — never merge across suppliers. */
+function headwearVolumeGroupKey(line: VolumeCartLine): string {
+  const pid = String(line.productId ?? "").trim();
+  if (pid) {
+    return `pid:${pid}`;
+  }
+  const slug = String(line.productPathSlug ?? "")
+    .trim()
+    .toLowerCase();
+  const supplier = String(line.supplierName ?? "")
+    .trim()
+    .toLowerCase();
+  if (slug || supplier) {
+    return `sup:${supplier}|slug:${slug}`;
+  }
+  const id = String(line.id ?? "").trim();
+  if (id) {
+    return `id:${id}`;
+  }
+  // Last resort: keep lines separate (do not dump everything into one shared bucket).
+  return `solo:${String(line.productName ?? "").trim().toLowerCase()}|u:${storefrontCartLineListUnitAud(line)}`;
+}
+
 function applyHeadwearVolumeDiscountToLines<T extends VolumeCartLine>(
   lines: readonly T[],
 ): WeakMap<T, { unitPrice: number; totalPrice: number }> {
@@ -296,12 +311,12 @@ function applyHeadwearVolumeDiscountToLines<T extends VolumeCartLine>(
   }
   const byProduct = new Map<string, T[]>();
   for (const it of lines) {
-    const pid = String(it.productId ?? "").trim() || "__headwear";
-    const bucket = byProduct.get(pid);
+    const key = headwearVolumeGroupKey(it);
+    const bucket = byProduct.get(key);
     if (bucket) {
       bucket.push(it);
     } else {
-      byProduct.set(pid, [it]);
+      byProduct.set(key, [it]);
     }
   }
   for (const group of byProduct.values()) {

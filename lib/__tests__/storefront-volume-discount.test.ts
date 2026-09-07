@@ -138,17 +138,30 @@ describe("sortStorefrontCartLinesHeadwearLast", () => {
     ]);
   });
 
-  it("detects numeric Headwear style codes in product names", () => {
-    const cap = {
-      id: "cap-2653",
+  it("detects Headwear only via supplier/slug/category — not shared numeric model codes", () => {
+    const capNamedOnly = {
+      id: "cap-2653-name",
       productName: "100% Recycled Earth Friendly Fabric (2653)",
-      productId: "hw-2653",
       unitPrice: 30,
       listUnitPrice: 30,
       quantity: 50,
     };
-    expect(isHeadwearVolumeDiscountCartLine(cap)).toBe(true);
-    expect(inferHeadwearCartLineFields(cap).productPathSlug).toBe("hw-2653");
+    // Name-only numeric codes are ambiguous across suppliers.
+    expect(isHeadwearVolumeDiscountCartLine(capNamedOnly)).toBe(false);
+    expect(inferHeadwearCartLineFields(capNamedOnly)).toEqual({});
+
+    const capHeadwear = {
+      id: "cap-2653",
+      productName: "100% Recycled Earth Friendly Fabric (2653)",
+      productId: "hw-2653",
+      productPathSlug: "hw-2653",
+      supplierName: "Headwear",
+      unitPrice: 30,
+      listUnitPrice: 30,
+      quantity: 50,
+    };
+    expect(isHeadwearVolumeDiscountCartLine(capHeadwear)).toBe(true);
+    expect(inferHeadwearCartLineFields(capHeadwear)).toEqual({});
   });
 
   it("does not treat Aussie Pacific numeric style codes as Headwear volume lines", () => {
@@ -170,5 +183,36 @@ describe("sortStorefrontCartLinesHeadwearLast", () => {
     expect(adjusted[0]!.totalPrice).toBeCloseTo(46.05 * 50 * 0.9, 1);
     expect(adjusted[0]!.totalPrice).toBeGreaterThan(1900);
     expect(adjusted[0]!.totalPrice).not.toBeCloseTo(1197.3, 0);
+  });
+
+  it("does not merge Headwear volume qty across different suppliers with the same model code", () => {
+    const apLikeName = {
+      id: "ap-line",
+      productName: "Tasman Polo (1311)",
+      productPathSlug: "ap-1311",
+      supplierName: "Aussie Pacific",
+      productId: "ap-uuid",
+      unitPrice: 40,
+      listUnitPrice: 40,
+      quantity: 50,
+    };
+    const hw = {
+      id: "hw-line",
+      productName: "Some Cap (1311)",
+      productPathSlug: "hw-1311",
+      supplierName: "Headwear",
+      productId: "hw-uuid",
+      unitPrice: 30,
+      listUnitPrice: 30,
+      quantity: 50,
+    };
+    expect(isHeadwearVolumeDiscountCartLine(apLikeName)).toBe(false);
+    expect(isHeadwearVolumeDiscountCartLine(hw)).toBe(true);
+
+    const adjusted = storefrontVolumeAdjustedCartLines([apLikeName, hw]);
+    const byId = Object.fromEntries(adjusted.map((r) => [r.id, r]));
+    // AP stays on apparel tiers; Headwear uses its own qty-50 tier (48%), not combined with AP.
+    expect(byId["ap-line"]!.totalPrice).toBeCloseTo(40 * 50 * 0.9, 1);
+    expect(byId["hw-line"]!.totalPrice).toBeCloseTo(30 * 50 * (1 - 0.48), 1);
   });
 });
