@@ -77,7 +77,39 @@ export function isHeadwearVolumeDiscountCartLine(line: {
   if (isHeadwearStorefrontProduct(line.productPathSlug, line.supplierName, line.category)) {
     return true;
   }
+  // Legacy cart lines only: trailing numeric `(2653)` with no non-Headwear identity.
+  // Aussie Pacific / JB / DNC (and many others) also use numeric style codes — never treat those as Headwear.
+  if (hasNonHeadwearCartIdentity(line)) {
+    return false;
+  }
   return headwearNumericStyleCodeFromProductName(line.productName) != null;
+}
+
+function hasNonHeadwearCartIdentity(line: {
+  supplierName?: string | null;
+  productPathSlug?: string | null;
+  category?: string | null;
+}): boolean {
+  const slug = String(line.productPathSlug ?? "")
+    .trim()
+    .toLowerCase();
+  if (slug && !slug.startsWith("hw-")) {
+    return true;
+  }
+  const supplier = String(line.supplierName ?? "")
+    .trim()
+    .toLowerCase();
+  if (supplier && supplier !== "headwear" && supplier !== "head wear") {
+    return true;
+  }
+  const cat = String(line.category ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+  if (cat && cat !== "head wear" && cat !== "headwear") {
+    return true;
+  }
+  return false;
 }
 
 function headwearNumericStyleCodeFromProductName(productName?: string): string | null {
@@ -101,6 +133,9 @@ export function inferHeadwearCartLineFields(line: {
   category?: string;
 } {
   if (isHeadwearStorefrontProduct(line.productPathSlug, line.supplierName, line.category)) {
+    return {};
+  }
+  if (hasNonHeadwearCartIdentity(line)) {
     return {};
   }
   const code = headwearNumericStyleCodeFromProductName(line.productName);

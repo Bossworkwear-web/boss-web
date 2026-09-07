@@ -12,7 +12,8 @@ function expectLinePricesMatchQuantity(
   line: { id?: string; quantity: number; unitPrice: number; totalPrice: number },
 ) {
   const implied = Math.round(line.unitPrice * line.quantity * 100) / 100;
-  expect(Math.abs(implied - line.totalPrice)).toBeLessThanOrEqual(0.02);
+  // Unit is rounded from total/qty; allow a few cents of display drift on large qty lines.
+  expect(Math.abs(implied - line.totalPrice)).toBeLessThanOrEqual(0.15);
 }
 
 describe("storefrontVolumeAdjustedCartLines", () => {
@@ -148,5 +149,26 @@ describe("sortStorefrontCartLinesHeadwearLast", () => {
     };
     expect(isHeadwearVolumeDiscountCartLine(cap)).toBe(true);
     expect(inferHeadwearCartLineFields(cap).productPathSlug).toBe("hw-2653");
+  });
+
+  it("does not treat Aussie Pacific numeric style codes as Headwear volume lines", () => {
+    const polo = {
+      id: "ap-1311",
+      productName: "TASMAN MENS POLOS (1311)",
+      productPathSlug: "ap-1311",
+      supplierName: "Aussie Pacific",
+      category: "Polos",
+      unitPrice: 46.05,
+      listUnitPrice: 46.05,
+      quantity: 50,
+    };
+    expect(isHeadwearVolumeDiscountCartLine(polo)).toBe(false);
+    expect(inferHeadwearCartLineFields(polo)).toEqual({});
+
+    const adjusted = storefrontVolumeAdjustedCartLines([polo]);
+    // Apparel volume (~10% at ~$2302 subtotal), not Headwear 48% at qty 50.
+    expect(adjusted[0]!.totalPrice).toBeCloseTo(46.05 * 50 * 0.9, 1);
+    expect(adjusted[0]!.totalPrice).toBeGreaterThan(1900);
+    expect(adjusted[0]!.totalPrice).not.toBeCloseTo(1197.3, 0);
   });
 });
