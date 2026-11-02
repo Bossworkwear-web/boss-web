@@ -7,7 +7,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { StoreOrderBarcode } from "@/app/components/store-order-barcode";
 
 import type { StoreOrderCustomerMemoLine } from "@/lib/store-order-customer-detail";
-import { checkoutMemoServicesForNotes } from "@/lib/store-order-customer-detail";
+import {
+  checkoutMemoExtraArtworkRows,
+  checkoutMemoServicesForNotes,
+} from "@/lib/store-order-customer-detail";
 import { productColourLabelToSwatches } from "@/lib/product-colour-swatch";
 import { notifyRouteLoadingStart, stopRouteLoading } from "@/lib/route-loading";
 import { supplierOrderProductIdHeadTail } from "@/lib/supplier-order-product-id-parts";
@@ -79,14 +82,17 @@ function renderCheckoutMemoLineText(line: string) {
   return line;
 }
 
+function checkoutMemoServiceClassName(service: "Embroidery" | "Printing"): string {
+  return service === "Printing" ? "text-red-600" : "text-green-600";
+}
+
 function ClickUpCheckoutMemoBody({ row }: { row: StoreOrderCustomerMemoLine }) {
   const bodyNotes = String(row.notes ?? "");
   const lines = bodyNotes.split("\n");
-  const services = checkoutMemoServicesForNotes(
-    bodyNotes,
-    row.placementServices ?? [],
-    row.lineService ?? null,
-  );
+  const placementServices = row.placementServices ?? [];
+  const lineService = row.lineService ?? null;
+  const services = checkoutMemoServicesForNotes(bodyNotes, placementServices, lineService);
+  const extraArtwork = checkoutMemoExtraArtworkRows(bodyNotes, placementServices, lineService);
   const size = String(row.size ?? "").trim();
   const productName = String(row.productName ?? "").trim();
   const quantity = Math.max(0, Math.round(Number(row.quantity) || 0));
@@ -115,17 +121,21 @@ function ClickUpCheckoutMemoBody({ row }: { row: StoreOrderCustomerMemoLine }) {
               <p key={`memo-line-${lineIdx}`} className="m-0 whitespace-pre-wrap">
                 <span>{renderCheckoutMemoLineText(line)}</span>
                 {service ? (
-                  <span
-                    className={`ml-2 font-semibold ${
-                      service === "Printing" ? "text-red-600" : "text-green-600"
-                    }`}
-                  >
+                  <span className={`ml-2 font-semibold ${checkoutMemoServiceClassName(service)}`}>
                     {service}
                   </span>
                 ) : null}
               </p>
             );
           })}
+          {extraArtwork.map((art, artIdx) => (
+            <p key={`memo-art-${artIdx}`} className="m-0 mt-1 whitespace-pre-wrap">
+              {art.code ? <span className="font-semibold text-slate-900">{art.code}</span> : null}
+              <span className={`${art.code ? "ml-2" : ""} font-semibold ${checkoutMemoServiceClassName(art.service)}`}>
+                {art.service}
+              </span>
+            </p>
+          ))}
         </div>
       </div>
     </div>
@@ -750,9 +760,10 @@ export function ClickUpSheetWorkspace({
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Logo &amp; artwork</h2>
           <div className="mt-4">
             <p className="click-up-sheet-print-hide mt-1 text-xs text-slate-600" suppressHydrationWarning>
-              체크아웃 시 고객이 라인별로 입력한 내용(<span className="font-mono">store_order_items.notes</span>)입니다. 사이즈는
-              왼쪽 큰 글씨, 색상은 모델명 뒤에 표시합니다. 내용·사이즈·제품명이 같은 메모는 한 번만 표시합니다. 읽기
-              전용입니다.
+              체크아웃 시 고객이 라인별로 입력한 내용(<span className="font-mono">store_order_items.notes</span>)입니다. 로고
+              위치·Embroidery/Printing은 메모의 LC/BU 줄 또는 체크아웃 <span className="font-mono">placements</span>에서
+              표시합니다. 사이즈는 왼쪽 큰 글씨, 색상은 모델명 뒤에 표시합니다. 내용·사이즈·제품명이 같은 메모는 한 번만
+              표시합니다. 읽기 전용입니다.
             </p>
             {!orderId.trim() ? (
               <p className="click-up-sheet-print-hide mt-3 text-sm text-slate-500">Order ID가 있으면 표시됩니다.</p>

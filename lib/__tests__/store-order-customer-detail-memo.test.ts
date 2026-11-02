@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  checkoutMemoExtraArtworkRows,
   checkoutMemoServiceForLine,
   checkoutMemoServicesForNotes,
   parseCheckoutMemoPlacementServices,
@@ -123,6 +124,28 @@ describe("checkout memo placement services", () => {
       { code: "RC", service: "Printing" },
       { code: "BU", service: "Embroidery" },
     ]);
+  });
+
+  it("maps unlabeled placement labels when the line has one decorate service", () => {
+    expect(parseCheckoutMemoPlacementServices(["Left Chest", "Back Upper"], "Printing")).toEqual([
+      { code: "LC", service: "Printing" },
+      { code: "BU", service: "Printing" },
+    ]);
+  });
+
+  it("shows checkout placements when notes only have logo-file lines", () => {
+    const notes = "[Logo files with this line: IMG_3255.jpeg (35 KB)] - Black";
+    const placements = parseCheckoutMemoPlacementServices(["Embroidery: Left Chest", "Printing: Full Back"]);
+    expect(checkoutMemoExtraArtworkRows(notes, placements, "Embroidery")).toEqual([
+      { code: "LC", service: "Embroidery" },
+      { code: "FB", service: "Printing" },
+    ]);
+  });
+
+  it("does not duplicate artwork rows when notes already have LC/BU lines", () => {
+    const notes = "LC - logo\nBU - back";
+    const placements = parseCheckoutMemoPlacementServices(["Embroidery: Left Chest"]);
+    expect(checkoutMemoExtraArtworkRows(notes, placements, "Embroidery")).toEqual([]);
   });
 
   it("resolves singular line service and attaches it beside logo lines", () => {

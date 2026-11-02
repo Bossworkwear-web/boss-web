@@ -318,18 +318,28 @@ export function resolveCheckoutMemoLineService(
 /** Parse `Embroidery: Left Chest` / `Printing: Right Chest` placement strings. */
 export function parseCheckoutMemoPlacementServices(
   placements: unknown,
+  lineService: CheckoutMemoDecorateService | null = null,
 ): CheckoutMemoPlacementService[] {
   const out: CheckoutMemoPlacementService[] = [];
   const seen = new Set<string>();
   for (const raw of placementsFromDb(placements)) {
-    const m = raw.trim().match(/^(Embroidery|Printing)\s*:\s*(.+)$/i);
-    if (!m) {
+    const trimmed = raw.trim();
+    if (!trimmed) {
       continue;
     }
-    const service: CheckoutMemoDecorateService = /^embroidery$/i.test(m[1] ?? "")
-      ? "Embroidery"
-      : "Printing";
-    const code = placementLabelToMemoCode(m[2] ?? "");
+    const m = trimmed.match(/^(Embroidery|Printing)\s*:\s*(.+)$/i);
+    let service: CheckoutMemoDecorateService | null = null;
+    let label = trimmed;
+    if (m) {
+      service = /^embroidery$/i.test(m[1] ?? "") ? "Embroidery" : "Printing";
+      label = (m[2] ?? "").trim();
+    } else {
+      service = lineService;
+    }
+    if (!service) {
+      continue;
+    }
+    const code = placementLabelToMemoCode(label);
     if (!code || seen.has(code)) {
       continue;
     }
@@ -337,6 +347,32 @@ export function parseCheckoutMemoPlacementServices(
     out.push({ code, service });
   }
   return out;
+}
+
+export type CheckoutMemoArtworkRow = {
+  code: string | null;
+  service: CheckoutMemoDecorateService;
+};
+
+/** When checkout notes have no LC/BU lines, still show DB placements on Logo & artwork cards. */
+export function checkoutMemoExtraArtworkRows(
+  notes: string,
+  placementServices: CheckoutMemoPlacementService[],
+  lineService: CheckoutMemoDecorateService | null,
+): CheckoutMemoArtworkRow[] {
+  const hasCodeLines = String(notes ?? "")
+    .split("\n")
+    .some((line) => Boolean(checkoutMemoLinePlacementCode(line)));
+  if (hasCodeLines) {
+    return [];
+  }
+  if (placementServices.length > 0) {
+    return placementServices.map((p) => ({ code: p.code, service: p.service }));
+  }
+  if (lineService) {
+    return [{ code: null, service: lineService }];
+  }
+  return [];
 }
 
 /** Leading placement short-code on a memo line (`LC - …`, `BU: …`). */
@@ -527,8 +563,8 @@ export async function getCustomerDetailForStoreOrderNumber(
       const productName = (row.product_name ?? "").trim();
       const color = (row.color ?? "").trim();
       const quantity = Math.max(0, Math.round(Number(row.quantity) || 0));
-      const placementServices = parseCheckoutMemoPlacementServices(row.placements);
       const lineService = resolveCheckoutMemoLineService(row.service_type);
+      const placementServices = parseCheckoutMemoPlacementServices(row.placements, lineService);
       const dedupeKey = `${memo}\0${size}\0${productName}\0${color}\0${quantity}`;
       if (seenMemoKeys.has(dedupeKey)) {
         continue;
