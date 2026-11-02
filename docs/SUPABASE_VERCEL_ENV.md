@@ -17,6 +17,7 @@ The daily **2:00 AM DB backup** (pg_dump) does **not** affect the website API co
 |-----------|----------------|
 | `lib/storefront-catalog-fetch.ts` | Throws on missing/invalid Supabase config instead of silently returning `[]`. |
 | `GET /api/cron/storefront-catalog-health` | Every 6 hours: probes catalog count; emails staff if broken (`CRON_SECRET`). |
+| `GET /api/cron/supabase-unhealthy-restart` | Every 15 minutes: if the project API times out (Unhealthy / 522), calls Supabase **Restart project**. Needs `SUPABASE_ACCESS_TOKEN`. |
 | Admin Dashboard banner | Red alert when the catalog probe fails. |
 | `npm run sync:vercel-supabase-env` | Copies Supabase URL + keys from `.env.local` to Vercel (Production + Preview). |
 
@@ -40,6 +41,7 @@ The daily **2:00 AM DB backup** (pg_dump) does **not** affect the website API co
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same (public read) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Admin, CRM, stock, uploads |
 | `CRON_SECRET` | Catalog health cron + other crons |
+| `SUPABASE_ACCESS_TOKEN` | Auto-restart hung projects (`project_admin_write` PAT). Create at [Account → Access Tokens](https://supabase.com/dashboard/account/tokens). |
 | `RESEND_API_KEY` | Catalog alert emails (optional but recommended) |
 
 ## Manual health check
@@ -50,3 +52,13 @@ curl -sS -H "Authorization: Bearer $CRON_SECRET" \
 ```
 
 Expect `"ok": true` and `productCount` in the hundreds/thousands.
+
+## Auto-restart when the project is Unhealthy
+
+Supabase does not restart Nano instances by itself. Production cron `GET /api/cron/supabase-unhealthy-restart` (every 15 minutes) probes `products?limit=1` with an 8s timeout. Timeouts / Cloudflare 522 / 503–504 trigger **Restart project** via the Management API.
+
+1. Create a **scoped** personal access token: [Account → Access Tokens](https://supabase.com/dashboard/account/tokens) with **project_admin_write** on this project.
+2. Add `SUPABASE_ACCESS_TOKEN` in Vercel → Settings → Environment Variables (Production).
+3. Deploy once so the new cron is live. Without the token the cron is a no-op.
+
+This recovers a hung instance; it does not stop Nano from hanging again. Upgrade compute if Unhealthy keeps returning.

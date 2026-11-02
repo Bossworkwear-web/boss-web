@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/storefront-catalog-health",
       "schedule": "30 */6 * * *"
+    },
+    {
+      "path": "/api/cron/supabase-unhealthy-restart",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
