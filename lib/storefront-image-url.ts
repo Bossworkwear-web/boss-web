@@ -1,6 +1,35 @@
 const MEDIA_PREFIX = "/api/supplier-media/";
 const MEDIA_PREFIX_LOOSE = "api/supplier-media/";
 
+/**
+ * Bisley catalogue rows hotlink `myadmin.pipanz.com/images/…`. That host now answers with a
+ * Cloudflare challenge and `Cross-Origin-Resource-Policy: same-origin`, so `<img>` tags break.
+ * The same files are public on PIP's asset blob.
+ */
+const PIPANZ_ADMIN_IMAGES = /^https?:\/\/myadmin\.pipanz\.com(\/images\/[^?#]*)/i;
+const PIPANZ_BLOB_ASSETS = "https://pipanz.blob.core.windows.net/assets";
+
+function encodePipanzImagePath(path: string): string {
+  return path
+    .split("/")
+    .map((seg) => {
+      if (!seg) return seg;
+      try {
+        return encodeURIComponent(decodeURIComponent(seg));
+      } catch {
+        return encodeURIComponent(seg);
+      }
+    })
+    .join("/");
+}
+
+export function rewritePipanzAdminImageUrl(raw: string): string | null {
+  const match = raw.trim().match(PIPANZ_ADMIN_IMAGES);
+  const path = match?.[1];
+  if (!path) return null;
+  return `${PIPANZ_BLOB_ASSETS}${encodePipanzImagePath(path)}`;
+}
+
 /** Default bucket in `scripts/upload-supplier-images.mjs` / middleware (must match DB rows from `--images=storage`). */
 const DEFAULT_SUPPLIER_IMAGES_BUCKET = "supplier-product-images";
 
@@ -106,6 +135,11 @@ export function resolveStorefrontImageUrl(url: string | null | undefined): strin
   if (!raw) return "";
   if (raw.startsWith("data:")) {
     return raw;
+  }
+
+  const pipanz = rewritePipanzAdminImageUrl(raw);
+  if (pipanz) {
+    return pipanz;
   }
 
   const fromSupabasePublic = rewriteProjectSupabaseStorageUrlToSupplierMediaProxy(raw);

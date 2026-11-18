@@ -39,6 +39,26 @@ function parseArgs(argv) {
   return out;
 }
 
+/** `myadmin.pipanz.com` blocks hotlinking; the same file is on the public PIP asset blob. */
+function rewritePipanzAdminImageUrl(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  const match = s.match(/^https?:\/\/myadmin\.pipanz\.com(\/images\/[^?#]*)/i);
+  if (!match?.[1]) return s;
+  const path = match[1]
+    .split("/")
+    .map((seg) => {
+      if (!seg) return seg;
+      try {
+        return encodeURIComponent(decodeURIComponent(seg));
+      } catch {
+        return encodeURIComponent(seg);
+      }
+    })
+    .join("/");
+  return `https://pipanz.blob.core.windows.net/assets${path}`;
+}
+
 /**
  * RFC4180-ish CSV parser supporting:
  * - commas
@@ -348,7 +368,7 @@ async function main() {
     const productName = String(r[idxProductName] ?? "").trim();
     const color = String(r[idxColourName] ?? "").trim();
     const size = normalizeSizeToken(r[idxSize] ?? "");
-    const imageUrl = String(r[idxImageUrl] ?? "").trim();
+    const imageUrl = rewritePipanzAdminImageUrl(String(r[idxImageUrl] ?? "").trim());
     const price = parseCsvPriceCell(r[idxPrice]);
     const desc = String(r[idxDesc] ?? "").trim();
     const sizesText = String(r[idxSizesText] ?? "").trim();
