@@ -35,14 +35,22 @@ export function applyJb7pipBlackRedFirstPdp<T extends string>(
   colorsOut.unshift(picked);
 
   const urlsOut = [...imageUrls];
+  // Move the matching hero the same way as the chip. Swapping only index 0 and `idx`
+  // leaves every colour between them pointing at the next garment once Black/Red is
+  // not already beside the first chip (alphabetical 7PIP lists put it at index 7).
   if (jbPrefixCount > 0 && idx < jbPrefixCount && urlsOut.length >= jbPrefixCount) {
     const jbpcMatch = urlsOut[0]?.match(/#jbpc=\d+$/i);
     const jbpcSuffix = jbpcMatch?.[0] ?? "";
     const stripJbpc = (u: string) => u.replace(/#jbpc=\d+$/i, "");
-    const atIdx = stripJbpc(urlsOut[idx] ?? "");
-    const atZero = stripJbpc(urlsOut[0] ?? "");
-    urlsOut[0] = jbpcSuffix ? `${atIdx}${jbpcSuffix}` : atIdx;
-    urlsOut[idx] = atZero;
+    const prefix = urlsOut.slice(0, jbPrefixCount).map((u) => stripJbpc(u));
+    const [pickedUrl] = prefix.splice(idx, 1);
+    if (pickedUrl) {
+      prefix.unshift(pickedUrl);
+    }
+    if (jbpcSuffix && prefix[0]) {
+      prefix[0] = `${prefix[0]}${jbpcSuffix}`;
+    }
+    urlsOut.splice(0, jbPrefixCount, ...prefix);
   }
 
   return { colors: colorsOut, imageUrls: urlsOut };

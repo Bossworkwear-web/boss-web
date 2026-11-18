@@ -15,6 +15,18 @@ describe("applyJb7pipBlackRedFirstPdp", () => {
     expect(out.imageUrls[1]).toBe("a");
   });
 
+  it("shifts the gallery with the chip when Black/Red is not adjacent", () => {
+    const colors = ["Aqua/White", "Black/Aqua", "Black/Gold", "Black/Red", "Black/White"] as const;
+    const out = applyJb7pipBlackRedFirstPdp(
+      "7PIP",
+      colors,
+      ["lw#jbpc=5", "blackaqua", "by", "bc", "bw"],
+      5,
+    );
+    expect(out.colors).toEqual(["Black/Red", "Aqua/White", "Black/Aqua", "Black/Gold", "Black/White"]);
+    expect(out.imageUrls).toEqual(["bc#jbpc=5", "lw", "blackaqua", "by", "bw"]);
+  });
+
   it("ignores 7PIPL", () => {
     const colors = ["Navy/White", "Black/Red"] as const;
     const out = applyJb7pipBlackRedFirstPdp("7PIPL", colors, ["a", "b"], 2);
