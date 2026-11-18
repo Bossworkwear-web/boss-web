@@ -81,10 +81,15 @@ function toShortCode(label: string): string {
     .join("");
 }
 
-/** Full Back (FB) and Full Chest (FC): printing only — same rule as storefront PDP. */
+/**
+ * Printing only: Full Back (FB), Full Chest (FC), Center Chest (CC), Back Middle (BM).
+ * CC and BM stay available for printing; embroidery is no longer offered there.
+ */
+const EMBROIDERY_EXCLUDED_PLACEMENT_ABBRS = new Set(["FB", "FC", "CC", "BM"]);
+
 export function isEmbroideryOfferedForPlacement(diagramAbbr: string): boolean {
   const a = diagramAbbr.trim().toUpperCase();
-  return a !== "FB" && a !== "FC";
+  return !EMBROIDERY_EXCLUDED_PLACEMENT_ABBRS.has(a);
 }
 
 /** Storefront / Get a Quote placement row order (top → bottom). */

@@ -408,10 +408,10 @@ function parseCartServiceFlags(serviceType: string): { emb: boolean; prn: boolea
   };
 }
 
-/** Full Back (FB) and Full Chest (FC): printing only — no embroidery option on the PDP. */
+/** FB, FC, CC, and BM: printing only — no embroidery option on the PDP. */
 function isEmbroideryOfferedForPlacement(diagramAbbr: string): boolean {
   const a = diagramAbbr.trim().toUpperCase();
-  return a !== "FB" && a !== "FC";
+  return a !== "FB" && a !== "FC" && a !== "CC" && a !== "BM";
 }
 
 function isPrintingOfferedForPlacement(diagramAbbr: string, isHeadwear?: boolean): boolean {
