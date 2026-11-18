@@ -534,8 +534,8 @@ export default function PaymentPage() {
     <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
       <TopNav />
       <div className={STORE_MAIN_SHELL_CLASS}>
-        <section className={`${SITE_PAGE_ROW_CLASS} py-10`}>
-        <div className={PAYMENT_PAGE_ZOOM_WRAP_CLASS}>
+        <section className={`${SITE_PAGE_ROW_CLASS} storefront-compact-inset-x py-10`}>
+        <div className={`${PAYMENT_PAGE_ZOOM_WRAP_CLASS} storefront-compact-payment-column`}>
         <header className="mb-7 space-y-2">
           <Link href="/cart" className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-orange">
             <ArrowLeftIcon className="h-4 w-4" />

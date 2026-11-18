@@ -59,6 +59,19 @@ html {
   padding-inline: clamp(1rem, calc(5cm / 1.452), 8vw);
 }
 
+/* 11"/13" tablets and 13" laptops: product, cart, and payment side space at 1/4. */
+@media (min-width: 768px) and (max-width: 1470px) {
+  .site-page-inset-x.storefront-compact-inset-x {
+    padding-inline: calc(clamp(1rem, calc(5cm / 1.452), 8vw) / 4);
+  }
+  .storefront-compact-cart-column {
+    width: 92.5%;
+  }
+  .storefront-compact-payment-column {
+    max-width: calc(36rem + (100% - 36rem) * 0.75);
+  }
+}
+
 /* Admin panel content row — half storefront inset, same fluid cap idea. */
 .admin-panel-inset-x {
   box-sizing: border-box;

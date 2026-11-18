@@ -3486,7 +3486,7 @@ export function PremiumWorkPoloClient({
   return (
     <main className="product-detail-page min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
       <div className={STORE_MAIN_SHELL_CLASS}>
-        <section className={`${SITE_PAGE_INSET_X_CLASS} pb-6 pt-6 sm:pb-10 sm:pt-10`}>
+        <section className={`${SITE_PAGE_INSET_X_CLASS} storefront-compact-inset-x pb-6 pt-6 sm:pb-10 sm:pt-10`}>
         <div className="mx-auto grid w-full max-w-none grid-cols-1 gap-8 lg:grid-cols-[1fr_1fr] lg:gap-10">
         {renderProductMetaHeader("mobile")}
         <section

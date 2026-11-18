@@ -352,8 +352,8 @@ export default function CartPage() {
     <main className="min-h-screen bg-white pt-[var(--site-header-height)] text-brand-navy">
       <TopNav />
       <div className={STORE_MAIN_SHELL_CLASS}>
-        <section className={`${SITE_PAGE_ROW_CLASS} py-10`}>
-        <div className="mx-auto w-[70%] max-w-full min-w-0">
+        <section className={`${SITE_PAGE_ROW_CLASS} storefront-compact-inset-x py-10`}>
+        <div className="storefront-compact-cart-column mx-auto w-[70%] max-w-full min-w-0">
         <header className="mb-7">
           <div className="flex flex-col">
             <Link
