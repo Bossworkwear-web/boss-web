@@ -59,7 +59,7 @@ export function stripUploadedAssetUrlsFromCheckoutNotes(text: string): string {
 
 /**
  * Drop the last non-empty line of checkout notes for Click Up Memo display
- * (auto-appended embroidery logo-setup tag, etc.).
+ * when it is an auto-appended `[...]` tag (embroidery logo setup, etc.).
  */
 export function stripCheckoutMemoLastLine(notes: string): string {
   const body = notes.trim();
@@ -76,6 +76,9 @@ export function stripCheckoutMemoLastLine(notes: string): string {
   }
   if (lastIdx < 0) {
     return "";
+  }
+  if (!/^\[.*\]$/.test((lines[lastIdx] ?? "").trim())) {
+    return body;
   }
   lines.splice(lastIdx, 1);
   return lines
@@ -556,15 +559,15 @@ export async function getCustomerDetailForStoreOrderNumber(
       const memo = stripCheckoutMemoLastLine(
         stripUploadedAssetUrlsFromCheckoutNotes((row.notes ?? "").trim()),
       );
-      if (!memo) {
-        continue;
-      }
       const size = (row.size ?? "").trim();
       const productName = (row.product_name ?? "").trim();
       const color = (row.color ?? "").trim();
       const quantity = Math.max(0, Math.round(Number(row.quantity) || 0));
       const lineService = resolveCheckoutMemoLineService(row.service_type);
       const placementServices = parseCheckoutMemoPlacementServices(row.placements, lineService);
+      if (!memo && placementServices.length === 0 && !lineService) {
+        continue;
+      }
       const dedupeKey = `${memo}\0${size}\0${productName}\0${color}\0${quantity}`;
       if (seenMemoKeys.has(dedupeKey)) {
         continue;

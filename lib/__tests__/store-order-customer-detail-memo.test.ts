@@ -79,6 +79,15 @@ describe("stripCheckoutMemoLastLine", () => {
       ["TT04 - Yellow/Navy", "Please see email from last order"].join("\n"),
     );
   });
+
+  it("keeps the last customer line when there is no auto tag", () => {
+    const notes = ["TT04 - Yellow/Navy", "RC - LUKE"].join("\n");
+    expect(stripCheckoutMemoLastLine(notes)).toBe(notes);
+  });
+
+  it("returns empty when the notes are only the auto tag", () => {
+    expect(stripCheckoutMemoLastLine("[Embroidery logo setup: Use my saved embroidery logo ($0)]")).toBe("");
+  });
 });
 
 describe("withCheckoutMemoColorAfterModel", () => {
